@@ -395,10 +395,11 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     e.stopPropagation();
     const th = e.target.closest('th');
     const table = tableRef.current;
-    if (!th || !table) return;
+    if (!th || !table) { console.log('리사이즈 실패: th 또는 table 없음', !!th, !!table); return; }
     const startX = e.clientX;
     const startThW = th.offsetWidth;
     const startTableW = table.offsetWidth;
+    console.log('리사이즈 시작', colKey, 'startWidth:', startThW, 'tableWidth:', startTableW);
 
     document.body.style.userSelect = 'none';
     document.body.style.cursor = 'col-resize';
@@ -412,6 +413,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       th.style.minWidth = newW + 'px';
       th.style.maxWidth = newW + 'px';
       table.style.width = (startTableW + delta) + 'px';
+      console.log('드래그 중', colKey, 'newWidth:', newW);
     };
 
     const onUp = () => {
@@ -420,6 +422,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
       const finalW = th.offsetWidth;
+      console.log('리사이즈 완료', colKey, 'finalWidth:', finalW);
       savedWidthsRef.current = { ...savedWidthsRef.current, [colKey]: finalW };
       supabase.from('settings').upsert({ key: 'as_column_widths', value: savedWidthsRef.current, updated_at: new Date().toISOString() });
     };
