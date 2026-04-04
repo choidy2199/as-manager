@@ -545,9 +545,9 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     if (col.key === 'repair_cost' && val) return <span className="price">{fmt(val)}</span>;
     if (col.key === 'company_name') {
       const parts = [r.company_name, r.customer_name].filter(Boolean);
-      return parts.length > 0 ? parts.join(' / ') : '';
+      return parts.length > 0 ? parts.join(' / ') : <span className="empty-dot" />;
     }
-    return val || '';
+    return val || <span className="empty-dot" />;
   };
 
   const renderNewCell = (col) => {

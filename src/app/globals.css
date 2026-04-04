@@ -250,6 +250,9 @@ select.as-cell-input { padding-right: 2px; height: 32px; font-size: 13px; }
 .sms-dot-green { color: var(--tl-success); }
 .sms-dot-gray { color: var(--tl-text-hint); }
 
+/* ── Empty cell dot ── */
+.empty-dot { display: block; width: 6px; height: 6px; border-radius: 50%; background: #DDE1EB; margin: 0 auto; }
+
 /* ── Badge purple ── */
 .badge-purple { background: #F0E6FF; color: #4A1D96; }
 
