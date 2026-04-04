@@ -500,7 +500,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
             onBlur={commitEdit}
             onKeyDown={e => e.key === 'Enter' && commitEdit()}
           >
-            <option value="">—</option>
+            <option value=""></option>
             {col.opts.map(o => <option key={o} value={col.toDb ? col.toDb(o) : o}>{o}</option>)}
           </select>
         );
@@ -545,9 +545,9 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     if (col.key === 'repair_cost' && val) return <span className="price">{fmt(val)}</span>;
     if (col.key === 'company_name') {
       const parts = [r.company_name, r.customer_name].filter(Boolean);
-      return parts.length > 0 ? parts.join(' / ') : '—';
+      return parts.length > 0 ? parts.join(' / ') : '';
     }
-    return val || '—';
+    return val || '';
   };
 
   const renderNewCell = (col) => {
@@ -559,7 +559,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
           const v = col.fromDb ? col.fromDb(e.target.value) : e.target.value;
           setNewRow(p => ({ ...p, [col.key]: col.toDb ? col.toDb(v || e.target.value) : e.target.value }));
         }}>
-          <option value="">—</option>
+          <option value=""></option>
           {col.opts.map(o => <option key={o} value={col.toDb ? col.toDb(o) : o}>{o}</option>)}
         </select>
       );
