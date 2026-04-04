@@ -381,10 +381,19 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   const savedWidthsRef = useRef({});
   const tableRef = useRef(null);
 
-  /* ── 컬럼 너비 로드 (settings 테이블) ── */
+  /* ── 컬럼 너비 로드 ── */
   useEffect(() => {
+    try {
+      const local = JSON.parse(localStorage.getItem('as_column_widths'));
+      if (local && typeof local === 'object') savedWidthsRef.current = local;
+    } catch {}
     supabase.from('settings').select('value').eq('key', 'as_column_widths').single()
-      .then(({ data }) => { if (data?.value) savedWidthsRef.current = data.value; });
+      .then(({ data }) => {
+        if (data?.value && typeof data.value === 'object') {
+          savedWidthsRef.current = data.value;
+          localStorage.setItem('as_column_widths', JSON.stringify(data.value));
+        }
+      });
   }, []);
 
   const getColWidth = (key) => savedWidthsRef.current[key] || DEFAULT_WIDTHS[key] || 80;
@@ -420,6 +429,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       document.body.style.cursor = '';
       const finalW = parseInt(col.style.width) || startW;
       savedWidthsRef.current = { ...savedWidthsRef.current, [colKey]: finalW };
+      localStorage.setItem('as_column_widths', JSON.stringify(savedWidthsRef.current));
       supabase.from('settings').upsert({ key: 'as_column_widths', value: savedWidthsRef.current, updated_at: new Date().toISOString() });
     };
 
