@@ -458,15 +458,15 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload }) {
     { key:'customer_phone', label:'연락처', w:115, type:'text' },
     { key:'model', label:'모델명', w:100, type:'select', opts: MODELS },
     { key:'symptom', label:'증상', w:180, type:'text' },
-    { key:'memo', label:'비고', w:100, type:'text' },
+    { key:'memo', label:'비고', w:100, type:'text', groupEnd: true },
     // 초록 그룹
     { key:'repair_result', label:'처리결과', w:160, type:'text' },
     { key:'technician', label:'처리자', w:80, type:'text' },
     { key:'status', label:'AS상태', w:80, type:'select', opts: STATUS_LIST },
-    { key:'repair_cost', label:'AS비용', w:90, type:'number' },
+    { key:'repair_cost', label:'AS비용', w:90, type:'number', groupEnd: true },
     // 노란 그룹
     { key:'payment_status', label:'입금', w:80, type:'select', opts: PAYMENT_STATUS },
-    { key:'payer', label:'입금자', w:80, type:'text' },
+    { key:'payer', label:'입금자', w:80, type:'text', groupEnd: true },
     // 보라 그룹
     { key:'release_date', label:'출고일', w:115, type:'date' },
     { key:'release_carrier', label:'택배', w:70, type:'select', opts: CARRIERS_OUT },
@@ -577,7 +577,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload }) {
           {COLS.map(c => {
             const w = getColWidth(c.key);
             return (
-              <th key={c.key} style={{ width: w, minWidth: 50, position: 'relative' }}>
+              <th key={c.key} className={c.groupEnd ? 'as-group-border-th' : ''} style={{ width: w, minWidth: 50, position: 'relative' }}>
                 {c.label}
                 {c.key !== '_sms' && (
                   <span className="col-resize-handle" onMouseDown={e => startResize(c.key, e)} />
@@ -593,7 +593,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload }) {
           {COLS.map(c => {
             const w = getColWidth(c.key);
             return (
-              <td key={c.key} style={{width:w, minWidth:50}}>
+              <td key={c.key} className={c.groupEnd ? 'as-group-border-td' : ''} style={{width:w, minWidth:50}}>
                 {c.key === '_sms' ? (
                   <button className="btn-primary" style={{fontSize:11,padding:'4px 10px',whiteSpace:'nowrap'}} onClick={handleNewRowSave}>저장</button>
                 ) : renderNewCell(c)}
@@ -607,7 +607,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload }) {
             {COLS.map(c => {
               const w = getColWidth(c.key);
               return (
-                <td key={c.key} style={{width:w, minWidth:50}}
+                <td key={c.key} className={c.groupEnd ? 'as-group-border-td' : ''} style={{width:w, minWidth:50}}
                   onClick={() => {
                     if (c.key === '_sms') return;
                     const val = c.key === 'company_name' ? (r.company_name || '') :
