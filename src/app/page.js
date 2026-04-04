@@ -7,7 +7,7 @@ const MODELS = ["DC660","DC661","DC662","DC886","DC990X1","DC990K","DC990S","DC9
 const BRANDS = ["콜라보","마끼다","디월트","프레레","기타"];
 const STATUS_LIST = ["접수","진단중","부품대기","수리중","완료","수리X","폐기"];
 const RECORD_TYPES = ["AS 수리","제품 판매","부품 판매"];
-const CARRIERS_IN = ["롯데택배","CJ대한통운","한진택배","경동택배","로젠택배","우체국","대신화물","방문","용차","퀵"];
+const CARRIERS_IN = ["롯데택배","CJ대한통운","한진택배","경동택배","로젠택배","우체국","대신화물","대신택배","방문","용차","퀵"];
 const CARRIERS_OUT = [...CARRIERS_IN, "매장"];
 const INVOICE_TYPES = ["없음(일반소매)","계산서(거래처)","월말"];
 const PAYMENT_STATUS = ["완료","대기","명세서","무상","카드","방문결제"];
@@ -640,7 +640,7 @@ function ShipForm({ initial, onSave, onClose }) {
     receiverAddress: i.receiver_address || '', contents: i.contents || '', memo: i.memo || '',
   });
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
-  const CARRIERS = ["CJ대한통운","한진택배","롯데택배","로젠택배","우체국택배","경동택배","기타"];
+  const CARRIERS = ["CJ대한통운","한진택배","롯데택배","로젠택배","우체국택배","경동택배","대신택배","대신화물","기타"];
 
   return (
     <>
