@@ -394,9 +394,11 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     e.preventDefault();
     e.stopPropagation();
     const th = e.target.closest('th');
-    if (!th) return;
+    const table = tableRef.current;
+    if (!th || !table) return;
     const startX = e.clientX;
-    const startW = th.offsetWidth;
+    const startThW = th.offsetWidth;
+    const startTableW = table.offsetWidth;
 
     document.body.style.userSelect = 'none';
     document.body.style.cursor = 'col-resize';
@@ -404,10 +406,12 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     const onMove = (ev) => {
       ev.preventDefault();
       const diff = ev.clientX - startX;
-      const newW = Math.max(30, startW + diff);
+      const newW = Math.max(30, startThW + diff);
+      const delta = newW - startThW;
       th.style.width = newW + 'px';
       th.style.minWidth = newW + 'px';
       th.style.maxWidth = newW + 'px';
+      table.style.width = (startTableW + delta) + 'px';
     };
 
     const onUp = () => {
@@ -415,7 +419,6 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       document.removeEventListener('mouseup', onUp);
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
-      // 최종 너비를 저장
       const finalW = th.offsetWidth;
       savedWidthsRef.current = { ...savedWidthsRef.current, [colKey]: finalW };
       supabase.from('settings').upsert({ key: 'as_column_widths', value: savedWidthsRef.current, updated_at: new Date().toISOString() });
