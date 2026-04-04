@@ -40,6 +40,7 @@ export default function Home() {
 
   /* ── 새 접수 입력 행 표시 ── */
   const [showNewRow, setShowNewRow] = useState(false);
+  const [kpiFilter, setKpiFilter] = useState(null);
 
   /* ── 택배/부속 기존 state ── */
   const [partsSearch, setPartsSearch] = useState('');
@@ -131,13 +132,15 @@ export default function Home() {
   const logout = async () => { await supabase.auth.signOut(); setUser(null); };
 
   /* ── AS 필터링 ── */
+  const KPI_STATUS_MAP = { reception: ['접수','진단중'], repairing: ['수리중','부품대기'], done: ['완료'], norepair: ['수리X','폐기'] };
   const filteredAS = asRecords.filter(r => {
     const ms = !search || [r.customer_name, r.customer_phone, r.model, r.symptom, r.company_name, r.memo, r.repair_result].some(f => f?.toLowerCase().includes(search.toLowerCase()));
     const mt = typeFilter === '전체' || dbToRecordType(r.record_type) === typeFilter;
     const mst = statusFilter === '전체' || r.status === statusFilter;
     const mb = brandFilter === '전체' || r.brand === brandFilter;
     const mm = !monthFilter || r.receipt_date?.startsWith(monthFilter);
-    return ms && mt && mst && mb && mm;
+    const mk = !kpiFilter || (KPI_STATUS_MAP[kpiFilter] || []).includes(r.status);
+    return ms && mt && mst && mb && mm && mk;
   });
 
   /* ── KPI ── */
@@ -192,11 +195,18 @@ export default function Home() {
           <>
             {/* KPI */}
             <div className="as-kpi-row">
-              <div className="as-kpi-item"><div className="as-kpi-label">전체 건수</div><div className="as-kpi-value" style={{color:'#1A1D23'}}>{kpiTotal}<span className="as-kpi-unit">건</span></div></div>
-              <div className="as-kpi-item"><div className="as-kpi-label">접수/진단</div><div className="as-kpi-value" style={{color:'#185FA5'}}>{kpiReception}<span className="as-kpi-unit">건</span></div></div>
-              <div className="as-kpi-item"><div className="as-kpi-label">수리중</div><div className="as-kpi-value" style={{color:'#EF9F27'}}>{kpiRepairing}<span className="as-kpi-unit">건</span></div></div>
-              <div className="as-kpi-item"><div className="as-kpi-label">완료</div><div className="as-kpi-value" style={{color:'#1D9E75'}}>{kpiDone}<span className="as-kpi-unit">건</span></div></div>
-              <div className="as-kpi-item"><div className="as-kpi-label">수리불가</div><div className="as-kpi-value" style={{color:'#CC2222'}}>{kpiNoRepair}<span className="as-kpi-unit">건</span></div></div>
+              {[
+                { key: null, label: '전체 건수', value: kpiTotal, color: '#1A1D23' },
+                { key: 'reception', label: '접수/진단', value: kpiReception, color: '#185FA5' },
+                { key: 'repairing', label: '수리중', value: kpiRepairing, color: '#EF9F27' },
+                { key: 'done', label: '완료', value: kpiDone, color: '#1D9E75' },
+                { key: 'norepair', label: '수리불가', value: kpiNoRepair, color: '#CC2222' },
+              ].map(k => (
+                <div key={k.label} className="as-kpi-item" style={{ cursor:'pointer', border: kpiFilter === k.key ? `2px solid ${k.color}` : '2px solid transparent' }} onClick={() => setKpiFilter(kpiFilter === k.key ? null : k.key)}>
+                  <div className="as-kpi-label">{k.label}</div>
+                  <div className="as-kpi-value" style={{color:k.color}}>{k.value}<span className="as-kpi-unit">건</span></div>
+                </div>
+              ))}
             </div>
 
             {/* 필터 */}
