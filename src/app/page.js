@@ -471,11 +471,11 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   };
 
   const DEFAULT_WIDTHS = {
-    record_type:80, receipt_date:120, brand:80, intake_carrier:80, shipping_fee:90,
-    invoice_type:80, company_name:160, customer_phone:120, model:100, symptom:180, memo:90,
+    record_type:70, receipt_date:120, brand:70, intake_carrier:70, shipping_fee:80,
+    invoice_type:70, company_name:160, _sms:40, customer_phone:120, model:100, symptom:180, memo:100,
     repair_result:160, technician:80, status:80, repair_cost:90,
-    payment_status:80, payer:80,
-    _sms:36, release_date:120, release_carrier:80, tracking_number:130, release_memo:90,
+    payment_status:70, payer:80,
+    release_date:120, release_carrier:70, tracking_number:130, release_memo:90,
   };
   const getColWidth = (key) => colWidths?.[key] || DEFAULT_WIDTHS[key] || 80;
 
@@ -603,7 +603,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   };
 
   return (
-    <table className="as-table" ref={tableRef}>
+    <table className="as-table" ref={tableRef} style={{width: COLS.reduce((s, c) => s + getColWidth(c.key), 0)}}>
       {/* 컬럼 그룹 헤더 */}
       <thead>
         <tr className="as-group-header">
