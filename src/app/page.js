@@ -240,25 +240,18 @@ export default function Home() {
                 <span>AS 일지</span>
                 <span style={{fontSize:13,fontWeight:400}}>{monthLabel} — {filteredAS.length}건</span>
               </div>
-              <div className="as-main-layout">
-                <div className="as-table-wrapper" style={{ flex: 1 }}>
-                  <ASTable
-                    records={filteredAS}
-                    onSaveField={saveASField}
-                    onAddNew={addNewAS}
-                    onDelete={deleteAS}
-                    onReload={() => loadData(monthFilter)}
-                    showNewRow={showNewRow}
-                    onHideNewRow={() => setShowNewRow(false)}
-                    smsPanelId={smsPanelId}
-                    onOpenSms={setSmsPanelId}
-                  />
-                </div>
-                {smsPanelId && (() => {
-                  const rec = asRecords.find(r => r.id === smsPanelId);
-                  if (!rec) return null;
-                  return <SMSPanel record={rec} onClose={() => setSmsPanelId(null)} />;
-                })()}
+              <div className="as-table-wrapper">
+                <ASTable
+                  records={filteredAS}
+                  onSaveField={saveASField}
+                  onAddNew={addNewAS}
+                  onDelete={deleteAS}
+                  onReload={() => loadData(monthFilter)}
+                  showNewRow={showNewRow}
+                  onHideNewRow={() => setShowNewRow(false)}
+                  smsPanelId={smsPanelId}
+                  onOpenSms={setSmsPanelId}
+                />
               </div>
             </div>
           </>
@@ -360,6 +353,19 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* ═══ SMS 모달 ═══ */}
+      {smsPanelId && (() => {
+        const rec = asRecords.find(r => r.id === smsPanelId);
+        if (!rec) return null;
+        return (
+          <div className="sms-modal-overlay" onClick={() => setSmsPanelId(null)}>
+            <div className="sms-modal" onClick={e => e.stopPropagation()}>
+              <SMSPanel record={rec} onClose={() => setSmsPanelId(null)} />
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 }
@@ -395,7 +401,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     const onMove = (ev) => {
       if (!resizeRef.current) return;
       const diff = ev.clientX - resizeRef.current.startX;
-      const newW = Math.max(50, resizeRef.current.startW + diff);
+      const newW = Math.max(30, resizeRef.current.startW + diff);
       setColWidths(prev => ({ ...(prev || {}), [resizeRef.current.colKey]: newW }));
     };
     const onUp = () => {
@@ -458,15 +464,15 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     invoice_type:80, company_name:160, customer_phone:120, model:100, symptom:180, memo:90,
     repair_result:160, technician:80, status:80, repair_cost:90,
     payment_status:80, payer:80,
-    release_date:120, release_carrier:80, tracking_number:130, release_memo:90, _sms:44,
+    _sms:36, release_date:120, release_carrier:80, tracking_number:130, release_memo:90,
   };
   const getColWidth = (key) => colWidths?.[key] || DEFAULT_WIDTHS[key] || 80;
 
   const COL_GROUPS = [
-    { label: '입고 / 고객 / 제품', color: '#0C447C', span: 11 },
+    { label: '입고 / 고객 / 제품', color: '#0C447C', span: 12 },
     { label: 'AS 처리 및 비용', color: '#085041', span: 4 },
     { label: '입금', color: '#412402', span: 2 },
-    { label: '출고', color: '#3C3489', span: 5 },
+    { label: '출고', color: '#3C3489', span: 4 },
   ];
 
   const COLS = [
@@ -478,6 +484,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'shipping_fee', label:'운임', w:80, type:'text' },
     { key:'invoice_type', label:'계산서', w:75, type:'select', opts: INVOICE_TYPES },
     { key:'company_name', label:'거래처/성함', w:150, type:'text', combined: true },
+    { key:'_sms', label:'💬', w:36, type:'icon' },
     { key:'customer_phone', label:'연락처', w:115, type:'text' },
     { key:'model', label:'모델명', w:100, type:'select', opts: MODELS },
     { key:'symptom', label:'증상', w:180, type:'text' },
@@ -495,7 +502,6 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'release_carrier', label:'택배', w:70, type:'select', opts: CARRIERS_OUT },
     { key:'tracking_number', label:'운송장번호', w:130, type:'text' },
     { key:'release_memo', label:'비고', w:90, type:'text' },
-    { key:'_sms', label:'문자', w:40, type:'icon' },
   ];
 
   const renderCell = (r, col) => {
@@ -617,7 +623,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
             {COLS.map(c => {
               const w = getColWidth(c.key);
               return (
-                <td key={c.key} className={c.groupEnd ? 'as-group-border-td' : ''} style={{width:w, minWidth:50}}>
+                <td key={c.key} className={c.groupEnd ? 'as-group-border-td' : ''} style={{width:w, minWidth:30}}>
                   {c.key === '_sms' ? (
                     <div style={{display:'flex',gap:4}}>
                       <button className="btn-primary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={handleNewRowSave}>저장</button>
@@ -635,7 +641,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
             {COLS.map(c => {
               const w = getColWidth(c.key);
               return (
-                <td key={c.key} className={c.groupEnd ? 'as-group-border-td' : ''} style={{width:w, minWidth:50}}
+                <td key={c.key} className={c.groupEnd ? 'as-group-border-td' : ''} style={{width:w, minWidth:30}}
                   onClick={() => {
                     if (c.key === '_sms') return;
                     const val = c.key === 'company_name' ? (r.company_name || '') :
