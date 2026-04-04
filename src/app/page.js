@@ -439,11 +439,22 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 
   const commitEdit = async () => {
     if (!editCell) return;
+    const { id, field } = editCell;
     let val = editValue;
-    if (editCell.field === 'repair_cost') val = parseInt(String(val).replace(/,/g, '')) || 0;
-    await onSaveField(editCell.id, editCell.field, val || null);
+    if (field === 'repair_cost') val = parseInt(String(val).replace(/,/g, '')) || 0;
+    const finalVal = val || null;
+
+    // 이전값과 비교 — 변경 없으면 Supabase 호출 안 함
+    const row = records.find(r => r.id === id);
+    const prevVal = row ? row[field] : undefined;
+    const prev = (prevVal === undefined || prevVal === null) ? null : prevVal;
+    const next = (finalVal === undefined || finalVal === null || finalVal === '') ? null : finalVal;
     setEditCell(null);
-    onReload();
+
+    if (String(prev ?? '') !== String(next ?? '')) {
+      await onSaveField(id, field, next);
+      // Realtime이 자동으로 데이터를 갱신하므로 onReload 호출 불필요
+    }
   };
 
   const handleNewRowSave = async () => {
@@ -606,11 +617,9 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
           {COLS.map(c => {
             const w = getColWidth(c.key);
             return (
-              <th key={c.key} className={c.groupEnd ? 'as-group-border-th' : ''} style={{ width: w, minWidth: 50, position: 'sticky', top: 29, zIndex: 19, background: '#EAECF2' }}>
+              <th key={c.key} className={c.groupEnd ? 'as-group-border-th' : ''} style={{ width: w, minWidth: 30, position: 'sticky', top: 29, zIndex: 19, background: '#EAECF2' }}>
                 {c.label}
-                {c.key !== '_sms' && (
-                  <span className="col-resize-handle" onMouseDown={e => startResize(c.key, e)} />
-                )}
+                <span className="col-resize-handle" onMouseDown={e => startResize(c.key, e)} />
               </th>
             );
           })}
