@@ -571,7 +571,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       <thead>
         <tr className="as-group-header">
           {COL_GROUPS.map((g, i) => (
-            <th key={i} colSpan={g.span} style={{ background: g.color, color: '#fff', fontSize: 12, fontWeight: 600, padding: '6px 8px', textAlign: 'center', borderRight: i < COL_GROUPS.length - 1 ? '2px solid rgba(255,255,255,0.3)' : 'none' }}>
+            <th key={i} colSpan={g.span} style={{ background: g.color, color: '#fff', fontSize: 12, fontWeight: 600, padding: '6px 8px', textAlign: 'center', borderRight: i < COL_GROUPS.length - 1 ? '2px solid rgba(255,255,255,0.3)' : 'none', position: 'sticky', top: 0, zIndex: 20 }}>
               {g.label}
             </th>
           ))}
@@ -580,7 +580,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
           {COLS.map(c => {
             const w = getColWidth(c.key);
             return (
-              <th key={c.key} className={c.groupEnd ? 'as-group-border-th' : ''} style={{ width: w, minWidth: 50, position: 'relative' }}>
+              <th key={c.key} className={c.groupEnd ? 'as-group-border-th' : ''} style={{ width: w, minWidth: 50, position: 'sticky', top: 29, zIndex: 19, background: '#EAECF2' }}>
                 {c.label}
                 {c.key !== '_sms' && (
                   <span className="col-resize-handle" onMouseDown={e => startResize(c.key, e)} />
