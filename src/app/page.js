@@ -55,31 +55,34 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
-  /* ── Data Load ── */
-  const loadData = useCallback(async () => {
+  /* ── Data Load (월별 최적화) ── */
+  const loadData = useCallback(async (month) => {
+    const m = month || monthFilter;
     setLoading(true);
+    const startDate = m + '-01';
+    const endDate = m + '-31';
     const [asRes, shipRes, partsRes] = await Promise.all([
-      supabase.from('as_records').select('*').order('created_at', { ascending: false }),
-      supabase.from('ship_records').select('*').order('created_at', { ascending: false }),
+      supabase.from('as_records').select('*').gte('receipt_date', startDate).lte('receipt_date', endDate).order('created_at', { ascending: false }),
+      supabase.from('ship_records').select('*').order('created_at', { ascending: false }).limit(100),
       supabase.from('parts').select('*').order('code'),
     ]);
     if (asRes.data) setAsRecords(asRes.data);
     if (shipRes.data) setShipRecords(shipRes.data);
     if (partsRes.data) setParts(partsRes.data);
     setLoading(false);
-  }, []);
+  }, [monthFilter]);
 
-  useEffect(() => { if (user) loadData(); }, [user, loadData]);
+  useEffect(() => { if (user) loadData(monthFilter); }, [user, monthFilter, loadData]);
 
   /* ── Realtime ── */
   useEffect(() => {
     if (!user) return;
     const ch = supabase.channel('db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'as_records' }, () => loadData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ship_records' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'as_records' }, () => loadData(monthFilter))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ship_records' }, () => loadData(monthFilter))
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [user, loadData]);
+  }, [user, loadData, monthFilter]);
 
   /* ── AS inline save ── */
   const saveASField = async (id, field, value) => {
@@ -231,7 +234,7 @@ export default function Home() {
                     onSaveField={saveASField}
                     onAddNew={addNewAS}
                     onDelete={deleteAS}
-                    onReload={loadData}
+                    onReload={() => loadData(monthFilter)}
                   />
                 </div>
               </div>
@@ -347,6 +350,48 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload }) {
   const [editCell, setEditCell] = useState(null); // {id, field}
   const [editValue, setEditValue] = useState('');
   const [newRow, setNewRow] = useState(emptyRow());
+  const [colWidths, setColWidths] = useState(null);
+  const resizeRef = useRef(null);
+  const tableRef = useRef(null);
+
+  /* ── 컬럼 너비 로드 (settings 테이블) ── */
+  useEffect(() => {
+    supabase.from('settings').select('value').eq('key', 'as_column_widths').single()
+      .then(({ data }) => { if (data?.value) setColWidths(data.value); });
+  }, []);
+
+  const saveColWidths = async (widths) => {
+    await supabase.from('settings').upsert({ key: 'as_column_widths', value: widths, updated_at: new Date().toISOString() });
+  };
+
+  const startResize = (colKey, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const currentW = getColWidth(colKey);
+    resizeRef.current = { colKey, startX, startW: currentW };
+    const onMove = (ev) => {
+      if (!resizeRef.current) return;
+      const diff = ev.clientX - resizeRef.current.startX;
+      const newW = Math.max(50, resizeRef.current.startW + diff);
+      setColWidths(prev => ({ ...(prev || {}), [resizeRef.current.colKey]: newW }));
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      if (resizeRef.current) {
+        const diff = 0;
+        setColWidths(prev => {
+          const next = { ...(prev || {}) };
+          saveColWidths(next);
+          return next;
+        });
+      }
+      resizeRef.current = null;
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
 
   function emptyRow() {
     return {
@@ -384,6 +429,15 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload }) {
     await onAddNew(row);
     setNewRow(emptyRow());
   };
+
+  const DEFAULT_WIDTHS = {
+    record_type:80, receipt_date:120, brand:80, intake_carrier:80, shipping_fee:90,
+    invoice_type:80, company_name:160, customer_phone:120, model:100, symptom:180, memo:90,
+    repair_result:160, technician:80, status:80, repair_cost:90,
+    payment_status:80, payer:80,
+    release_date:120, release_carrier:80, tracking_number:130, release_memo:90, _sms:44,
+  };
+  const getColWidth = (key) => colWidths?.[key] || DEFAULT_WIDTHS[key] || 80;
 
   const COL_GROUPS = [
     { label: '입고 / 고객 / 제품', color: '#0C447C', span: 11 },
@@ -509,7 +563,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload }) {
   };
 
   return (
-    <table className="as-table">
+    <table className="as-table" ref={tableRef}>
       {/* 컬럼 그룹 헤더 */}
       <thead>
         <tr className="as-group-header">
@@ -520,38 +574,52 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload }) {
           ))}
         </tr>
         <tr className="as-col-header">
-          {COLS.map(c => (
-            <th key={c.key} style={{ width: c.w, minWidth: c.w }}>{c.label}</th>
-          ))}
+          {COLS.map(c => {
+            const w = getColWidth(c.key);
+            return (
+              <th key={c.key} style={{ width: w, minWidth: 50, position: 'relative' }}>
+                {c.label}
+                {c.key !== '_sms' && (
+                  <span className="col-resize-handle" onMouseDown={e => startResize(c.key, e)} />
+                )}
+              </th>
+            );
+          })}
         </tr>
       </thead>
       <tbody>
         {/* NEW 행 */}
         <tr className="as-new-row">
-          {COLS.map(c => (
-            <td key={c.key} style={{width:c.w, minWidth:c.w}}>
-              {c.key === '_sms' ? (
-                <button className="btn-primary" style={{fontSize:11,padding:'2px 8px',whiteSpace:'nowrap'}} onClick={handleNewRowSave}>저장</button>
-              ) : renderNewCell(c)}
-            </td>
-          ))}
+          {COLS.map(c => {
+            const w = getColWidth(c.key);
+            return (
+              <td key={c.key} style={{width:w, minWidth:50}}>
+                {c.key === '_sms' ? (
+                  <button className="btn-primary" style={{fontSize:11,padding:'4px 10px',whiteSpace:'nowrap'}} onClick={handleNewRowSave}>저장</button>
+                ) : renderNewCell(c)}
+              </td>
+            );
+          })}
         </tr>
         {/* 데이터 행 */}
         {records.map(r => (
           <tr key={r.id} className="as-data-row">
-            {COLS.map(c => (
-              <td key={c.key} style={{width:c.w, minWidth:c.w}}
-                onClick={() => {
-                  if (c.key === '_sms') return;
-                  const val = c.key === 'company_name' ? (r.company_name || '') :
-                    c.fromDb ? (c.fromDb(r[c.key]) || '') :
-                    (c.key === 'repair_cost' ? (r[c.key]?.toString() || '') : (r[c.key] || ''));
-                  startEdit(r.id, c.key, c.toDb ? c.toDb(val) : val);
-                }}
-              >
-                {renderCell(r, c)}
-              </td>
-            ))}
+            {COLS.map(c => {
+              const w = getColWidth(c.key);
+              return (
+                <td key={c.key} style={{width:w, minWidth:50}}
+                  onClick={() => {
+                    if (c.key === '_sms') return;
+                    const val = c.key === 'company_name' ? (r.company_name || '') :
+                      c.fromDb ? (c.fromDb(r[c.key]) || '') :
+                      (c.key === 'repair_cost' ? (r[c.key]?.toString() || '') : (r[c.key] || ''));
+                    startEdit(r.id, c.key, c.toDb ? c.toDb(val) : val);
+                  }}
+                >
+                  {renderCell(r, c)}
+                </td>
+              );
+            })}
           </tr>
         ))}
         {records.length === 0 && (
