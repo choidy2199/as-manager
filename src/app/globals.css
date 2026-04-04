@@ -228,18 +228,18 @@ textarea.input { height: auto; padding: 10px; resize: vertical; }
 .as-filter-month { width: 160px; height: 38px; }
 
 /* ── AS Table ── */
-.as-table-wrapper { overflow: auto; max-height: calc(100vh - 280px); border: 1px solid var(--tl-border); border-top: none; border-radius: 0 0 6px 6px; }
+.as-table-wrapper { overflow: auto; max-height: calc(100vh - 300px); border: 1px solid var(--tl-border); border-top: none; border-radius: 0 0 6px 6px; background: var(--tl-bg); }
 .as-table { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
 .as-group-header th { position: sticky; top: 0; z-index: 12; }
-.as-col-header th { position: sticky; top: 30px; z-index: 11; }
-.as-table th { background: var(--tl-bg-tertiary); color: var(--tl-text-secondary); font-weight: 600; font-size: 12px; padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--tl-border); border-right: 1px solid #DDE1EB; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: none; }
+.as-col-header th { position: sticky; top: 30px; z-index: 11; background: var(--tl-bg-tertiary); }
+.as-table th { background: var(--tl-bg-tertiary); color: var(--tl-text-secondary); font-weight: 600; font-size: 12px; padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--tl-border); border-right: 1px solid #DDE1EB; white-space: nowrap; user-select: none; }
 .as-table th:last-child { border-right: none; }
-.as-table td { padding: 5px 6px; border-bottom: 1px solid #F0F2F7; border-right: 1px solid #F0F2F7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; font-size: 14px; }
+.as-table td { padding: 5px 6px; border-bottom: 1px solid #F0F2F7; border-right: 1px solid #F0F2F7; white-space: nowrap; cursor: pointer; font-size: 14px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
 .as-table td:last-child { border-right: none; }
 .as-table .as-group-border-th { border-right: 2px solid #B0B8C8 !important; }
 .as-table .as-group-border-td { border-right: 2px solid #B0B8C8 !important; }
 .as-data-row:hover td { background: var(--tl-bg-secondary); }
-.as-new-row td { background: #FFFDE7; border-bottom: 2px solid var(--tl-warning); }
+.as-new-row td { background: #FFFDE7; border-bottom: 2px solid var(--tl-warning); height: 44px; overflow: visible; padding: 4px 4px; }
 .as-cell-input { width: 100%; height: 36px; border: 1px solid var(--tl-primary); border-radius: 4px; padding: 0 6px; font-size: 14px; font-family: 'Pretendard', sans-serif; background: #fff; outline: none; box-shadow: 0 0 0 2px var(--tl-primary-light); }
 select.as-cell-input { padding-right: 2px; height: 36px; font-size: 14px; }
 
