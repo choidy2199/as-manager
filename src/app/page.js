@@ -38,6 +38,9 @@ export default function Home() {
   const [brandFilter, setBrandFilter] = useState('전체');
   const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0,7));
 
+  /* ── 새 접수 입력 행 표시 ── */
+  const [showNewRow, setShowNewRow] = useState(false);
+
   /* ── 택배/부속 기존 state ── */
   const [partsSearch, setPartsSearch] = useState('');
   const [partsCatFilter, setPartsCatFilter] = useState('전체');
@@ -216,10 +219,7 @@ export default function Home() {
               <h1 className="page-title" style={{marginBottom:0}}>AS 일지</h1>
               <div style={{display:'flex',gap:8}}>
                 <button className="btn-secondary">엑셀 다운로드</button>
-                <button className="btn-primary" onClick={() => {
-                  const el = document.querySelector('.as-new-row input');
-                  if (el) el.focus();
-                }}>+ 새 접수</button>
+                <button className="btn-primary" onClick={() => setShowNewRow(true)}>+ 새 접수</button>
               </div>
             </div>
 
@@ -229,16 +229,16 @@ export default function Home() {
                 <span>AS 일지</span>
                 <span style={{fontSize:13,fontWeight:400}}>{monthLabel} — {filteredAS.length}건</span>
               </div>
-              <div className="section-body" style={{padding:0}}>
-                <div className="scroll-x">
-                  <ASTable
-                    records={filteredAS}
-                    onSaveField={saveASField}
-                    onAddNew={addNewAS}
-                    onDelete={deleteAS}
-                    onReload={() => loadData(monthFilter)}
-                  />
-                </div>
+              <div className="as-table-wrapper">
+                <ASTable
+                  records={filteredAS}
+                  onSaveField={saveASField}
+                  onAddNew={addNewAS}
+                  onDelete={deleteAS}
+                  onReload={() => loadData(monthFilter)}
+                  showNewRow={showNewRow}
+                  onHideNewRow={() => setShowNewRow(false)}
+                />
               </div>
             </div>
           </>
@@ -348,7 +348,7 @@ export default function Home() {
 /* ═══════════════════════════════════════════════
    AS 테이블 — 인라인 편집
    ═══════════════════════════════════════════════ */
-function ASTable({ records, onSaveField, onAddNew, onDelete, onReload }) {
+function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow }) {
   const [editCell, setEditCell] = useState(null); // {id, field}
   const [editValue, setEditValue] = useState('');
   const [newRow, setNewRow] = useState(emptyRow());
@@ -430,6 +430,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload }) {
     row.status = row.status || '접수';
     await onAddNew(row);
     setNewRow(emptyRow());
+    if (onHideNewRow) onHideNewRow();
   };
 
   const DEFAULT_WIDTHS = {
@@ -591,18 +592,23 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload }) {
       </thead>
       <tbody>
         {/* NEW 행 */}
-        <tr className="as-new-row">
-          {COLS.map(c => {
-            const w = getColWidth(c.key);
-            return (
-              <td key={c.key} className={c.groupEnd ? 'as-group-border-td' : ''} style={{width:w, minWidth:50}}>
-                {c.key === '_sms' ? (
-                  <button className="btn-primary" style={{fontSize:11,padding:'4px 10px',whiteSpace:'nowrap'}} onClick={handleNewRowSave}>저장</button>
-                ) : renderNewCell(c)}
-              </td>
-            );
-          })}
-        </tr>
+        {showNewRow && (
+          <tr className="as-new-row">
+            {COLS.map(c => {
+              const w = getColWidth(c.key);
+              return (
+                <td key={c.key} className={c.groupEnd ? 'as-group-border-td' : ''} style={{width:w, minWidth:50}}>
+                  {c.key === '_sms' ? (
+                    <div style={{display:'flex',gap:4}}>
+                      <button className="btn-primary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={handleNewRowSave}>저장</button>
+                      <button className="btn-secondary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={onHideNewRow}>취소</button>
+                    </div>
+                  ) : renderNewCell(c)}
+                </td>
+              );
+            })}
+          </tr>
+        )}
         {/* 데이터 행 */}
         {records.map(r => (
           <tr key={r.id} className="as-data-row">
