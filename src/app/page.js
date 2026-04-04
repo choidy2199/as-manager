@@ -398,7 +398,10 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     const startX = e.clientX;
     const currentW = getColWidth(colKey);
     resizeRef.current = { colKey, startX, startW: currentW };
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
     const onMove = (ev) => {
+      ev.preventDefault();
       if (!resizeRef.current) return;
       const diff = ev.clientX - resizeRef.current.startX;
       const newW = Math.max(30, resizeRef.current.startW + diff);
@@ -407,8 +410,9 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     const onUp = () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
       if (resizeRef.current) {
-        const diff = 0;
         setColWidths(prev => {
           const next = { ...(prev || {}) };
           saveColWidths(next);
