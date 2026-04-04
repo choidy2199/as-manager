@@ -378,23 +378,11 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   const [editCell, setEditCell] = useState(null); // {id, field}
   const [editValue, setEditValue] = useState('');
   const [newRow, setNewRow] = useState(emptyRow());
-  const savedWidthsRef = useRef({});
+  const savedWidthsRef = useRef((() => {
+    if (typeof window === 'undefined') return {};
+    try { const v = JSON.parse(localStorage.getItem('as_column_widths')); return (v && typeof v === 'object') ? v : {}; } catch { return {}; }
+  })());
   const tableRef = useRef(null);
-
-  /* ── 컬럼 너비 로드 ── */
-  useEffect(() => {
-    try {
-      const local = JSON.parse(localStorage.getItem('as_column_widths'));
-      if (local && typeof local === 'object') savedWidthsRef.current = local;
-    } catch {}
-    supabase.from('settings').select('value').eq('key', 'as_column_widths').single()
-      .then(({ data }) => {
-        if (data?.value && typeof data.value === 'object') {
-          savedWidthsRef.current = data.value;
-          localStorage.setItem('as_column_widths', JSON.stringify(data.value));
-        }
-      });
-  }, []);
 
   const getColWidth = (key) => savedWidthsRef.current[key] || DEFAULT_WIDTHS[key] || 80;
 
@@ -558,46 +546,66 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     }
 
     // Display
-    const B = (bg, color, text) => <span style={{display:'inline-flex',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color}}>{text}</span>;
+    const B = (bg, color, text, extra) => <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color,...(extra||{})}}>{text}</span>;
     const empty = <span className="empty-dot" />;
 
     if (col.key === '_sms') {
       return <span className="sms-icon" title="문자" onClick={e => { e.stopPropagation(); onOpenSms && onOpenSms(r.id); }}>💬</span>;
     }
+    // 1. 구분
     if (col.key === 'record_type') {
       const label = dbToRecordType(r.record_type);
-      const colors = { as_repair:['#E6F1FB','#0C447C'], product_sale:['#E1F5EE','#085041'], parts_sale:['#FAEEDA','#412402'] };
-      const [bg,c] = colors[r.record_type] || ['#F4F6FA','#5A6070'];
+      const m = { as_repair:['#E6F1FB','#0C447C'], product_sale:['#E1F5EE','#085041'], parts_sale:['#FAEEDA','#412402'] };
+      const [bg,c] = m[r.record_type] || ['#F4F6FA','#5A6070'];
       return B(bg, c, label);
     }
-    if (col.key === 'brand') return val ? B('#EEEDFE','#3C3489',val) : empty;
+    // 2. 입고일 / 11. 출고일
+    if (col.type === 'date') return val ? B('#F4F6FA','#5A6070',fmtDate(val)) : empty;
+    // 3. 브랜드
+    if (col.key === 'brand') {
+      if (!val) return empty;
+      const m = {'콜라보':['#EEEDFE','#3C3489'],'마끼다':['#FAEEDA','#412402'],'디월트':['#E1F5EE','#085041']};
+      const [bg,c] = m[val] || ['#EEEDFE','#3C3489'];
+      return B(bg, c, val);
+    }
+    // 4. 택배(입고) / 10. 택배(출고)
     if (col.key === 'intake_carrier' || col.key === 'release_carrier') return val ? B('#F4F6FA','#5A6070',val) : empty;
+    // 5. 계산서
     if (col.key === 'invoice_type') {
-      if (!val || val === '없음(일반소매)') return val ? B('#F4F6FA','#5A6070','일반') : empty;
+      if (!val || val === '없음(일반소매)') return val ? B('#F4F6FA','#9BA3B2','일반') : empty;
       if (val === '계산서(거래처)') return B('#E6F1FB','#0C447C','계산서');
       if (val === '월말') return B('#FAEEDA','#412402','월말');
-      return B('#F4F6FA','#5A6070',val);
+      return B('#F4F6FA','#9BA3B2',val);
     }
+    // 6. 모델명
     if (col.key === 'model') return val ? B('#F4F6FA','#1A1D23',val) : empty;
+    // 7. 처리자
     if (col.key === 'technician') return val ? B('#E6F1FB','#0C447C',val) : empty;
-    if (col.key === 'status' && val) {
-      const cls = {'접수':['#E6F1FB','#0C447C'],'진단중':['#FAEEDA','#412402'],'부품대기':['#FAEEDA','#412402'],'수리중':['#E6F1FB','#0C447C'],'완료':['#E1F5EE','#085041'],'수리X':['#FCEBEB','#791F1F'],'폐기':['#F4F6FA','#5A6070']};
-      const [bg,c] = cls[val] || ['#F4F6FA','#5A6070'];
+    // 8. AS상태
+    if (col.key === 'status') {
+      if (!val) return empty;
+      const m = {'접수':['#E6F1FB','#0C447C'],'진단중':['#FAEEDA','#412402'],'부품대기':['#FAEEDA','#412402'],'수리중':['#FAEEDA','#412402'],'완료':['#E1F5EE','#085041'],'수리X':['#FCEBEB','#791F1F'],'폐기':['#FCEBEB','#791F1F']};
+      const [bg,c] = m[val] || ['#F4F6FA','#5A6070'];
       return B(bg, c, val);
     }
+    // 9. 입금
     if (col.key === 'payment_status') {
       if (!val) return empty;
-      const cls = {'완료':['#E1F5EE','#085041'],'무상':['#F4F6FA','#5A6070'],'대기':['#FAEEDA','#412402'],'명세서':['#FAEEDA','#412402'],'카드':['#E6F1FB','#0C447C'],'방문결제':['#E6F1FB','#0C447C']};
-      const [bg,c] = cls[val] || ['#FAEEDA','#412402'];
+      const m = {'완료':['#E1F5EE','#085041'],'무상':['#F4F6FA','#5A6070'],'대기':['#FAEEDA','#412402'],'명세서':['#FAEEDA','#412402'],'카드':['#E6F1FB','#0C447C'],'방문결제':['#E6F1FB','#0C447C']};
+      const [bg,c] = m[val] || ['#FAEEDA','#412402'];
       return B(bg, c, val);
     }
-    if (col.key === 'tracking_number') return val ? <span style={{display:'inline-flex',padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:600,whiteSpace:'nowrap',background:'#F4F6FA',color:'#5A6070',fontFamily:'monospace'}}>{val}</span> : empty;
-    if (col.type === 'date') return val ? <span style={{fontSize:12,color:'#5A6070',whiteSpace:'nowrap'}}>{fmtDate(val)}</span> : empty;
-    if (col.key === 'repair_cost') return val ? <span style={{color:'#185FA5',fontWeight:600}}>{fmt(val)}</span> : empty;
+    // 12. 운송장번호
+    if (col.key === 'tracking_number') return val ? B('#F4F6FA','#5A6070',val,{fontFamily:'monospace',fontSize:10}) : empty;
+    // AS비용
+    if (col.key === 'repair_cost') return val ? <span style={{color:'#185FA5',fontWeight:700}}>{fmt(val)}</span> : empty;
+    // 거래처/성함
     if (col.key === 'company_name') {
-      const parts = [r.company_name, r.customer_name].filter(Boolean);
-      return parts.length > 0 ? parts.join(' / ') : empty;
+      const p = [r.company_name, r.customer_name].filter(Boolean);
+      return p.length > 0 ? p.join(' / ') : empty;
     }
+    // 연락처
+    if (col.key === 'customer_phone') return val ? <span style={{fontSize:12,color:'#5A6070'}}>{val}</span> : empty;
     return val || empty;
   };
 
