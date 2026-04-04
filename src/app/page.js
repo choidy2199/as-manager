@@ -390,16 +390,17 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   const getColWidth = (key) => savedWidthsRef.current[key] || DEFAULT_WIDTHS[key] || 80;
 
   /* ── 컬럼 리사이즈 — DOM 직접 조작 ── */
-  const startResize = (colKey, e) => {
+  /* ── 컬럼 리사이즈 — colgroup > col DOM 직접 조작 ── */
+  const startResize = (colIdx, colKey, e) => {
     e.preventDefault();
     e.stopPropagation();
-    const th = e.target.closest('th');
     const table = tableRef.current;
-    if (!th || !table) { console.log('리사이즈 실패: th 또는 table 없음', !!th, !!table); return; }
+    if (!table) return;
+    const col = table.querySelector('colgroup').children[colIdx];
+    if (!col) return;
     const startX = e.clientX;
-    const startThW = th.offsetWidth;
+    const startW = col.offsetWidth || getColWidth(colKey);
     const startTableW = table.offsetWidth;
-    console.log('리사이즈 시작', colKey, 'startWidth:', startThW, 'tableWidth:', startTableW);
 
     document.body.style.userSelect = 'none';
     document.body.style.cursor = 'col-resize';
@@ -407,13 +408,9 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     const onMove = (ev) => {
       ev.preventDefault();
       const diff = ev.clientX - startX;
-      const newW = Math.max(30, startThW + diff);
-      const delta = newW - startThW;
-      th.style.width = newW + 'px';
-      th.style.minWidth = newW + 'px';
-      th.style.maxWidth = newW + 'px';
-      table.style.width = (startTableW + delta) + 'px';
-      console.log('드래그 중', colKey, 'newWidth:', newW);
+      const newW = Math.max(30, startW + diff);
+      col.style.width = newW + 'px';
+      table.style.width = (startTableW + (newW - startW)) + 'px';
     };
 
     const onUp = () => {
@@ -421,8 +418,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       document.removeEventListener('mouseup', onUp);
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
-      const finalW = th.offsetWidth;
-      console.log('리사이즈 완료', colKey, 'finalWidth:', finalW);
+      const finalW = parseInt(col.style.width) || startW;
       savedWidthsRef.current = { ...savedWidthsRef.current, [colKey]: finalW };
       supabase.from('settings').upsert({ key: 'as_column_widths', value: savedWidthsRef.current, updated_at: new Date().toISOString() });
     };
@@ -612,7 +608,9 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 
   return (
     <table className="as-table" ref={tableRef} style={{width: COLS.reduce((s, c) => s + getColWidth(c.key), 0)}}>
-      {/* 컬럼 그룹 헤더 */}
+      <colgroup>
+        {COLS.map(c => <col key={c.key} style={{width: getColWidth(c.key)}} />)}
+      </colgroup>
       <thead>
         <tr className="as-group-header">
           {COL_GROUPS.map((g, i) => (
@@ -622,43 +620,35 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
           ))}
         </tr>
         <tr className="as-col-header">
-          {COLS.map(c => {
-            const w = getColWidth(c.key);
-            return (
-              <th key={c.key} className={c.groupEnd ? 'as-group-border-th' : ''} style={{ width: w, minWidth: 30, position: 'sticky', top: 29, zIndex: 19, background: '#EAECF2' }}>
-                {c.label}
-                <span className="col-resize-handle" onMouseDown={e => startResize(c.key, e)} />
-              </th>
-            );
-          })}
+          {COLS.map((c, idx) => (
+            <th key={c.key} className={c.groupEnd ? 'as-group-border-th' : ''} style={{ position: 'sticky', top: 29, zIndex: 19, background: '#EAECF2' }}>
+              {c.label}
+              <span className="col-resize-handle" onMouseDown={e => startResize(idx, c.key, e)} />
+            </th>
+          ))}
         </tr>
       </thead>
       <tbody>
         {/* NEW 행 */}
         {showNewRow && (
           <tr className="as-new-row">
-            {COLS.map(c => {
-              const w = getColWidth(c.key);
-              return (
-                <td key={c.key} className={c.groupEnd ? 'as-group-border-td' : ''} style={{width:w, minWidth:30}}>
-                  {c.key === '_sms' ? (
-                    <div style={{display:'flex',gap:4}}>
-                      <button className="btn-primary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={handleNewRowSave}>저장</button>
-                      <button className="btn-secondary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={onHideNewRow}>취소</button>
-                    </div>
-                  ) : renderNewCell(c)}
-                </td>
-              );
-            })}
+            {COLS.map(c => (
+              <td key={c.key} className={c.groupEnd ? 'as-group-border-td' : ''}>
+                {c.key === '_sms' ? (
+                  <div style={{display:'flex',gap:4}}>
+                    <button className="btn-primary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={handleNewRowSave}>저장</button>
+                    <button className="btn-secondary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={onHideNewRow}>취소</button>
+                  </div>
+                ) : renderNewCell(c)}
+              </td>
+            ))}
           </tr>
         )}
         {/* 데이터 행 */}
         {records.map(r => (
           <tr key={r.id} className="as-data-row" style={smsPanelId === r.id ? {background:'#E6F1FB'} : undefined}>
-            {COLS.map(c => {
-              const w = getColWidth(c.key);
-              return (
-                <td key={c.key} className={c.groupEnd ? 'as-group-border-td' : ''} style={{width:w, minWidth:30}}
+            {COLS.map(c => (
+                <td key={c.key} className={c.groupEnd ? 'as-group-border-td' : ''}
                   onClick={() => {
                     if (c.key === '_sms') return;
                     const val = c.key === 'company_name' ? (r.company_name || '') :
@@ -669,8 +659,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
                 >
                   {renderCell(r, c)}
                 </td>
-              );
-            })}
+            ))}
           </tr>
         ))}
         {records.length === 0 && (
