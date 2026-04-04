@@ -378,49 +378,49 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   const [editCell, setEditCell] = useState(null); // {id, field}
   const [editValue, setEditValue] = useState('');
   const [newRow, setNewRow] = useState(emptyRow());
-  const [colWidths, setColWidths] = useState(null);
-  const resizeRef = useRef(null);
+  const savedWidthsRef = useRef({});
   const tableRef = useRef(null);
 
   /* ── 컬럼 너비 로드 (settings 테이블) ── */
   useEffect(() => {
     supabase.from('settings').select('value').eq('key', 'as_column_widths').single()
-      .then(({ data }) => { if (data?.value) setColWidths(data.value); });
+      .then(({ data }) => { if (data?.value) savedWidthsRef.current = data.value; });
   }, []);
 
-  const saveColWidths = async (widths) => {
-    await supabase.from('settings').upsert({ key: 'as_column_widths', value: widths, updated_at: new Date().toISOString() });
-  };
+  const getColWidth = (key) => savedWidthsRef.current[key] || DEFAULT_WIDTHS[key] || 80;
 
+  /* ── 컬럼 리사이즈 — DOM 직접 조작 ── */
   const startResize = (colKey, e) => {
     e.preventDefault();
     e.stopPropagation();
+    const th = e.target.closest('th');
+    if (!th) return;
     const startX = e.clientX;
-    const currentW = getColWidth(colKey);
-    resizeRef.current = { colKey, startX, startW: currentW };
+    const startW = th.offsetWidth;
+
     document.body.style.userSelect = 'none';
     document.body.style.cursor = 'col-resize';
+
     const onMove = (ev) => {
       ev.preventDefault();
-      if (!resizeRef.current) return;
-      const diff = ev.clientX - resizeRef.current.startX;
-      const newW = Math.max(30, resizeRef.current.startW + diff);
-      setColWidths(prev => ({ ...(prev || {}), [resizeRef.current.colKey]: newW }));
+      const diff = ev.clientX - startX;
+      const newW = Math.max(30, startW + diff);
+      th.style.width = newW + 'px';
+      th.style.minWidth = newW + 'px';
+      th.style.maxWidth = newW + 'px';
     };
+
     const onUp = () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
-      if (resizeRef.current) {
-        setColWidths(prev => {
-          const next = { ...(prev || {}) };
-          saveColWidths(next);
-          return next;
-        });
-      }
-      resizeRef.current = null;
+      // 최종 너비를 저장
+      const finalW = th.offsetWidth;
+      savedWidthsRef.current = { ...savedWidthsRef.current, [colKey]: finalW };
+      supabase.from('settings').upsert({ key: 'as_column_widths', value: savedWidthsRef.current, updated_at: new Date().toISOString() });
     };
+
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   };
@@ -481,8 +481,6 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     payment_status:70, payer:80,
     release_date:120, release_carrier:70, tracking_number:130, release_memo:90,
   };
-  const getColWidth = (key) => colWidths?.[key] || DEFAULT_WIDTHS[key] || 80;
-
   const COL_GROUPS = [
     { label: '입고 / 고객 / 제품', color: '#0C447C', span: 12 },
     { label: 'AS 처리 및 비용', color: '#085041', span: 4 },
