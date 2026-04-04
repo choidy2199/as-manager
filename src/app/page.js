@@ -560,43 +560,43 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       return B(bg, c, label);
     }
     // 2. 입고일 / 11. 출고일
-    if (col.type === 'date') return val ? B('#F4F6FA','#5A6070',fmtDate(val)) : empty;
+    if (col.type === 'date') return val ? B('#E8EBF0','#3A3F4B',fmtDate(val)) : empty;
     // 3. 브랜드
     if (col.key === 'brand') {
       if (!val) return empty;
-      const m = {'콜라보':['#EEEDFE','#3C3489'],'마끼다':['#FAEEDA','#412402'],'디월트':['#E1F5EE','#085041']};
+      const m = {'콜라보':['#EEEDFE','#3C3489'],'마끼다':['#FAEEDA','#412402'],'디월트':['#E1F5EE','#085041'],'프레레':['#E6F1FB','#0C447C']};
       const [bg,c] = m[val] || ['#EEEDFE','#3C3489'];
       return B(bg, c, val);
     }
     // 4. 택배(입고) / 10. 택배(출고)
-    if (col.key === 'intake_carrier' || col.key === 'release_carrier') return val ? B('#F4F6FA','#5A6070',val) : empty;
+    if (col.key === 'intake_carrier' || col.key === 'release_carrier') return val ? B('#E8EBF0','#3A3F4B',val) : empty;
     // 5. 계산서
     if (col.key === 'invoice_type') {
-      if (!val || val === '없음(일반소매)') return val ? B('#F4F6FA','#9BA3B2','일반') : empty;
+      if (!val || val === '없음(일반소매)') return val ? B('#E8EBF0','#7A8194','일반') : empty;
       if (val === '계산서(거래처)') return B('#E6F1FB','#0C447C','계산서');
       if (val === '월말') return B('#FAEEDA','#412402','월말');
-      return B('#F4F6FA','#9BA3B2',val);
+      return B('#E8EBF0','#7A8194',val);
     }
     // 6. 모델명
-    if (col.key === 'model') return val ? B('#F4F6FA','#1A1D23',val) : empty;
+    if (col.key === 'model') return val ? B('#E6F1FB','#0C447C',val) : empty;
     // 7. 처리자
     if (col.key === 'technician') return val ? B('#E6F1FB','#0C447C',val) : empty;
     // 8. AS상태
     if (col.key === 'status') {
       if (!val) return empty;
       const m = {'접수':['#E6F1FB','#0C447C'],'진단중':['#FAEEDA','#412402'],'부품대기':['#FAEEDA','#412402'],'수리중':['#FAEEDA','#412402'],'완료':['#E1F5EE','#085041'],'수리X':['#FCEBEB','#791F1F'],'폐기':['#FCEBEB','#791F1F']};
-      const [bg,c] = m[val] || ['#F4F6FA','#5A6070'];
+      const [bg,c] = m[val] || ['#E8EBF0','#3A3F4B'];
       return B(bg, c, val);
     }
     // 9. 입금
     if (col.key === 'payment_status') {
       if (!val) return empty;
-      const m = {'완료':['#E1F5EE','#085041'],'무상':['#F4F6FA','#5A6070'],'대기':['#FAEEDA','#412402'],'명세서':['#FAEEDA','#412402'],'카드':['#E6F1FB','#0C447C'],'방문결제':['#E6F1FB','#0C447C']};
+      const m = {'완료':['#E1F5EE','#085041'],'무상':['#E8EBF0','#3A3F4B'],'대기':['#FAEEDA','#412402'],'명세서':['#FAEEDA','#412402'],'카드':['#E6F1FB','#0C447C'],'방문결제':['#E6F1FB','#0C447C']};
       const [bg,c] = m[val] || ['#FAEEDA','#412402'];
       return B(bg, c, val);
     }
     // 12. 운송장번호
-    if (col.key === 'tracking_number') return val ? B('#F4F6FA','#5A6070',val,{fontFamily:'monospace',fontSize:10}) : empty;
+    if (col.key === 'tracking_number') return val ? B('#E8EBF0','#3A3F4B',val,{fontFamily:'monospace',fontSize:10}) : empty;
     // AS비용
     if (col.key === 'repair_cost') return val ? <span style={{color:'#185FA5',fontWeight:700}}>{fmt(val)}</span> : empty;
     // 거래처/성함
