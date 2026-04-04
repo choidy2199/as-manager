@@ -59,8 +59,10 @@ export default function Home() {
   const loadData = useCallback(async (month) => {
     const m = month || monthFilter;
     setLoading(true);
+    const [y, mo] = m.split('-').map(Number);
+    const lastDay = new Date(y, mo, 0).getDate();
     const startDate = m + '-01';
-    const endDate = m + '-31';
+    const endDate = m + '-' + String(lastDay).padStart(2, '0');
     const [asRes, shipRes, partsRes] = await Promise.all([
       supabase.from('as_records').select('*').gte('receipt_date', startDate).lte('receipt_date', endDate).order('created_at', { ascending: false }),
       supabase.from('ship_records').select('*').order('created_at', { ascending: false }).limit(100),
