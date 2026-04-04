@@ -41,6 +41,7 @@ export default function Home() {
   /* ── 새 접수 입력 행 표시 ── */
   const [showNewRow, setShowNewRow] = useState(false);
   const [kpiFilter, setKpiFilter] = useState(null);
+  const [smsPanelId, setSmsPanelId] = useState(null);
 
   /* ── 택배/부속 기존 state ── */
   const [partsSearch, setPartsSearch] = useState('');
@@ -239,16 +240,25 @@ export default function Home() {
                 <span>AS 일지</span>
                 <span style={{fontSize:13,fontWeight:400}}>{monthLabel} — {filteredAS.length}건</span>
               </div>
-              <div className="as-table-wrapper">
-                <ASTable
-                  records={filteredAS}
-                  onSaveField={saveASField}
-                  onAddNew={addNewAS}
-                  onDelete={deleteAS}
-                  onReload={() => loadData(monthFilter)}
-                  showNewRow={showNewRow}
-                  onHideNewRow={() => setShowNewRow(false)}
-                />
+              <div className="as-main-layout">
+                <div className="as-table-wrapper" style={{ flex: 1 }}>
+                  <ASTable
+                    records={filteredAS}
+                    onSaveField={saveASField}
+                    onAddNew={addNewAS}
+                    onDelete={deleteAS}
+                    onReload={() => loadData(monthFilter)}
+                    showNewRow={showNewRow}
+                    onHideNewRow={() => setShowNewRow(false)}
+                    smsPanelId={smsPanelId}
+                    onOpenSms={setSmsPanelId}
+                  />
+                </div>
+                {smsPanelId && (() => {
+                  const rec = asRecords.find(r => r.id === smsPanelId);
+                  if (!rec) return null;
+                  return <SMSPanel record={rec} onClose={() => setSmsPanelId(null)} />;
+                })()}
               </div>
             </div>
           </>
@@ -358,7 +368,7 @@ export default function Home() {
 /* ═══════════════════════════════════════════════
    AS 테이블 — 인라인 편집
    ═══════════════════════════════════════════════ */
-function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow }) {
+function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, smsPanelId, onOpenSms }) {
   const [editCell, setEditCell] = useState(null); // {id, field}
   const [editValue, setEditValue] = useState('');
   const [newRow, setNewRow] = useState(emptyRow());
@@ -519,7 +529,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 
     // Display
     if (col.key === '_sms') {
-      return <span className="sms-dot sms-dot-gray" title="미발송">●</span>;
+      return <span className="sms-icon" title="문자" onClick={e => { e.stopPropagation(); onOpenSms && onOpenSms(r.id); }}>💬</span>;
     }
     if (col.key === 'record_type') {
       const label = dbToRecordType(r.record_type);
@@ -621,7 +631,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         )}
         {/* 데이터 행 */}
         {records.map(r => (
-          <tr key={r.id} className="as-data-row">
+          <tr key={r.id} className="as-data-row" style={smsPanelId === r.id ? {background:'#E6F1FB'} : undefined}>
             {COLS.map(c => {
               const w = getColWidth(c.key);
               return (
@@ -681,5 +691,112 @@ function ShipForm({ initial, onSave, onClose }) {
       </div>
       <div className="modal-footer"><button onClick={onClose} className="btn-secondary">취소</button><button onClick={() => onSave(f)} className="btn-primary">저장</button></div>
     </>
+  );
+}
+
+
+/* ═══ SMS PANEL ═══ */
+function SMSPanel({ record, onClose }) {
+  const r = record;
+  const [msgInput, setMsgInput] = useState('');
+  const [smsMessages, setSmsMessages] = useState([]);
+
+  useEffect(() => {
+    if (!r.customer_phone) return;
+    supabase.from('sms_messages').select('*')
+      .eq('phone', r.customer_phone)
+      .order('sent_at', { ascending: true })
+      .then(({ data }) => { if (data) setSmsMessages(data); });
+  }, [r.customer_phone, r.id]);
+
+  const STATUS_STEPS = ['접수', '진단', '수리중', '출고', '완료'];
+  const statusIndex = (() => {
+    const map = { '접수': 0, '진단중': 1, '부품대기': 2, '수리중': 2, '완료': 4, '수리X': -1, '폐기': -1 };
+    const idx = map[r.status];
+    if (idx === undefined) return 0;
+    if (r.release_date && idx < 3) return 3;
+    return idx;
+  })();
+
+  const handleSend = () => {
+    if (!msgInput.trim()) return;
+    alert('SMS 연동이 필요합니다.\n설정 → SMS 연동에서 httpSMS API 키를 입력해주세요.');
+    setMsgInput('');
+  };
+
+  return (
+    <div className="sms-panel">
+      {/* 헤더 */}
+      <div className="sms-panel-header">
+        <div>
+          <div style={{fontSize:16,fontWeight:700}}>{r.customer_name || r.company_name || '고객'}</div>
+          <div style={{fontSize:13,opacity:0.85}}>{r.customer_phone || '연락처 없음'}</div>
+        </div>
+        <button className="sms-panel-close" onClick={onClose}>✕</button>
+      </div>
+
+      {/* AS 정보 요약 */}
+      <div className="sms-section">
+        <div className="sms-info-grid">
+          <div><span className="sms-info-label">입고일</span><span className="sms-info-value">{fmtDate(r.receipt_date)}</span></div>
+          <div><span className="sms-info-label">브랜드</span><span className="sms-info-value">{r.brand || '-'}</span></div>
+          <div><span className="sms-info-label">모델명</span><span className="sms-info-value">{r.model || '-'}</span></div>
+          <div><span className="sms-info-label">계산서</span><span className="sms-info-value">{r.invoice_type || '-'}</span></div>
+          <div><span className="sms-info-label">증상</span><span className="sms-info-value">{r.symptom || '-'}</span></div>
+          <div><span className="sms-info-label">입금상태</span><span className="sms-info-value">{r.payment_status || '-'}</span></div>
+        </div>
+      </div>
+
+      {/* 진행 상황 바 */}
+      <div className="sms-section">
+        <div className="sms-progress-bar">
+          {STATUS_STEPS.map((step, i) => {
+            let color = '#EAECF2';
+            let textColor = '#9BA3B2';
+            if (statusIndex >= 0) {
+              if (i < statusIndex) { color = '#1D9E75'; textColor = '#1D9E75'; }
+              else if (i === statusIndex) { color = '#EF9F27'; textColor = '#EF9F27'; }
+            }
+            return (
+              <div key={step} className="sms-progress-step">
+                <div className="sms-progress-dot" style={{background:color}} />
+                {i < STATUS_STEPS.length - 1 && <div className="sms-progress-line" style={{background: i < statusIndex ? '#1D9E75' : '#EAECF2'}} />}
+                <div className="sms-progress-label" style={{color:textColor}}>{step}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 교체 부품 / 비용 */}
+      <div className="sms-section">
+        <div className="sms-info-label" style={{marginBottom:4}}>처리결과</div>
+        <div style={{fontSize:13,marginBottom:8}}>{r.repair_result || '-'}</div>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <span className="sms-info-label">AS 비용</span>
+          <span style={{fontSize:16,fontWeight:700,color:'#185FA5'}}>{r.repair_cost ? fmt(r.repair_cost) + '원' : '0원'}</span>
+        </div>
+      </div>
+
+      {/* 문자 내역 */}
+      <div className="sms-chat-area">
+        {smsMessages.length === 0 ? (
+          <div className="sms-chat-empty">문자 내역이 없습니다</div>
+        ) : (
+          smsMessages.map(msg => (
+            <div key={msg.id} className={`sms-bubble ${msg.direction === 'outgoing' ? 'sms-bubble-out' : 'sms-bubble-in'}`}>
+              <div className="sms-bubble-text">{msg.content}</div>
+              <div className="sms-bubble-time">{new Date(msg.sent_at).toLocaleString('ko-KR', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* 문자 입력창 */}
+      <div className="sms-input-bar">
+        <input className="input" value={msgInput} onChange={e => setMsgInput(e.target.value)} placeholder="문자 입력..." onKeyDown={e => e.key === 'Enter' && handleSend()} style={{flex:1}} />
+        <button className="btn-primary" onClick={handleSend} style={{whiteSpace:'nowrap'}}>전송</button>
+      </div>
+    </div>
   );
 }
