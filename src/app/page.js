@@ -481,13 +481,13 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     invoice_type:70, company_name:160, _sms:40, customer_phone:120, model:100, symptom:180, memo:100,
     repair_result:160, technician:80, status:80, repair_cost:90,
     payment_status:70, payer:80,
-    release_date:120, release_carrier:70, tracking_number:130, release_memo:90,
+    release_date:120, release_carrier:70, tracking_number:130,
   };
   const COL_GROUPS = [
     { label: '입고 / 고객 / 제품', color: '#0C447C', span: 12 },
     { label: 'AS 처리 및 비용', color: '#085041', span: 4 },
     { label: '입금', color: '#412402', span: 2 },
-    { label: '출고', color: '#3C3489', span: 4 },
+    { label: '출고', color: '#3C3489', span: 3 },
   ];
 
   const COLS = [
@@ -516,7 +516,6 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'release_date', label:'출고일', w:115, type:'date' },
     { key:'release_carrier', label:'택배', w:70, type:'select', opts: CARRIERS_OUT },
     { key:'tracking_number', label:'운송장번호', w:130, type:'text' },
-    { key:'release_memo', label:'비고', w:90, type:'text' },
   ];
 
   const renderCell = (r, col) => {
@@ -549,36 +548,47 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     }
 
     // Display
+    const B = (bg, color, text) => <span style={{display:'inline-flex',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color}}>{text}</span>;
+    const empty = <span className="empty-dot" />;
+
     if (col.key === '_sms') {
       return <span className="sms-icon" title="문자" onClick={e => { e.stopPropagation(); onOpenSms && onOpenSms(r.id); }}>💬</span>;
     }
     if (col.key === 'record_type') {
       const label = dbToRecordType(r.record_type);
-      const cls = r.record_type === 'as_repair' ? 'badge-blue' : r.record_type === 'product_sale' ? 'badge-green' : 'badge-amber';
-      return <span className={`badge ${cls}`} style={{fontSize:11}}>{label}</span>;
+      const colors = { as_repair:['#E6F1FB','#0C447C'], product_sale:['#E1F5EE','#085041'], parts_sale:['#FAEEDA','#412402'] };
+      const [bg,c] = colors[r.record_type] || ['#F4F6FA','#5A6070'];
+      return B(bg, c, label);
     }
-    if (col.key === 'brand' && val) {
-      const cls = {'콜라보':'badge-purple','마끼다':'badge-amber','디월트':'badge-green','프레레':'badge-blue'}[val] || 'badge-gray';
-      return <span className={`badge ${cls}`} style={{fontSize:11}}>{val}</span>;
+    if (col.key === 'brand') return val ? B('#EEEDFE','#3C3489',val) : empty;
+    if (col.key === 'intake_carrier' || col.key === 'release_carrier') return val ? B('#F4F6FA','#5A6070',val) : empty;
+    if (col.key === 'invoice_type') {
+      if (!val || val === '없음(일반소매)') return val ? B('#F4F6FA','#5A6070','일반') : empty;
+      if (val === '계산서(거래처)') return B('#E6F1FB','#0C447C','계산서');
+      if (val === '월말') return B('#FAEEDA','#412402','월말');
+      return B('#F4F6FA','#5A6070',val);
     }
+    if (col.key === 'model') return val ? B('#F4F6FA','#1A1D23',val) : empty;
+    if (col.key === 'technician') return val ? B('#E6F1FB','#0C447C',val) : empty;
     if (col.key === 'status' && val) {
-      const cls = {'접수':'badge-blue','진단중':'badge-amber','부품대기':'badge-amber','수리중':'badge-blue','완료':'badge-green','수리X':'badge-red','폐기':'badge-gray'}[val] || 'badge-gray';
-      return <span className={`badge ${cls}`} style={{fontSize:11}}>{val}</span>;
+      const cls = {'접수':['#E6F1FB','#0C447C'],'진단중':['#FAEEDA','#412402'],'부품대기':['#FAEEDA','#412402'],'수리중':['#E6F1FB','#0C447C'],'완료':['#E1F5EE','#085041'],'수리X':['#FCEBEB','#791F1F'],'폐기':['#F4F6FA','#5A6070']};
+      const [bg,c] = cls[val] || ['#F4F6FA','#5A6070'];
+      return B(bg, c, val);
     }
-    if (col.key === 'invoice_type' && val && val !== '없음(일반소매)') {
-      return <span className="badge badge-amber" style={{fontSize:11}}>{val}</span>;
+    if (col.key === 'payment_status') {
+      if (!val) return empty;
+      const cls = {'완료':['#E1F5EE','#085041'],'무상':['#F4F6FA','#5A6070'],'대기':['#FAEEDA','#412402'],'명세서':['#FAEEDA','#412402'],'카드':['#E6F1FB','#0C447C'],'방문결제':['#E6F1FB','#0C447C']};
+      const [bg,c] = cls[val] || ['#FAEEDA','#412402'];
+      return B(bg, c, val);
     }
-    if (col.key === 'payment_status' && val) {
-      const cls = val === '완료' ? 'badge-green' : val === '무상' ? 'badge-gray' : 'badge-amber';
-      return <span className={`badge ${cls}`} style={{fontSize:11}}>{val}</span>;
-    }
-    if (col.type === 'date' && val) return <span style={{whiteSpace:'nowrap'}}>{fmtDate(val)}</span>;
-    if (col.key === 'repair_cost' && val) return <span className="price">{fmt(val)}</span>;
+    if (col.key === 'tracking_number') return val ? <span style={{display:'inline-flex',padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:600,whiteSpace:'nowrap',background:'#F4F6FA',color:'#5A6070',fontFamily:'monospace'}}>{val}</span> : empty;
+    if (col.type === 'date') return val ? <span style={{fontSize:12,color:'#5A6070',whiteSpace:'nowrap'}}>{fmtDate(val)}</span> : empty;
+    if (col.key === 'repair_cost') return val ? <span style={{color:'#185FA5',fontWeight:600}}>{fmt(val)}</span> : empty;
     if (col.key === 'company_name') {
       const parts = [r.company_name, r.customer_name].filter(Boolean);
-      return parts.length > 0 ? parts.join(' / ') : <span className="empty-dot" />;
+      return parts.length > 0 ? parts.join(' / ') : empty;
     }
-    return val || <span className="empty-dot" />;
+    return val || empty;
   };
 
   const renderNewCell = (col) => {
