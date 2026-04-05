@@ -743,7 +743,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     return (
       <input className="as-cell-input" value={val} placeholder={col.label}
         onChange={e => setNewRow(p => ({...p,[col.key]:e.target.value}))}
-        onKeyDown={e => { if (e.key === 'Enter') handleNewRowSave(); }}
+        onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
       />
     );
   };
@@ -961,7 +961,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
                   <>
                     <input className="as-cell-input" value={newRow.receiver_name||''} placeholder="수령자명"
                       onChange={e => { setNewRow(p=>({...p, receiver_name: e.target.value, as_record_id: null})); setRecipientQuery(e.target.value); }}
-                      onKeyDown={e => e.key==='Enter' && handleNewSave()} />
+                      onKeyDown={e => { if (e.key==='Enter') e.preventDefault(); }} />
                     {showNewRow && pendingShip.length > 0 && (
                       <div className="search-dropdown" style={{minWidth:350,top:'100%',left:0}}>
                         <div className="search-dropdown-header">
@@ -993,7 +993,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
                 ) : c.type === 'date' ? (
                   <input type="date" className="as-cell-input" value={newRow[c.key]||''} onChange={e => setNewRow(p=>({...p,[c.key]:e.target.value}))} />
                 ) : (
-                  <input className="as-cell-input" value={newRow[c.key]||''} placeholder={c.label} onChange={e => setNewRow(p=>({...p,[c.key]:e.target.value}))} onKeyDown={e => e.key==='Enter' && handleNewSave()} />
+                  <input className="as-cell-input" value={newRow[c.key]||''} placeholder={c.label} onChange={e => setNewRow(p=>({...p,[c.key]:e.target.value}))} onKeyDown={e => { if (e.key==='Enter') e.preventDefault(); }} />
                 )}
               </td>
             ))}
