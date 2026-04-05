@@ -113,7 +113,8 @@ export default function Home() {
 
   /* ── AS inline save ── */
   const saveASField = async (id, field, value) => {
-    await supabase.from('as_records').update({ [field]: value }).eq('id', id);
+    const { error } = await supabase.from('as_records').update({ [field]: value }).eq('id', id);
+    if (error) { console.error('AS save error:', error); alert('저장 실패: ' + error.message); }
   };
 
   const addNewAS = async (row) => {
@@ -400,7 +401,7 @@ export default function Home() {
                 <ShipTable
                   records={filtered}
                   asRecords={asRecords}
-                  onSave={async (id, field, value) => { await supabase.from('ship_records').update({[field]:value}).eq('id',id); loadData(monthFilter); }}
+                  onSave={async (id, field, value) => { const {error} = await supabase.from('ship_records').update({[field]:value}).eq('id',id); if(error) { console.error('Ship save error:', error); alert('저장 실패: '+error.message); } loadData(monthFilter); }}
                   onAdd={addShip}
                   onDelete={deleteShip}
                   showNewRow={showNewShipRow}
@@ -568,7 +569,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 
     if (String(prev ?? '') !== String(next ?? '')) {
       await onSaveField(id, field, next);
-      // Realtime이 자동으로 데이터를 갱신하므로 onReload 호출 불필요
+      onReload(); // Realtime 지연 시 대비하여 수동 갱신
     }
   };
 
