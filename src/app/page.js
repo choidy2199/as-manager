@@ -1549,8 +1549,9 @@ function SettingsTab({ asRecords, monthFilter }) {
 
   const save = async (key, value) => { await supabase.from('settings').upsert({ key, value, updated_at: new Date().toISOString() }); };
 
+  const getAdminPw = () => { const v = stg.admin_password; if (!v) return '1234'; return String(v).replace(/"/g, ''); };
   const handlePwCheck = () => {
-    if (pwInput === (stg.admin_password || '1234')) { setAuthOk(true); setPwModal(false); setPwInput(''); setPwError(''); }
+    if (pwInput === getAdminPw()) { setAuthOk(true); setPwModal(false); setPwInput(''); setPwError(''); }
     else setPwError('비밀번호가 일치하지 않습니다');
   };
 
@@ -1578,7 +1579,7 @@ function SettingsTab({ asRecords, monthFilter }) {
   const nextMo = () => { setSettMonth(sm===12?`${sy+1}-01`:`${sy}-${String(sm+1).padStart(2,'0')}`); };
 
   return (
-    <div style={{maxWidth:800,margin:'0 auto',padding:'0 16px'}}>
+    <div style={{padding:'0 4px'}}>
       <div style={{display:'flex',gap:4,marginBottom:20}}>
         {[['billing','🔒 정산 관리'],['system','시스템 설정']].map(([k,v]) => (
           <button key={k} onClick={() => handleSubTab(k)} style={{padding:'8px 18px',borderRadius:6,fontSize:13,fontWeight:600,cursor:'pointer',border:'none',fontFamily:'inherit',background:subTab===k?'#185FA5':'transparent',color:subTab===k?'#fff':'#5A6070'}}>{v}</button>
@@ -1655,7 +1656,7 @@ function SettingsTab({ asRecords, monthFilter }) {
       )}
 
       {subTab === 'system' && (
-        <>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,alignItems:'start'}}>
           <div style={{background:'#fff',border:'1px solid #DDE1EB',borderRadius:8,padding:20,marginBottom:16}}>
             <div style={{fontSize:15,fontWeight:600,marginBottom:12}}>📱 문자 알림 템플릿</div>
             <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:12}}>
@@ -1720,13 +1721,13 @@ function SettingsTab({ asRecords, monthFilter }) {
               <div className="form-field"><label className="label">새 비밀번호 확인</label><input type="password" maxLength={4} value={newPwC} onChange={e => setNewPwC(e.target.value.replace(/\D/g,''))} className="input" placeholder="4자리" /></div>
             </div>
             <button className="btn-primary" style={{fontSize:12,marginTop:8}} onClick={() => {
-              if(curPw!==(stg.admin_password||'1234')){alert('현재 비밀번호가 틀립니다');return;}
+              if(curPw!==getAdminPw()){alert('현재 비밀번호가 틀립니다');return;}
               if(newPw.length!==4){alert('4자리 필요');return;} if(newPw!==newPwC){alert('불일치');return;}
               save('admin_password',newPw); setStg(p=>({...p,admin_password:newPw}));
               setCurPw('');setNewPw('');setNewPwC(''); alert('변경 완료');
             }}>비밀번호 변경</button>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
