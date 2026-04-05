@@ -434,35 +434,58 @@ export default function Home() {
           </div>
         )}
 
-        {/* ═══ 부속가격 (기존 유지) ═══ */}
+        {/* ═══ 부속가격 ═══ */}
         {tab === 'parts' && (
           <>
-            <h1 className="page-title">부속 가격표</h1>
-            <div className="filter-bar">
-              <input placeholder="코드, 부품명, 규격 검색..." value={partsSearch} onChange={e => setPartsSearch(e.target.value)} className="input" style={{ flex:1, minWidth:200 }} autoComplete="off" />
-              <select value={partsCatFilter} onChange={e => setPartsCatFilter(e.target.value)} className="input" style={{ width:160 }}>
-                {partCats.map(c => <option key={c}>{c}</option>)}
-              </select>
+            {/* 검색 + 필터 */}
+            <div className="as-filter-row">
+              <div className="as-filter-search-wrap">
+                <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                <input className="input as-filter-search" placeholder="부품코드, 품명, 스펙 검색..." value={partsSearch} onChange={e => setPartsSearch(e.target.value)} autoComplete="off" />
+              </div>
+              <div className="as-filter-pair"><span className="as-filter-label">구분</span>
+                <select className="input as-filter-select" value={partsCatFilter} onChange={e => setPartsCatFilter(e.target.value)}>
+                  {partCats.map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
             </div>
+            {/* 다크바 */}
             <div className="section">
-              <div className="section-header"><span>부품 목록 ({filteredParts.length}개)</span></div>
-              <div className="section-body">
-                <div className="scroll-x"><table className="data-table"><thead><tr>
-                  {['코드','구분','부품명','규격/사양','공임비(원)'].map(h => <th key={h}>{h}</th>)}
-                </tr></thead><tbody>
-                  {filteredParts.map(p => (
-                    <tr key={p.id}>
-                      <td className="mono" style={{fontSize:12}}>{p.code}</td>
-                      <td><span className="badge-cat">{p.category || '-'}</span></td>
-                      <td className="fw600">{p.name}</td>
-                      <td className="text-secondary">{p.spec || '-'}</td>
-                      <td className="price">₩{fmt(p.price)}</td>
-                    </tr>
-                  ))}
-                </tbody></table></div>
+              <div className="section-header">
+                <span style={{fontSize:12,fontWeight:600}}>부속 가격</span>
+                <div style={{display:'flex',alignItems:'center',gap:10}}>
+                  <span style={{fontSize:12,color:'rgba(255,255,255,0.5)'}}>총 {filteredParts.length}건</span>
+                  <button className="btn-primary" style={{fontSize:11,padding:'4px 12px'}} onClick={() => setModal({type:'part-new'})}>+ 새 부품</button>
+                </div>
+              </div>
+              <div className="as-table-wrapper" style={{maxHeight:'calc(100vh - 200px)'}}>
+                <PartsTable parts={filteredParts} onEdit={p => setModal({type:'part-edit',data:p})} />
               </div>
             </div>
           </>
+        )}
+
+        {/* 부품 모달 */}
+        {modal && (modal.type === 'part-new' || modal.type === 'part-edit') && (
+          <PartModal
+            initial={modal.data}
+            onSave={async (d) => {
+              if (modal.type === 'part-new') {
+                const { error } = await supabase.from('parts').insert(d);
+                if (error) alert('저장 실패: ' + error.message);
+              } else {
+                const { error } = await supabase.from('parts').update(d).eq('id', modal.data.id);
+                if (error) alert('수정 실패: ' + error.message);
+              }
+              setModal(null); loadData(monthFilter);
+            }}
+            onDelete={modal.type === 'part-edit' ? async () => {
+              if (!confirm('이 부품을 삭제하시겠습니까?')) return;
+              await supabase.from('parts').delete().eq('id', modal.data.id);
+              setModal(null); loadData(monthFilter);
+            } : null}
+            onClose={() => setModal(null)}
+          />
         )}
 
         {/* ═══ 설정 (신규 빈 페이지) ═══ */}
@@ -1302,6 +1325,147 @@ function CustomerPopup({ customer, onClose }) {
               <button className="btn-primary" onClick={handleSend} style={{padding:'0 14px',fontSize:12,fontWeight:600,whiteSpace:'nowrap'}}>전송</button>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/* ═══ PARTS TABLE ═══ */
+function PartsTable({ parts, onEdit }) {
+  const [sortKey, setSortKey] = useState('code');
+  const [sortAsc, setSortAsc] = useState(true);
+  const toggleSort = (k) => { if (sortKey === k) setSortAsc(!sortAsc); else { setSortKey(k); setSortAsc(true); } };
+  const sorted = [...parts].sort((a, b) => {
+    let va = a[sortKey] ?? '', vb = b[sortKey] ?? '';
+    if (sortKey === 'price') { va = va || 0; vb = vb || 0; }
+    return sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+  });
+  const COLS = [
+    { key:'code', label:'내부코드', w:90 },
+    { key:'name', label:'부품', w:280 },
+    { key:'category', label:'구분(모델)', w:120 },
+    { key:'price', label:'공임비', w:100 },
+    { key:'_edit', label:'관리', w:60 },
+  ];
+  return (
+    <table className="as-table" style={{width: COLS.reduce((s,c) => s + c.w, 0)}}>
+      <colgroup>{COLS.map(c => <col key={c.key} style={{width:c.w}} />)}</colgroup>
+      <thead><tr className="as-col-header">
+        {COLS.map(c => (
+          <th key={c.key} style={{background:'#EAECF2',cursor:c.key !== '_edit' ? 'pointer' : 'default'}} onClick={() => c.key !== '_edit' && toggleSort(c.key)}>
+            {c.label}{sortKey === c.key ? (sortAsc ? ' ↑' : ' ↓') : ''}
+          </th>
+        ))}
+      </tr></thead>
+      <tbody>
+        {sorted.map((p, i) => (
+          <tr key={p.id} className="as-data-row" style={i % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
+            <td style={{textAlign:'center'}}><span style={{fontFamily:'monospace',fontSize:12,color:'#5A6070'}}>{p.code || <span className="empty-dot">●</span>}</span></td>
+            <td style={{textAlign:'left'}}>
+              <div style={{display:'flex',alignItems:'center',gap:10}}>
+                {p.image_url ? <img src={p.image_url} alt="" style={{width:48,height:48,objectFit:'cover',borderRadius:6,flexShrink:0}} />
+                  : <div style={{width:48,height:48,borderRadius:6,background:'#F4F6FA',display:'flex',alignItems:'center',justifyContent:'center',color:'#5A6070',fontSize:16,fontWeight:600,flexShrink:0}}>{(p.name||'?')[0]}</div>}
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:600,color:'#1A1D23',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.name || <span className="empty-dot">●</span>}</div>
+                  {p.spec && <div style={{fontSize:11,color:'#5A6070',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.spec}</div>}
+                </div>
+              </div>
+            </td>
+            <td style={{textAlign:'center'}}>{p.category ? <span style={{display:'inline-flex',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:600,background: p.category === '공용' ? '#E6F1FB' : '#F4F6FA',color: p.category === '공용' ? '#0C447C' : '#1A1D23'}}>{p.category}</span> : <span className="empty-dot">●</span>}</td>
+            <td style={{textAlign:'right',color:'#185FA5',fontWeight:700,fontSize:14}}>₩{p.price?.toLocaleString('ko-KR') || '0'}</td>
+            <td style={{textAlign:'center'}}><button className="btn-text-edit" style={{fontSize:11}} onClick={() => onEdit(p)}>수정</button></td>
+          </tr>
+        ))}
+        {sorted.length === 0 && <tr><td colSpan={5} className="empty">부품이 없습니다</td></tr>}
+      </tbody>
+    </table>
+  );
+}
+
+
+/* ═══ PART MODAL ═══ */
+function PartModal({ initial, onSave, onDelete, onClose }) {
+  const isEdit = !!initial;
+  const [f, setF] = useState({
+    code: initial?.code || '', category: initial?.category || '', name: initial?.name || '',
+    spec: initial?.spec || '', price: initial?.price?.toString() || '', image_url: initial?.image_url || '',
+  });
+  const [imgFile, setImgFile] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }));
+
+  const handleImgChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // 200x200 리사이즈
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 200; canvas.height = 200;
+        const ctx = canvas.getContext('2d');
+        const size = Math.min(img.width, img.height);
+        ctx.drawImage(img, (img.width - size) / 2, (img.height - size) / 2, size, size, 0, 0, 200, 200);
+        canvas.toBlob(blob => { setImgFile(blob); set('image_url', URL.createObjectURL(blob)); }, 'image/jpeg', 0.85);
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    let imgUrl = f.image_url;
+    // 이미지 업로드
+    if (imgFile) {
+      const fileName = `part_${Date.now()}.jpg`;
+      const { data, error } = await supabase.storage.from('parts-images').upload(fileName, imgFile, { contentType: 'image/jpeg', upsert: true });
+      if (!error && data) {
+        const { data: urlData } = supabase.storage.from('parts-images').getPublicUrl(fileName);
+        imgUrl = urlData?.publicUrl || imgUrl;
+      }
+    }
+    await onSave({ code: f.code || null, category: f.category || null, name: f.name || null, spec: f.spec || null, price: parseInt(String(f.price).replace(/,/g, '')) || 0, image_url: imgUrl || null });
+    setSaving(false);
+  };
+
+  useEffect(() => {
+    const esc = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, [onClose]);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" style={{maxWidth:480}} onClick={e => e.stopPropagation()}>
+        <div className="modal-header"><h2>{isEdit ? '부품 수정' : '새 부품 추가'}</h2><button onClick={onClose} className="modal-close">✕</button></div>
+        <div className="modal-body">
+          {/* 이미지 */}
+          <div style={{display:'flex',justifyContent:'center',marginBottom:16}}>
+            <label style={{cursor:'pointer',position:'relative'}}>
+              {f.image_url ? <img src={f.image_url} alt="" style={{width:120,height:120,objectFit:'cover',borderRadius:8,border:'1px solid #DDE1EB'}} />
+                : <div style={{width:120,height:120,borderRadius:8,border:'2px dashed #DDE1EB',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#9BA3B2',fontSize:13}}>
+                  <span style={{fontSize:28}}>+</span><span>사진 추가</span>
+                </div>}
+              <input type="file" accept="image/*" onChange={handleImgChange} style={{display:'none'}} />
+              {f.image_url && <div style={{textAlign:'center',fontSize:10,color:'#9BA3B2',marginTop:4}}>클릭하여 변경</div>}
+            </label>
+          </div>
+          <div className="form-grid">
+            <div className="form-field"><label className="label">내부코드</label><input value={f.code} onChange={e => set('code', e.target.value)} className="input" placeholder="00000" /></div>
+            <div className="form-field"><label className="label">구분(모델)</label><input value={f.category} onChange={e => set('category', e.target.value)} className="input" placeholder="DC990, 공용 등" /></div>
+          </div>
+          <div className="form-field"><label className="label">규격 및 품명</label><input value={f.name} onChange={e => set('name', e.target.value)} className="input" placeholder="품명 입력" /></div>
+          <div className="form-field"><label className="label">스펙</label><input value={f.spec} onChange={e => set('spec', e.target.value)} className="input" placeholder="사양/규격" /></div>
+          <div className="form-field"><label className="label">공임비 (원)</label><input value={f.price} onChange={e => set('price', e.target.value.replace(/[^0-9]/g,''))} className="input" placeholder="0" /></div>
+        </div>
+        <div className="modal-footer">
+          {isEdit && onDelete && <button onClick={onDelete} className="btn-danger" style={{marginRight:'auto',fontSize:12}}>삭제</button>}
+          <button onClick={onClose} className="btn-secondary">취소</button>
+          <button onClick={handleSave} className="btn-primary" disabled={saving}>{saving ? '저장 중...' : '저장'}</button>
         </div>
       </div>
     </div>
