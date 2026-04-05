@@ -41,7 +41,7 @@ export default function Home() {
   /* ── 새 접수 입력 행 표시 ── */
   const [showNewRow, setShowNewRow] = useState(false);
   const [kpiFilter, setKpiFilter] = useState(null);
-  const [smsPanelId, setSmsPanelId] = useState(null);
+  const [customerPopup, setCustomerPopup] = useState(null); // { name, phone, company }
   const searchWrapRef = useRef(null);
 
   /* ── 검색 드롭다운 바깥 클릭 닫기 ── */
@@ -197,7 +197,7 @@ export default function Home() {
           AS Manager
         </div>
         <div className="nav-tabs">
-          {[['as','AS 일지'],['ship','택배발송'],['history','수리내역조회'],['parts','부속가격'],['settings','설정']].map(([k,v]) => (
+          {[['as','AS 일지'],['ship','택배발송'],['parts','부속가격'],['settings','설정']].map(([k,v]) => (
             <button key={k} onClick={() => setTab(k)} className={`nav-tab ${tab===k?'active':''}`}>{v}</button>
           ))}
         </div>
@@ -240,7 +240,7 @@ export default function Home() {
                         <span style={{fontSize:9,color:'#9BA3B2'}}>클릭 → 수리내역</span>
                       </div>
                       {customers.slice(0, 8).map((c, i) => (
-                        <div key={i} className="search-dropdown-item" onClick={() => { console.log('고객 클릭:', c.name, c.phone); setSearch(''); }}>
+                        <div key={i} className="search-dropdown-item" onClick={() => { setCustomerPopup({ name: c.name, phone: c.phone, company: c.company }); setSearch(''); }}>
                           <div className="search-dropdown-avatar" style={{background: i === 0 ? '#185FA5' : '#5A6070'}}>{(c.name || '?')[0]}</div>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{fontSize:12,fontWeight:600,color:'#1A1D23'}}>{c.name || '-'}{c.company ? <span style={{fontSize:10,color:'#9BA3B2',marginLeft:6}}>{c.company}</span> : null}</div>
@@ -319,8 +319,7 @@ export default function Home() {
                   onReload={() => loadData(monthFilter)}
                   showNewRow={showNewRow}
                   onHideNewRow={() => setShowNewRow(false)}
-                  smsPanelId={smsPanelId}
-                  onOpenSms={setSmsPanelId}
+                  onOpenCustomer={(name, phone, company) => setCustomerPopup({ name, phone, company })}
                 />
               </div>
             </div>
@@ -424,18 +423,13 @@ export default function Home() {
         </div>
       )}
 
-      {/* ═══ SMS 모달 ═══ */}
-      {smsPanelId && (() => {
-        const rec = asRecords.find(r => r.id === smsPanelId);
-        if (!rec) return null;
-        return (
-          <div className="sms-modal-overlay" onClick={() => setSmsPanelId(null)}>
-            <div className="sms-modal" onClick={e => e.stopPropagation()}>
-              <SMSPanel record={rec} onClose={() => setSmsPanelId(null)} />
-            </div>
-          </div>
-        );
-      })()}
+      {/* ═══ 고객 이력 팝업 ═══ */}
+      {customerPopup && (
+        <CustomerPopup
+          customer={customerPopup}
+          onClose={() => setCustomerPopup(null)}
+        />
+      )}
     </>
   );
 }
@@ -444,7 +438,7 @@ export default function Home() {
 /* ═══════════════════════════════════════════════
    AS 테이블 — 인라인 편집
    ═══════════════════════════════════════════════ */
-function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, smsPanelId, onOpenSms }) {
+function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer }) {
   const [editCell, setEditCell] = useState(null); // {id, field}
   const [editValue, setEditValue] = useState('');
   const [newRow, setNewRow] = useState(emptyRow());
@@ -546,13 +540,13 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 
   const DEFAULT_WIDTHS = {
     record_type:70, receipt_date:120, brand:70, intake_carrier:70, shipping_fee:80,
-    invoice_type:70, company_name:160, _sms:40, customer_phone:120, model:100, symptom:180, memo:100,
+    invoice_type:70, company_name:160, customer_phone:120, model:100, symptom:180, memo:100,
     repair_result:160, technician:80, status:80, repair_cost:90,
     payment_status:70, payer:80,
     release_date:120, release_carrier:70, tracking_number:130,
   };
   const COL_GROUPS = [
-    { label: '입고', bg: '#E6F1FB', color: '#0C447C', border: '#85B7EB', span: 12 },
+    { label: '입고', bg: '#E6F1FB', color: '#0C447C', border: '#85B7EB', span: 11 },
     { label: 'AS 처리', bg: '#E1F5EE', color: '#085041', border: '#5DCAA5', span: 4 },
     { label: '입금', bg: '#FAEEDA', color: '#412402', border: '#EF9F27', span: 2 },
     { label: '출고', bg: '#EEEDFE', color: '#26215C', border: '#AFA9EC', span: 3 },
@@ -567,7 +561,6 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'shipping_fee', label:'운임', w:80, type:'text' },
     { key:'invoice_type', label:'계산서', w:75, type:'select', opts: INVOICE_TYPES },
     { key:'company_name', label:'거래처/성함', w:150, type:'text', combined: true, isLink: true },
-    { key:'_sms', label:'sms', w:36, type:'icon', isSmsHeader: true },
     { key:'customer_phone', label:'연락처', w:115, type:'text' },
     { key:'model', label:'모델명', w:100, type:'select', opts: MODELS },
     { key:'symptom', label:'증상', w:180, type:'text' },
@@ -619,9 +612,6 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     const B = (bg, color, text, extra) => <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color,...(extra||{})}}>{text}</span>;
     const empty = <span className="empty-dot" />;
 
-    if (col.key === '_sms') {
-      return <span className="sms-icon" title="문자" onClick={e => { e.stopPropagation(); onOpenSms && onOpenSms(r.id); }}><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 2.5A1.5 1.5 0 012.5 1h9A1.5 1.5 0 0113 2.5v6A1.5 1.5 0 0111.5 10H5l-3 2.5V10H2.5A1.5 1.5 0 011 8.5v-6z" stroke="#9BA3B2" strokeWidth="1.2" strokeLinejoin="round"/></svg></span>;
-    }
     // 1. 구분
     if (col.key === 'record_type') {
       const label = dbToRecordType(r.record_type);
@@ -673,7 +663,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     if (col.key === 'company_name') {
       const p = [r.company_name, r.customer_name].filter(Boolean);
       if (p.length === 0) return empty;
-      return <span className="customer-link" onClick={e => { e.stopPropagation(); console.log('고객 클릭:', r.customer_name, r.customer_phone); }}>{p.join(' / ')}</span>;
+      return <span className="customer-link" onClick={e => { e.stopPropagation(); onOpenCustomer && onOpenCustomer(r.customer_name, r.customer_phone, r.company_name); }}>{p.join(' / ')}</span>;
     }
     // 연락처
     if (col.key === 'customer_phone') return val ? <span style={{fontSize:12,color:'#5A6070'}}>{val}</span> : empty;
@@ -681,7 +671,6 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   };
 
   const renderNewCell = (col) => {
-    if (col.key === '_sms') return null;
     const val = col.key === 'company_name' ? newRow.company_name : newRow[col.key] ?? '';
     if (col.type === 'select') {
       return (
@@ -721,9 +710,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         <tr className="as-col-header">
           {COLS.map((c, idx) => (
             <th key={c.key} style={{ position: 'sticky', top: 34, zIndex: 20, background: '#EAECF2', borderRight: c.groupEnd && c.groupBorderColor ? `2px solid ${c.groupBorderColor}` : '1px solid #DDE1EB', color: c.isLink ? '#185FA5' : undefined }}>
-              {c.isSmsHeader ? (
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{verticalAlign:'middle'}}><path d="M1 2.5A1.5 1.5 0 012.5 1h9A1.5 1.5 0 0113 2.5v6A1.5 1.5 0 0111.5 10H5l-3 2.5V10H2.5A1.5 1.5 0 011 8.5v-6z" stroke="#9BA3B2" strokeWidth="1.2" strokeLinejoin="round"/></svg>
-              ) : c.label}
+              {c.label}
               <span className="col-resize-handle" onMouseDown={e => startResize(idx, c.key, e)} />
             </th>
           ))}
@@ -735,7 +722,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
           <tr className="as-new-row">
             {COLS.map(c => (
               <td key={c.key} style={c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : undefined}>
-                {c.key === '_sms' ? (
+                {c.key === 'tracking_number' ? (
                   <div style={{display:'flex',gap:4}}>
                     <button className="btn-primary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={handleNewRowSave}>저장</button>
                     <button className="btn-secondary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={onHideNewRow}>취소</button>
@@ -747,11 +734,11 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         )}
         {/* 데이터 행 */}
         {records.map((r, rowIdx) => (
-          <tr key={r.id} className="as-data-row" style={smsPanelId === r.id ? {background:'#E6F1FB'} : (rowIdx % 2 === 1 ? {background:'#FAFBFC'} : undefined)}>
+          <tr key={r.id} className="as-data-row" style={rowIdx % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
             {COLS.map(c => (
                 <td key={c.key} style={c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : undefined}
                   onClick={() => {
-                    if (c.key === '_sms') return;
+                    if (c.isLink) return; // 거래처/성함은 customer-link onClick에서 처리
                     const val = c.key === 'company_name' ? (r.company_name || '') :
                       c.fromDb ? (c.fromDb(r[c.key]) || '') :
                       (c.key === 'repair_cost' ? (r[c.key]?.toString() || '') : (r[c.key] || ''));
@@ -808,107 +795,157 @@ function ShipForm({ initial, onSave, onClose }) {
 }
 
 
-/* ═══ SMS PANEL ═══ */
-function SMSPanel({ record, onClose }) {
-  const r = record;
-  const [msgInput, setMsgInput] = useState('');
+/* ═══ CUSTOMER POPUP ═══ */
+function CustomerPopup({ customer, onClose }) {
+  const { name, phone, company } = customer;
+  const [records, setRecords] = useState([]);
   const [smsMessages, setSmsMessages] = useState([]);
+  const [msgInput, setMsgInput] = useState('');
+  const [loading, setLoading] = useState(true);
+  const chatRef = useRef(null);
 
   useEffect(() => {
-    if (!r.customer_phone) return;
-    supabase.from('sms_messages').select('*')
-      .eq('phone', r.customer_phone)
-      .order('sent_at', { ascending: true })
-      .then(({ data }) => { if (data) setSmsMessages(data); });
-  }, [r.customer_phone, r.id]);
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
 
-  const STATUS_STEPS = ['접수', '진단', '수리중', '출고', '완료'];
-  const statusIndex = (() => {
-    const map = { '접수': 0, '진단중': 1, '부품대기': 2, '수리중': 2, '완료': 4, '수리X': -1, '폐기': -1 };
-    const idx = map[r.status];
-    if (idx === undefined) return 0;
-    if (r.release_date && idx < 3) return 3;
-    return idx;
-  })();
+  useEffect(() => {
+    setLoading(true);
+    const loadAll = async () => {
+      // 전체 기간 해당 고객 레코드 조회
+      let q = supabase.from('as_records').select('*').order('receipt_date', { ascending: false });
+      if (name && phone) q = q.eq('customer_name', name).eq('customer_phone', phone);
+      else if (name) q = q.eq('customer_name', name);
+      else if (phone) q = q.eq('customer_phone', phone);
+      const { data: asData } = await q;
+      if (asData) setRecords(asData);
 
-  const handleSend = () => {
-    if (!msgInput.trim()) return;
-    alert('SMS 연동이 필요합니다.\n설정 → SMS 연동에서 httpSMS API 키를 입력해주세요.');
+      // 문자 내역
+      if (phone) {
+        const { data: smsData } = await supabase.from('sms_messages').select('*').eq('phone', phone).order('sent_at', { ascending: true });
+        if (smsData) setSmsMessages(smsData);
+      }
+      setLoading(false);
+    };
+    loadAll();
+  }, [name, phone]);
+
+  useEffect(() => {
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+  }, [smsMessages]);
+
+  const totalCost = records.reduce((s, r) => s + (r.repair_cost || 0), 0);
+  const now = new Date();
+  const warrantyCount = records.filter(r => {
+    if (!r.release_date) return false;
+    const months = r.record_type === 'product_sale' ? 12 : 6;
+    const releaseDate = new Date(r.release_date + 'T00:00:00');
+    const diff = (now - releaseDate) / (1000 * 60 * 60 * 24 * 30);
+    return diff <= months;
+  }).length;
+
+  const isWarranty = (r) => {
+    if (!r.release_date) return false;
+    const months = r.record_type === 'product_sale' ? 12 : 6;
+    const releaseDate = new Date(r.release_date + 'T00:00:00');
+    return (now - releaseDate) / (1000 * 60 * 60 * 24 * 30) <= months;
+  };
+
+  const handleSend = async () => {
+    if (!msgInput.trim() || !phone) return;
+    const msg = { phone, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString() };
+    const { data } = await supabase.from('sms_messages').insert(msg).select();
+    if (data) setSmsMessages(prev => [...prev, ...data]);
     setMsgInput('');
   };
 
+  const fmtDateFull = (d) => {
+    if (!d) return '—';
+    const dt = new Date(d + 'T00:00:00');
+    return `${dt.getFullYear()}년 ${dt.getMonth()+1}월 ${dt.getDate()}일`;
+  };
+
+  // 날짜별 문자 그룹핑
+  const groupedSms = [];
+  let lastDate = '';
+  smsMessages.forEach(msg => {
+    const d = new Date(msg.sent_at).toLocaleDateString('ko-KR');
+    if (d !== lastDate) { groupedSms.push({ type: 'date', label: d }); lastDate = d; }
+    groupedSms.push({ type: 'msg', data: msg });
+  });
+
   return (
-    <div className="sms-panel">
-      {/* 헤더 */}
-      <div className="sms-panel-header">
-        <div>
-          <div style={{fontSize:16,fontWeight:700}}>{r.customer_name || r.company_name || '고객'}</div>
-          <div style={{fontSize:13,opacity:0.85}}>{r.customer_phone || '연락처 없음'}</div>
-        </div>
-        <button className="sms-panel-close" onClick={onClose}>✕</button>
-      </div>
-
-      {/* AS 정보 요약 */}
-      <div className="sms-section">
-        <div className="sms-info-grid">
-          <div><span className="sms-info-label">입고일</span><span className="sms-info-value">{fmtDate(r.receipt_date)}</span></div>
-          <div><span className="sms-info-label">브랜드</span><span className="sms-info-value">{r.brand || '-'}</span></div>
-          <div><span className="sms-info-label">모델명</span><span className="sms-info-value">{r.model || '-'}</span></div>
-          <div><span className="sms-info-label">계산서</span><span className="sms-info-value">{r.invoice_type || '-'}</span></div>
-          <div><span className="sms-info-label">증상</span><span className="sms-info-value">{r.symptom || '-'}</span></div>
-          <div><span className="sms-info-label">입금상태</span><span className="sms-info-value">{r.payment_status || '-'}</span></div>
-        </div>
-      </div>
-
-      {/* 진행 상황 바 */}
-      <div className="sms-section">
-        <div className="sms-progress-bar">
-          {STATUS_STEPS.map((step, i) => {
-            let color = '#EAECF2';
-            let textColor = '#9BA3B2';
-            if (statusIndex >= 0) {
-              if (i < statusIndex) { color = '#1D9E75'; textColor = '#1D9E75'; }
-              else if (i === statusIndex) { color = '#EF9F27'; textColor = '#EF9F27'; }
-            }
-            return (
-              <div key={step} className="sms-progress-step">
-                <div className="sms-progress-dot" style={{background:color}} />
-                {i < STATUS_STEPS.length - 1 && <div className="sms-progress-line" style={{background: i < statusIndex ? '#1D9E75' : '#EAECF2'}} />}
-                <div className="sms-progress-label" style={{color:textColor}}>{step}</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 교체 부품 / 비용 */}
-      <div className="sms-section">
-        <div className="sms-info-label" style={{marginBottom:4}}>처리결과</div>
-        <div style={{fontSize:13,marginBottom:8}}>{r.repair_result || '-'}</div>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <span className="sms-info-label">AS 비용</span>
-          <span style={{fontSize:16,fontWeight:700,color:'#185FA5'}}>{r.repair_cost ? fmt(r.repair_cost) + '원' : '0원'}</span>
-        </div>
-      </div>
-
-      {/* 문자 내역 */}
-      <div className="sms-chat-area">
-        {smsMessages.length === 0 ? (
-          <div className="sms-chat-empty">문자 내역이 없습니다</div>
-        ) : (
-          smsMessages.map(msg => (
-            <div key={msg.id} className={`sms-bubble ${msg.direction === 'outgoing' ? 'sms-bubble-out' : 'sms-bubble-in'}`}>
-              <div className="sms-bubble-text">{msg.content}</div>
-              <div className="sms-bubble-time">{new Date(msg.sent_at).toLocaleString('ko-KR', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+    <div className="cp-overlay" onClick={onClose}>
+      <div className="cp-modal" onClick={e => e.stopPropagation()}>
+        {/* 헤더 */}
+        <div className="cp-header">
+          <div style={{display:'flex',alignItems:'center',gap:12,flex:1}}>
+            <div className="cp-avatar">{(name || '?')[0]}</div>
+            <div>
+              <div style={{fontSize:16,fontWeight:700,color:'#fff'}}>{name || '-'}</div>
+              <div style={{fontSize:12,color:'rgba(255,255,255,0.75)'}}>{phone || '연락처 없음'}{company ? ` · ${company}` : ''}</div>
             </div>
-          ))
-        )}
-      </div>
+          </div>
+          <div style={{display:'flex',gap:20,alignItems:'center'}}>
+            <div className="cp-stat"><span className="cp-stat-label">총 AS</span><span className="cp-stat-value">{records.length}<span className="cp-stat-unit">건</span></span></div>
+            <div className="cp-stat"><span className="cp-stat-label">총 비용</span><span className="cp-stat-value">{fmt(totalCost)}</span></div>
+            <div className="cp-stat"><span className="cp-stat-label">보증중</span><span className="cp-stat-value" style={{color:'#7BE8B8'}}>{warrantyCount}<span className="cp-stat-unit">건</span></span></div>
+          </div>
+          <button className="cp-close" onClick={onClose}>✕</button>
+        </div>
 
-      {/* 문자 입력창 */}
-      <div className="sms-input-bar">
-        <input className="input" value={msgInput} onChange={e => setMsgInput(e.target.value)} placeholder="문자 입력..." onKeyDown={e => e.key === 'Enter' && handleSend()} style={{flex:1}} />
-        <button className="btn-primary" onClick={handleSend} style={{whiteSpace:'nowrap'}}>전송</button>
+        {/* 바디: 좌측 수리이력 + 우측 문자 */}
+        <div className="cp-body">
+          {/* 좌측: 수리 이력 */}
+          <div className="cp-left">
+            <div className="cp-sub-header"><span style={{fontSize:13,fontWeight:600,color:'#1A1D23'}}>수리 이력</span><span style={{fontSize:11,color:'#9BA3B2'}}>총 {records.length}건</span></div>
+            <div className="cp-history-list">
+              {loading ? <div className="empty">로딩 중...</div> : records.length === 0 ? <div className="empty">수리 이력이 없습니다</div> : records.map((r, i) => (
+                <div key={r.id} className="cp-history-row" style={i % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
+                  <div style={{flexShrink:0}}>
+                    {isWarranty(r) ? <span className="cp-warranty-badge warranty">보증중</span> : <span className="cp-warranty-badge expired">만료</span>}
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
+                      {r.model && <span style={{display:'inline-flex',padding:'2px 6px',borderRadius:4,fontSize:10,fontWeight:600,background:'#E6F1FB',color:'#0C447C'}}>{r.model}</span>}
+                      <span style={{fontSize:13,fontWeight:500,color:'#1A1D23',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.repair_result || r.symptom || '-'}</span>
+                    </div>
+                    <div style={{fontSize:11,color:'#5A6070'}}>
+                      {fmtDateFull(r.receipt_date)}{r.technician ? ` · 처리자: ${r.technician}` : ''} · 상태: <span style={{color: r.status === '완료' ? '#1D9E75' : '#5A6070'}}>{r.status || '-'}</span>
+                    </div>
+                  </div>
+                  <div style={{flexShrink:0,textAlign:'right'}}>
+                    <div style={{fontSize:15,fontWeight:700,color:'#185FA5'}}>{r.repair_cost ? fmt(r.repair_cost) : '-'}</div>
+                    <div style={{fontSize:10,color: r.payment_status === '완료' ? '#1D9E75' : (r.payment_status === '대기' || r.payment_status === '명세서') ? '#CC2222' : r.payment_status === '무상' ? '#9BA3B2' : '#5A6070'}}>{r.payment_status || '-'}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 우측: 문자 내역 */}
+          <div className="cp-right">
+            <div className="cp-sub-header"><span style={{fontSize:13,fontWeight:600,color:'#1A1D23'}}>문자 내역</span><span style={{fontSize:11,color:'#9BA3B2'}}>{smsMessages.length}건</span></div>
+            <div className="cp-chat-area" ref={chatRef}>
+              {smsMessages.length === 0 ? <div className="empty" style={{padding:'40px 0'}}>문자 내역이 없습니다</div> : groupedSms.map((item, i) => {
+                if (item.type === 'date') return <div key={`d-${i}`} className="cp-chat-date">{item.label}</div>;
+                const msg = item.data;
+                const isOut = msg.direction === 'outgoing';
+                return (
+                  <div key={msg.id} className={`cp-bubble ${isOut ? 'cp-bubble-out' : 'cp-bubble-in'}`}>
+                    <div className="cp-bubble-text">{msg.content}</div>
+                    <div className="cp-bubble-time">{new Date(msg.sent_at).toLocaleString('ko-KR', {hour:'2-digit',minute:'2-digit'})}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="cp-chat-input">
+              <input className="input" value={msgInput} onChange={e => setMsgInput(e.target.value)} placeholder="문자 입력..." onKeyDown={e => e.key === 'Enter' && handleSend()} style={{flex:1,height:34,fontSize:12}} />
+              <button className="btn-primary" onClick={handleSend} style={{padding:'0 14px',fontSize:12,fontWeight:600,whiteSpace:'nowrap'}}>전송</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
