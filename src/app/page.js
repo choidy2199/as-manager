@@ -44,9 +44,20 @@ export default function Home() {
   /* ── 새 접수 입력 행 표시 ── */
   const [showNewRow, setShowNewRow] = useState(false);
   const [kpiFilter, setKpiFilter] = useState(null);
-  const [customerPopup, setCustomerPopup] = useState(null); // { name, phone, company }
+  const [customerPopup, setCustomerPopup] = useState(null);
   const [deleteMode, setDeleteMode] = useState(false);
+  const [smsPopup, setSmsPopup] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const searchWrapRef = useRef(null);
+
+  /* ── SMS 읽지 않은 문자 카운트 ── */
+  useEffect(() => {
+    if (!user) return;
+    const fetchUnread = async () => { const { count } = await supabase.from('sms_messages').select('*', { count: 'exact', head: true }).eq('direction', 'incoming').eq('read', false); setUnreadCount(count || 0); };
+    fetchUnread();
+    const iv = setInterval(fetchUnread, 10000);
+    return () => clearInterval(iv);
+  }, [user]);
 
   /* ── 검색 debounce ── */
   useEffect(() => {
@@ -317,6 +328,11 @@ export default function Home() {
                 <span style={{fontSize:13,fontWeight:700,color:'var(--tl-text)',marginLeft:4}}>— {filteredAS.length}건</span>
               </div>
               <div style={{display:'flex',gap:8}}>
+                <button style={{position:'relative',display:'inline-flex',alignItems:'center',gap:5,padding:'6px 14px',borderRadius:6,border: unreadCount > 0 ? '1px solid #B5D4F4' : '0.5px solid #DDE1EB',background: unreadCount > 0 ? '#E6F1FB' : '#F4F6FA',cursor:'pointer',fontFamily:'inherit',fontSize:12,fontWeight:600,color: unreadCount > 0 ? '#0C447C' : '#5A6070'}} onClick={() => setSmsPopup(true)}>
+                  <svg width="16" height="16" viewBox="0 0 14 14" fill="none"><path d="M2 2.5C2 1.7 2.7 1 3.5 1h7C11.3 1 12 1.7 12 2.5v5c0 .8-.7 1.5-1.5 1.5H8l-2.5 2.5V9H3.5C2.7 9 2 8.3 2 7.5v-5z" fill={unreadCount > 0 ? '#185FA5' : '#9BA3B2'}/></svg>
+                  문자
+                  {unreadCount > 0 && <span style={{position:'absolute',top:-6,right:-6,background:'#E24B4A',color:'#fff',fontSize:10,fontWeight:700,minWidth:18,height:18,borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{unreadCount}</span>}
+                </button>
                 <button className="btn-outline-secondary">
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{marginRight:4,verticalAlign:-1}}><path d="M2 1.5h8M3 4.5h6M4 7.5h4M5 10.5h2" stroke="#5A6070" strokeWidth="1" strokeLinecap="round"/></svg>
                   엑셀 다운로드
@@ -508,6 +524,7 @@ export default function Home() {
       )}
 
       {/* ═══ 고객 이력 팝업 ═══ */}
+      {smsPopup && <SMSPopup onClose={() => setSmsPopup(false)} onUnreadChange={setUnreadCount} />}
       {customerPopup && (
         <CustomerPopup
           customer={customerPopup}
@@ -1746,6 +1763,165 @@ function SettingsTab({ asRecords, monthFilter }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+/* ═══ SMS POPUP ═══ */
+function SMSPopup({ onClose, onUnreadChange }) {
+  const [customers, setCustomers] = useState([]);
+  const [selected, setSelected] = useState(null); // phone
+  const [messages, setMessages] = useState([]);
+  const [msgInput, setMsgInput] = useState('');
+  const [searchQ, setSearchQ] = useState('');
+  const chatRef = useRef(null);
+
+  // 고객 목록 로드
+  useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase.from('sms_messages').select('*').order('sent_at', { ascending: false });
+      if (!data) return;
+      const grouped = {};
+      data.forEach(m => {
+        if (!m.phone) return;
+        if (!grouped[m.phone]) grouped[m.phone] = { phone: m.phone, name: '', messages: [], unread: 0, latest: null, latestText: '' };
+        grouped[m.phone].messages.push(m);
+        if (!grouped[m.phone].latest || m.sent_at > grouped[m.phone].latest) { grouped[m.phone].latest = m.sent_at; grouped[m.phone].latestText = m.content; }
+        if (m.direction === 'incoming' && !m.read) grouped[m.phone].unread++;
+      });
+      // 고객명 매칭 (as_records에서)
+      const { data: asData } = await supabase.from('as_records').select('customer_name,customer_phone').not('customer_phone', 'is', null);
+      const nameMap = {};
+      (asData||[]).forEach(r => { if (r.customer_phone && r.customer_name) nameMap[r.customer_phone] = r.customer_name; });
+      Object.values(grouped).forEach(c => { c.name = nameMap[c.phone] || c.phone; });
+      const list = Object.values(grouped).sort((a,b) => (b.latest||'') > (a.latest||'') ? 1 : -1);
+      setCustomers(list);
+    };
+    load();
+  }, []);
+
+  // 메시지 로드 + 읽음 처리
+  useEffect(() => {
+    if (!selected) return;
+    const load = async () => {
+      const { data } = await supabase.from('sms_messages').select('*').eq('phone', selected).order('sent_at', { ascending: true });
+      if (data) setMessages(data);
+      // 읽음 처리
+      await supabase.from('sms_messages').update({ read: true }).eq('phone', selected).eq('direction', 'incoming').eq('read', false);
+      setCustomers(prev => prev.map(c => c.phone === selected ? { ...c, unread: 0 } : c));
+      // 전체 카운트 업데이트
+      const { count } = await supabase.from('sms_messages').select('*', { count: 'exact', head: true }).eq('direction', 'incoming').eq('read', false);
+      onUnreadChange(count || 0);
+    };
+    load();
+  }, [selected, onUnreadChange]);
+
+  useEffect(() => { setTimeout(() => { if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight; }, 50); }, [messages]);
+
+  useEffect(() => { const esc = (e) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', esc); return () => document.removeEventListener('keydown', esc); }, [onClose]);
+
+  const handleSend = async () => {
+    if (!msgInput.trim() || !selected) return;
+    try {
+      const res = await fetch('/api/sms/send', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to: selected, content: msgInput.trim() }) });
+      const result = await res.json();
+      if (result.error) { alert('발송 실패: ' + result.error); return; }
+    } catch (e) { alert('발송 실패: ' + e.message); return; }
+    const msg = { phone: selected, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString(), read: true };
+    const { data } = await supabase.from('sms_messages').insert(msg).select();
+    if (data) setMessages(prev => [...prev, ...data]);
+    setMsgInput('');
+    setCustomers(prev => prev.map(c => c.phone === selected ? { ...c, latest: new Date().toISOString(), latestText: msgInput.trim() } : c));
+  };
+
+  const timeAgo = (t) => {
+    if (!t) return '';
+    const diff = (Date.now() - new Date(t).getTime()) / 1000;
+    if (diff < 60) return '방금';
+    if (diff < 3600) return Math.floor(diff/60) + '분 전';
+    if (diff < 86400) return Math.floor(diff/3600) + '시간 전';
+    if (diff < 172800) return '어제';
+    return new Date(t).toLocaleDateString('ko-KR', { month:'numeric', day:'numeric' });
+  };
+
+  const filtered = searchQ ? customers.filter(c => c.name?.includes(searchQ) || c.phone?.includes(searchQ)) : customers;
+  const selCustomer = customers.find(c => c.phone === selected);
+
+  // 날짜 그룹핑
+  const groupedMsgs = [];
+  let lastDate = '';
+  messages.forEach(m => {
+    const d = new Date(m.sent_at).toLocaleDateString('ko-KR');
+    if (d !== lastDate) { groupedMsgs.push({ type: 'date', label: d }); lastDate = d; }
+    groupedMsgs.push({ type: 'msg', data: m });
+  });
+
+  const COLORS = ['#185FA5','#1D9E75','#EF9F27','#534AB7','#CC2222','#5A6070'];
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200}} onClick={onClose}>
+      <div style={{width:700,height:'80vh',background:'#fff',borderRadius:12,overflow:'hidden',display:'flex',boxShadow:'0 8px 32px rgba(0,0,0,0.18)'}} onClick={e => e.stopPropagation()}>
+        {/* 좌측: 고객 목록 */}
+        <div style={{width:280,flexShrink:0,display:'flex',flexDirection:'column',borderRight:'1px solid #EAECF2'}}>
+          <div style={{background:'#185FA5',padding:'14px 16px'}}>
+            <div style={{fontSize:16,fontWeight:500,color:'#fff'}}>문자함</div>
+            <div style={{fontSize:12,color:'rgba(255,255,255,0.6)'}}>{customers.reduce((s,c) => s + c.unread, 0)}건 새 문자</div>
+          </div>
+          <div style={{padding:8}}><input className="input" style={{height:34,fontSize:13,borderRadius:8}} placeholder="고객명, 연락처 검색..." value={searchQ} onChange={e => setSearchQ(e.target.value)} /></div>
+          <div style={{flex:1,overflowY:'auto'}}>
+            {filtered.map((c, i) => (
+              <div key={c.phone} style={{display:'flex',alignItems:'center',gap:10,padding:'12px 14px',borderBottom:'0.5px solid #F0F2F7',cursor:'pointer',background: selected === c.phone ? '#E6F1FB' : (c.unread > 0 ? '#F4F8FD' : 'transparent')}} onClick={() => setSelected(c.phone)}>
+                <div style={{width:40,height:40,borderRadius:'50%',background:COLORS[i % COLORS.length],display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:15,fontWeight:600,flexShrink:0}}>{(c.name||'?')[0]}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:c.unread > 0 ? 600 : 400,color:c.unread > 0 ? '#1A1D23' : '#5A6070'}}>{c.name}</div>
+                  <div style={{fontSize:12,color:'#5A6070',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{c.latestText}</div>
+                </div>
+                <div style={{flexShrink:0,textAlign:'right'}}>
+                  <div style={{fontSize:11,color:'#9BA3B2'}}>{timeAgo(c.latest)}</div>
+                  {c.unread > 0 && <div style={{background:'#E24B4A',color:'#fff',fontSize:10,fontWeight:700,minWidth:18,height:18,borderRadius:9,display:'inline-flex',alignItems:'center',justifyContent:'center',marginTop:2}}>{c.unread}</div>}
+                </div>
+              </div>
+            ))}
+            {filtered.length === 0 && <div style={{padding:20,textAlign:'center',color:'#9BA3B2',fontSize:13}}>문자 내역이 없습니다</div>}
+          </div>
+        </div>
+        {/* 우측: 채팅 */}
+        <div style={{flex:1,display:'flex',flexDirection:'column'}}>
+          {!selected ? (
+            <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#9BA3B2',fontSize:15}}>고객을 선택해주세요</div>
+          ) : (
+            <>
+              <div style={{background:'#185FA5',padding:'12px 16px',display:'flex',alignItems:'center',gap:10}}>
+                <div style={{width:36,height:36,borderRadius:'50%',background:'rgba(255,255,255,0.2)',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:14,fontWeight:600}}>{(selCustomer?.name||'?')[0]}</div>
+                <div><div style={{fontSize:15,fontWeight:500,color:'#fff'}}>{selCustomer?.name}</div><div style={{fontSize:11,color:'rgba(255,255,255,0.65)'}}>{selected}</div></div>
+                <button style={{marginLeft:'auto',background:'none',border:'none',color:'rgba(255,255,255,0.4)',fontSize:18,cursor:'pointer'}} onClick={onClose}>✕</button>
+              </div>
+              <div ref={chatRef} style={{flex:1,overflowY:'auto',background:'#F4F6FA',padding:'12px 14px'}}>
+                {groupedMsgs.map((item, i) => {
+                  if (item.type === 'date') return <div key={`d-${i}`} style={{textAlign:'center',margin:'12px 0 8px'}}><span style={{background:'#E6F1FB',color:'#5A6070',fontSize:11,padding:'3px 12px',borderRadius:10}}>{item.label}</span></div>;
+                  const m = item.data; const isOut = m.direction === 'outgoing';
+                  return (
+                    <div key={m.id} style={{display:'flex',justifyContent:isOut?'flex-end':'flex-start',marginBottom:6}}>
+                      <div style={{maxWidth:'75%'}}>
+                        <div style={{padding:'10px 14px',borderRadius: isOut ? '14px 14px 4px 14px' : '14px 14px 14px 4px', background:isOut?'#185FA5':'#fff',color:isOut?'#fff':'#1A1D23',fontSize:14,lineHeight:1.5,border:isOut?'none':'0.5px solid #DDE1EB'}}>{m.content}</div>
+                        <div style={{fontSize:11,color:'#9BA3B2',marginTop:2,textAlign:isOut?'right':'left'}}>{new Date(m.sent_at).toLocaleString('ko-KR',{hour:'2-digit',minute:'2-digit'})}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {messages.length === 0 && <div style={{textAlign:'center',color:'#9BA3B2',fontSize:13,padding:'40px 0'}}>문자 내역이 없습니다</div>}
+              </div>
+              <div style={{borderTop:'0.5px solid #DDE1EB',padding:'10px 12px',background:'#fff',display:'flex',gap:8,alignItems:'center'}}>
+                <input value={msgInput} onChange={e => setMsgInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder="메시지 입력..." style={{flex:1,padding:'10px 14px',borderRadius:20,border:'1px solid #DDE1EB',fontSize:14,fontFamily:'inherit',outline:'none'}} />
+                <button onClick={handleSend} style={{width:38,height:38,borderRadius:'50%',background:'#185FA5',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14 2L7 9M14 2L9.5 14L7 9M14 2L2 6.5L7 9" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
