@@ -23,16 +23,21 @@ export async function POST(request) {
   try {
     const { to, content } = await request.json();
 
-    const { data: apiKeySetting } = await supabase.from('settings').select('value').eq('key', 'httpsms_api_key').single();
-    const { data: phoneSetting } = await supabase.from('settings').select('value').eq('key', 'httpsms_phone').single();
+    const { data: apiKeySetting, error: e1 } = await supabase.from('settings').select('value').eq('key', 'httpsms_api_key').single();
+    const { data: phoneSetting, error: e2 } = await supabase.from('settings').select('value').eq('key', 'httpsms_phone').single();
+
+    console.log('[SMS] apiKey query:', apiKeySetting?.value, 'error:', e1?.message);
+    console.log('[SMS] phone query:', phoneSetting?.value, 'error:', e2?.message);
 
     if (!apiKeySetting?.value || !phoneSetting?.value) {
-      return Response.json({ error: 'SMS 설정이 필요합니다. 설정 탭에서 API 키를 입력해주세요.' }, { status: 400 });
+      return Response.json({ error: `SMS 설정이 필요합니다 (apiKey: ${!!apiKeySetting?.value}, phone: ${!!phoneSetting?.value})` }, { status: 400 });
     }
 
-    const apiKey = cleanJsonb(apiKeySetting.value);
-    const fromPhone = toE164(cleanJsonb(phoneSetting.value));
+    const apiKey = String(apiKeySetting.value).replace(/^"|"$/g, '');
+    const fromPhone = toE164(String(phoneSetting.value).replace(/^"|"$/g, ''));
     const toPhone = toE164(to);
+
+    console.log('[SMS] sending from:', fromPhone, 'to:', toPhone, 'apiKey length:', apiKey.length);
 
     const response = await fetch('https://api.httpsms.com/v1/messages/send', {
       method: 'POST',
