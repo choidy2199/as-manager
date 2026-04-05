@@ -502,8 +502,8 @@ export default function Home() {
         )}
       </div>
 
-      {/* ═══ 기타 MODALS ═══ */}
-      {modal && (
+      {/* ═══ 기타 MODALS (부품 모달이 아닐 때만) ═══ */}
+      {modal && modal.type !== 'part-new' && modal.type !== 'part-edit' && (
         <div className="modal-overlay" onClick={() => setModal(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()} />
         </div>
