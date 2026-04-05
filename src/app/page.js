@@ -43,6 +43,7 @@ export default function Home() {
   const [showNewRow, setShowNewRow] = useState(false);
   const [kpiFilter, setKpiFilter] = useState(null);
   const [customerPopup, setCustomerPopup] = useState(null); // { name, phone, company }
+  const [deleteMode, setDeleteMode] = useState(false);
   const searchWrapRef = useRef(null);
 
   /* ── 검색 debounce ── */
@@ -339,6 +340,8 @@ export default function Home() {
                       <span className="kpi-btn-value">{k.value}</span>
                     </button>
                   ))}
+                  <button style={{background: deleteMode ? 'rgba(204,34,34,0.5)' : 'rgba(204,34,34,0.2)', border: deleteMode ? '1px solid rgba(240,149,149,0.6)' : '1px solid rgba(240,149,149,0.35)', color: deleteMode ? '#fff' : '#F09595', fontSize:11, fontWeight: deleteMode ? 700 : 500, padding:'4px 10px', borderRadius:5, cursor:'pointer', fontFamily:'inherit'}}
+                    onClick={() => setDeleteMode(!deleteMode)}>삭제</button>
                 </div>
               </div>
               <div className="as-table-wrapper">
@@ -350,6 +353,7 @@ export default function Home() {
                   onReload={() => loadData(monthFilter)}
                   showNewRow={showNewRow}
                   onHideNewRow={() => setShowNewRow(false)}
+                  deleteMode={deleteMode}
                   onOpenCustomer={(name, phone, company) => setCustomerPopup({ name, phone, company })}
                   onAddShip={async (r) => {
                     await addShip({ shipDate: today(), carrier: null, trackingNo: null, senderName: '선불', receiverName: r.customer_name || r.company_name || '', receiverPhone: r.customer_phone, receiverAddress: null, contents: r.model || null, memo: null, asRecordId: r.id });
@@ -520,7 +524,7 @@ export default function Home() {
 /* ═══════════════════════════════════════════════
    AS 테이블 — 인라인 편집
    ═══════════════════════════════════════════════ */
-function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip }) {
+function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip, deleteMode }) {
   const [editCell, setEditCell] = useState(null); // {id, field} — 텍스트/숫자/날짜용
   const [editValue, setEditValue] = useState('');
   const [badgeOpen, setBadgeOpen] = useState(null); // {id, field} — 뱃지 펼침용
@@ -829,6 +833,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       </colgroup>
       <thead>
         <tr className="as-group-header">
+          {deleteMode && <th style={{position:'sticky',top:0,zIndex:21,background:'#FCEBEB',width:30}} />}
           {COL_GROUPS.map((g, i) => (
             <th key={i} colSpan={g.span} style={{ background: g.bg, color: g.color, fontSize: 12, fontWeight: 700, padding: '8px 0', textAlign: 'center', borderBottom: `2px solid ${g.border}`, borderRight: i < COL_GROUPS.length - 1 ? `2px solid ${g.border}` : 'none', position: 'sticky', top: 0, zIndex: 21 }}>
               {g.label}
@@ -836,6 +841,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
           ))}
         </tr>
         <tr className="as-col-header">
+          {deleteMode && <th style={{position:'sticky',top:34,zIndex:20,background:'#FCEBEB',width:30,fontSize:10,color:'#CC2222'}}>삭제</th>}
           {COLS.map((c, idx) => (
             <th key={c.key} style={{ position: 'sticky', top: 34, zIndex: 20, background: '#EAECF2', borderRight: c.groupEnd && c.groupBorderColor ? `2px solid ${c.groupBorderColor}` : '1px solid #DDE1EB', color: c.isLink ? '#185FA5' : undefined }}>
               {c.isMsgCol ? <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{verticalAlign:'middle'}}><path d="M2 2.5C2 1.7 2.7 1 3.5 1h7C11.3 1 12 1.7 12 2.5v5c0 .8-.7 1.5-1.5 1.5H8l-2.5 2.5V9H3.5C2.7 9 2 8.3 2 7.5v-5z" fill="#185FA5"/></svg> : c.label}
@@ -848,6 +854,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         {/* NEW 행 */}
         {showNewRow && (
           <tr className="as-new-row">
+            {deleteMode && <td />}
             {COLS.map(c => (
               <td key={c.key} style={{...(c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {})}}>
                 {c.key === '_ship_btn' ? (
@@ -863,6 +870,11 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         {/* 데이터 행 */}
         {records.map((r, rowIdx) => (
           <tr key={r.id} className="as-data-row" style={rowIdx % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
+            {deleteMode && (
+              <td style={{textAlign:'center',cursor:'pointer',padding:'2px'}} onClick={e => { e.stopPropagation(); if (confirm(`이 AS 건을 삭제하시겠습니까?\n고객: ${r.customer_name||'-'} / 모델: ${r.model||'-'}`)) onDelete(r.id); }}>
+                <span style={{color:'#CC2222',fontSize:14,fontWeight:700,display:'inline-flex',width:22,height:22,alignItems:'center',justifyContent:'center',borderRadius:4}} onMouseOver={e => e.currentTarget.style.background='#FCEBEB'} onMouseOut={e => e.currentTarget.style.background='transparent'}>✕</span>
+              </td>
+            )}
             {COLS.map(c => {
                 const tdStyle = { ...(c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {}), ...(c.type === 'readonly' ? {cursor:'default'} : {}) };
                 return (
@@ -881,7 +893,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
           </tr>
         ))}
         {records.length === 0 && (
-          <tr><td colSpan={COLS.length} className="empty">조건에 맞는 AS 건이 없습니다</td></tr>
+          <tr><td colSpan={COLS.length + (deleteMode?1:0)} className="empty">조건에 맞는 AS 건이 없습니다</td></tr>
         )}
       </tbody>
     </table>
