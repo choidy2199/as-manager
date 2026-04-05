@@ -809,6 +809,11 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
   const [sortKey, setSortKey] = useState('ship_date');
   const [sortAsc, setSortAsc] = useState(false);
   const SHIP_CARRIERS = ['롯데택배','CJ대한통운','한진택배','경동택배','로젠택배','우체국','대신택배'];
+  const tableRef = useRef(null);
+  const savedWidthsRef = useRef((() => {
+    if (typeof window === 'undefined') return {};
+    try { const v = JSON.parse(localStorage.getItem('ship_column_widths')); return (v && typeof v === 'object') ? v : {}; } catch { return {}; }
+  })());
 
   const COLS = [
     { key:'ship_date', label:'날짜', w:110, type:'date' },
@@ -821,6 +826,28 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
     { key:'tracking_no', label:'송장번호', w:140, type:'text' },
     { key:'sender_name', label:'보내는분', w:90, type:'text' },
   ];
+
+  const DEFAULT_SHIP_WIDTHS = { ship_date:110, receiver_name:100, receiver_phone:120, receiver_address:200, contents:150, memo:120, carrier:100, tracking_no:140, sender_name:90 };
+  const getColWidth = (key) => savedWidthsRef.current[key] || DEFAULT_SHIP_WIDTHS[key] || 80;
+
+  const startResize = (colIdx, colKey, e) => {
+    e.preventDefault(); e.stopPropagation();
+    const table = tableRef.current; if (!table) return;
+    const col = table.querySelector('colgroup').children[colIdx]; if (!col) return;
+    const startX = e.clientX;
+    const startW = col.offsetWidth || getColWidth(colKey);
+    const startTableW = table.offsetWidth;
+    document.body.style.userSelect = 'none'; document.body.style.cursor = 'col-resize';
+    const onMove = (ev) => { ev.preventDefault(); const newW = Math.max(40, startW + ev.clientX - startX); col.style.width = newW + 'px'; table.style.width = (startTableW + (newW - startW)) + 'px'; };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = ''; document.body.style.cursor = '';
+      const finalW = parseInt(col.style.width) || startW;
+      savedWidthsRef.current = { ...savedWidthsRef.current, [colKey]: finalW };
+      localStorage.setItem('ship_column_widths', JSON.stringify(savedWidthsRef.current));
+    };
+    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+  };
 
   const sorted = [...records].sort((a, b) => {
     const va = a[sortKey] || '', vb = b[sortKey] || '';
@@ -873,14 +900,15 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
   const noTracking = (r) => !r.tracking_no;
 
   return (
-    <table className="as-table" style={{width: COLS.reduce((s,c) => s + c.w, 0)}}>
-      <colgroup>{COLS.map(c => <col key={c.key} style={{width:c.w}} />)}</colgroup>
+    <table className="as-table" ref={tableRef} style={{width: COLS.reduce((s,c) => s + getColWidth(c.key), 0)}}>
+      <colgroup>{COLS.map(c => <col key={c.key} style={{width: getColWidth(c.key)}} />)}</colgroup>
       <thead>
         <tr className="as-col-header">
-          {COLS.map(c => (
+          {COLS.map((c, idx) => (
             <th key={c.key} style={{background:'#EAECF2',cursor:'pointer'}} onClick={() => toggleSort(c.key)}>
               {c.label}{sortKey === c.key ? (sortAsc ? ' ↑' : ' ↓') : ''}
-              </th>
+              <span className="col-resize-handle" onMouseDown={e => startResize(idx, c.key, e)} />
+            </th>
           ))}
         </tr>
       </thead>
