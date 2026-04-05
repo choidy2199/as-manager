@@ -707,9 +707,9 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     if (col.key === 'tracking_number') return val ? B('#E8EBF0','#3A3F4B',val,{fontFamily:'monospace',fontSize:10}) : empty;
     // 택배 버튼
     if (col.key === '_ship_btn') {
-      if (r.tracking_number) return <span style={{fontSize:10,color:'#9BA3B2'}}>발송완료</span>;
-      if (r.status === '완료') return <button style={{background:'#EEEDFE',color:'#534AB7',border:'1px solid #AFA9EC',borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'inherit'}} onClick={e => { e.stopPropagation(); onAddShip && onAddShip(r); }}>발송</button>;
-      return empty;
+      if (r.release_date || r.tracking_number) return empty; // 이미 출고 완료
+      if (r.status !== '완료') return empty; // 수리 미완료
+      return <button style={{background:'#EEEDFE',color:'#534AB7',border:'1px solid #AFA9EC',borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'inherit'}} onClick={e => { e.stopPropagation(); onAddShip && onAddShip(r); }}>발송</button>;
     }
     // AS비용
     if (col.key === 'repair_cost') return val ? <span style={{color:'#185FA5',fontWeight:700}}>{fmt(val)}</span> : empty;
@@ -817,7 +817,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, onHideNewRow, saveASField }) {
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState('');
-  const [newRow, setNewRow] = useState({ ship_date: today(), carrier: 'CJ대한통운', tracking_no: '', sender_name: '', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
+  const [newRow, setNewRow] = useState({ ship_date: today(), carrier: 'CJ대한통운', tracking_no: '', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
   const [sortKey, setSortKey] = useState('ship_date');
   const [sortAsc, setSortAsc] = useState(false);
   const [recipientQuery, setRecipientQuery] = useState('');
@@ -884,6 +884,12 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
           tracking_number: editValue,
           release_date: today(),
           release_carrier: row.carrier || null,
+        }).eq('id', row.as_record_id);
+      }
+      // 택배사 변경 시 이미 운송장번호가 있으면 AS건 택배사도 동기화
+      if (field === 'carrier' && row?.as_record_id && row.tracking_no) {
+        await supabase.from('as_records').update({
+          release_carrier: editValue || null,
         }).eq('id', row.as_record_id);
       }
     }
