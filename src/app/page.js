@@ -1130,7 +1130,7 @@ function CustomerPopup({ customer, onClose }) {
   }, [name, phone]);
 
   useEffect(() => {
-    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    setTimeout(() => { if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight; }, 50);
   }, [smsMessages]);
 
   const totalCost = records.reduce((s, r) => s + (r.repair_cost || 0), 0);
