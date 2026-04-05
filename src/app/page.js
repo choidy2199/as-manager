@@ -492,13 +492,9 @@ export default function Home() {
           />
         )}
 
-        {/* ═══ 설정 (신규 빈 페이지) ═══ */}
+        {/* ═══ 설정 ═══ */}
         {tab === 'settings' && (
-          <div style={{textAlign:'center',padding:'80px 0',color:'var(--tl-text-hint)'}}>
-            <div style={{fontSize:48,marginBottom:16}}>⚙️</div>
-            <div style={{fontSize:18,fontWeight:600,marginBottom:8}}>설정</div>
-            <div>다음 단계에서 구현 예정입니다</div>
-          </div>
+          <SettingsTab asRecords={asRecords} monthFilter={monthFilter} />
         )}
       </div>
 
@@ -1510,6 +1506,228 @@ function PartModal({ initial, onSave, onDelete, onClose }) {
           <button onClick={handleSave} className="btn-primary" disabled={saving}>{saving ? '저장 중...' : '저장'}</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+
+/* ═══ SETTINGS TAB ═══ */
+function SettingsTab({ asRecords, monthFilter }) {
+  const [subTab, setSubTab] = useState('system');
+  const [pwModal, setPwModal] = useState(false);
+  const [pwInput, setPwInput] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [authOk, setAuthOk] = useState(false);
+  const [settMonth, setSettMonth] = useState(monthFilter);
+  const [techs, setTechs] = useState([]);
+  const [stg, setStg] = useState({});
+  const [smsIntake, setSmsIntake] = useState('');
+  const [smsRelease, setSmsRelease] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [apiPhone, setApiPhone] = useState('');
+  const [warrantyNew, setWarrantyNew] = useState('12');
+  const [warrantyRepair, setWarrantyRepair] = useState('6');
+  const [curPw, setCurPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [newPwC, setNewPwC] = useState('');
+  const [newTechName, setNewTechName] = useState('');
+  const [editTech, setEditTech] = useState(null);
+  const intakeRef = useRef(null);
+  const releaseRef = useRef(null);
+  const [lastFocusedTpl, setLastFocusedTpl] = useState('intake');
+
+  useEffect(() => {
+    supabase.from('technicians').select('*').order('created_at').then(({data}) => { if(data) setTechs(data); });
+    supabase.from('settings').select('*').then(({data}) => {
+      const m = {}; (data||[]).forEach(s => { m[s.key] = s.value; }); setStg(m);
+      setSmsIntake(m.sms_template_intake || '{고객명}님, {모델명} 제품이 {입고날짜}에 입고되었습니다.');
+      setSmsRelease(m.sms_template_release || '{고객명}님, {모델명} 제품이 {택배사} {운송장번호}로 발송되었습니다.');
+      setApiKey(m.httpsms_api_key || ''); setApiPhone(m.httpsms_phone || '');
+      setWarrantyNew(String(m.warranty_new_months || 12)); setWarrantyRepair(String(m.warranty_repair_months || 6));
+    });
+  }, []);
+
+  const save = async (key, value) => { await supabase.from('settings').upsert({ key, value, updated_at: new Date().toISOString() }); };
+
+  const handlePwCheck = () => {
+    if (pwInput === (stg.admin_password || '1234')) { setAuthOk(true); setPwModal(false); setPwInput(''); setPwError(''); }
+    else setPwError('비밀번호가 일치하지 않습니다');
+  };
+
+  const handleSubTab = (t) => { if (t === 'billing') { setAuthOk(false); setPwModal(true); setPwInput(''); setPwError(''); } setSubTab(t); };
+
+  const insertVar = (v) => {
+    const ref = lastFocusedTpl === 'release' ? releaseRef : intakeRef;
+    const el = ref.current; if (!el) return;
+    const pos = el.selectionStart || 0;
+    const val = el.value;
+    const nv = val.slice(0, pos) + v + val.slice(pos);
+    if (lastFocusedTpl === 'release') setSmsRelease(nv); else setSmsIntake(nv);
+    setTimeout(() => { el.focus(); el.setSelectionRange(pos + v.length, pos + v.length); }, 0);
+  };
+
+  const [sy, sm] = settMonth.split('-').map(Number);
+  const sRecs = asRecords.filter(r => r.receipt_date?.startsWith(settMonth));
+  const totalRev = sRecs.reduce((s,r) => s + (r.repair_cost||0), 0);
+  const paidAmt = sRecs.filter(r => r.payment_status === '완료').reduce((s,r) => s + (r.repair_cost||0), 0);
+  const unpaidAmt = sRecs.filter(r => r.payment_status === '대기' || r.payment_status === '명세서').reduce((s,r) => s + (r.repair_cost||0), 0);
+  const freeN = sRecs.filter(r => r.payment_status === '무상').length;
+  const B = (bg,c,t) => <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color:c}}>{t}</span>;
+  const VARS = ['{입고날짜}','{출고날짜}','{모델명}','{택배사}','{운송장번호}','{고객명}','{거래처명}','{브랜드}','{AS비용}'];
+  const prevMo = () => { setSettMonth(sm===1?`${sy-1}-12`:`${sy}-${String(sm-1).padStart(2,'0')}`); };
+  const nextMo = () => { setSettMonth(sm===12?`${sy+1}-01`:`${sy}-${String(sm+1).padStart(2,'0')}`); };
+
+  return (
+    <div style={{maxWidth:800,margin:'0 auto',padding:'0 16px'}}>
+      <div style={{display:'flex',gap:4,marginBottom:20}}>
+        {[['billing','🔒 정산 관리'],['system','시스템 설정']].map(([k,v]) => (
+          <button key={k} onClick={() => handleSubTab(k)} style={{padding:'8px 18px',borderRadius:6,fontSize:13,fontWeight:600,cursor:'pointer',border:'none',fontFamily:'inherit',background:subTab===k?'#185FA5':'transparent',color:subTab===k?'#fff':'#5A6070'}}>{v}</button>
+        ))}
+      </div>
+
+      {pwModal && (
+        <div className="modal-overlay" onClick={() => { setPwModal(false); setSubTab('system'); }}>
+          <div className="modal-content" style={{maxWidth:360,padding:0}} onClick={e => e.stopPropagation()}>
+            <div style={{padding:'24px',textAlign:'center'}}>
+              <div style={{fontSize:16,fontWeight:700,marginBottom:16}}>🔒 정산 관리 접근</div>
+              <input type="password" maxLength={4} value={pwInput} onChange={e => setPwInput(e.target.value.replace(/\D/g,''))} onKeyDown={e => e.key==='Enter' && handlePwCheck()} placeholder="4자리 비밀번호" className="input" style={{textAlign:'center',fontSize:20,letterSpacing:8,marginBottom:8}} autoFocus />
+              {pwError && <div style={{color:'#CC2222',fontSize:12,marginBottom:8}}>{pwError}</div>}
+              <div style={{display:'flex',gap:8,justifyContent:'center',marginTop:12}}>
+                <button className="btn-secondary" onClick={() => { setPwModal(false); setSubTab('system'); }}>취소</button>
+                <button className="btn-primary" onClick={handlePwCheck}>확인</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {subTab === 'billing' && authOk && (
+        <>
+          <div style={{display:'flex',gap:12,marginBottom:16,flexWrap:'wrap'}}>
+            <div style={{flex:'1.5 1 200px',background:'#185FA5',borderRadius:8,padding:'16px 20px',color:'#fff'}}>
+              <div style={{fontSize:11,opacity:0.8}}>이번달 총 매출</div>
+              <div style={{fontSize:26,fontWeight:700}}>{totalRev.toLocaleString('ko-KR')}</div>
+            </div>
+            <div style={{flex:'1 1 140px',background:'#E1F5EE',borderRadius:8,padding:'16px 20px'}}>
+              <div style={{fontSize:11,color:'#5A6070'}}>입금 완료</div>
+              <div style={{fontSize:22,fontWeight:700,color:'#1D9E75'}}>{paidAmt.toLocaleString('ko-KR')}</div>
+            </div>
+            <div style={{flex:'1 1 140px',background:'#FAEEDA',borderRadius:8,padding:'16px 20px'}}>
+              <div style={{fontSize:11,color:'#5A6070'}}>미수금</div>
+              <div style={{fontSize:22,fontWeight:700,color:'#EF9F27'}}>{unpaidAmt.toLocaleString('ko-KR')}</div>
+            </div>
+            <div style={{flex:'1 1 140px',background:'#F4F6FA',borderRadius:8,padding:'16px 20px'}}>
+              <div style={{fontSize:11,color:'#5A6070'}}>무상 처리</div>
+              <div style={{fontSize:22,fontWeight:700,color:'#5A6070'}}>{freeN}건</div>
+            </div>
+          </div>
+          <div className="section">
+            <div className="section-header">
+              <span style={{fontSize:12,fontWeight:600}}>정산 내역</span>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <button style={{background:'none',border:'none',color:'#fff',cursor:'pointer',fontSize:14}} onClick={prevMo}>◀</button>
+                <span style={{fontSize:12}}>{sy}년 {sm}월</span>
+                <button style={{background:'none',border:'none',color:'#fff',cursor:'pointer',fontSize:14}} onClick={nextMo}>▶</button>
+              </div>
+            </div>
+            <div style={{overflowX:'auto',maxHeight:'calc(100vh - 340px)'}}>
+              <table className="data-table"><thead><tr>
+                {['날짜','거래처/고객','구분','모델','처리내용','AS비용','입금상태','계산서'].map(h => <th key={h}>{h}</th>)}
+              </tr></thead><tbody>
+                {sRecs.map((r,i) => (
+                  <tr key={r.id} style={i%2===1?{background:'#FAFBFC'}:undefined}>
+                    <td>{fmtDate(r.receipt_date)}</td>
+                    <td>{[r.company_name,r.customer_name].filter(Boolean).join(' / ') || <span className="empty-dot">●</span>}</td>
+                    <td>{r.record_type ? B(r.record_type==='as_repair'?'#E6F1FB':'#E1F5EE',r.record_type==='as_repair'?'#0C447C':'#085041',dbToRecordType(r.record_type)) : <span className="empty-dot">●</span>}</td>
+                    <td>{r.model ? B('#E6F1FB','#0C447C',r.model) : <span className="empty-dot">●</span>}</td>
+                    <td style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.repair_result || <span className="empty-dot">●</span>}</td>
+                    <td style={{textAlign:'right',color:'#185FA5',fontWeight:700}}>{r.repair_cost ? r.repair_cost.toLocaleString('ko-KR') : <span className="empty-dot">●</span>}</td>
+                    <td>{r.payment_status ? B(r.payment_status==='완료'?'#E1F5EE':r.payment_status==='무상'?'#F4F6FA':'#FAEEDA',r.payment_status==='완료'?'#085041':r.payment_status==='무상'?'#5A6070':'#412402',r.payment_status) : <span className="empty-dot">●</span>}</td>
+                    <td>{r.invoice_type ? B(r.invoice_type.includes('계산서')?'#E6F1FB':'#F4F6FA',r.invoice_type.includes('계산서')?'#0C447C':'#5A6070',r.invoice_type==='없음(일반소매)'?'일반':r.invoice_type.includes('계산서')?'계산서':r.invoice_type) : <span className="empty-dot">●</span>}</td>
+                  </tr>
+                ))}
+                {sRecs.length === 0 && <tr><td colSpan={8} className="empty">정산 내역이 없습니다</td></tr>}
+                {sRecs.length > 0 && <tr style={{background:'#F4F6FA',fontWeight:700}}><td colSpan={5} style={{textAlign:'right',fontSize:13}}>합계</td><td style={{textAlign:'right',color:'#185FA5',fontSize:16,fontWeight:700}}>{totalRev.toLocaleString('ko-KR')}</td><td colSpan={2}/></tr>}
+              </tbody></table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {subTab === 'system' && (
+        <>
+          <div style={{background:'#fff',border:'1px solid #DDE1EB',borderRadius:8,padding:20,marginBottom:16}}>
+            <div style={{fontSize:15,fontWeight:600,marginBottom:12}}>📱 문자 알림 템플릿</div>
+            <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:12}}>
+              {VARS.map(v => <button key={v} style={{background:'#E6F1FB',color:'#0C447C',border:'none',borderRadius:4,padding:'3px 8px',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}} onClick={() => insertVar(v)}>{v}</button>)}
+            </div>
+            <div style={{marginBottom:12}}>
+              <label className="label">입고 알림</label>
+              <textarea ref={intakeRef} className="input" style={{height:'auto',minHeight:60,resize:'vertical',padding:10}} value={smsIntake} onChange={e => setSmsIntake(e.target.value)} onFocus={() => setLastFocusedTpl('intake')} />
+            </div>
+            <div style={{marginBottom:12}}>
+              <label className="label">출고 알림</label>
+              <textarea ref={releaseRef} className="input" style={{height:'auto',minHeight:60,resize:'vertical',padding:10}} value={smsRelease} onChange={e => setSmsRelease(e.target.value)} onFocus={() => setLastFocusedTpl('release')} />
+            </div>
+            <button className="btn-primary" style={{fontSize:12}} onClick={() => { save('sms_template_intake',smsIntake); save('sms_template_release',smsRelease); alert('저장 완료'); }}>템플릿 저장</button>
+          </div>
+
+          <div style={{background:'#fff',border:'1px solid #DDE1EB',borderRadius:8,padding:20,marginBottom:16}}>
+            <div style={{fontSize:15,fontWeight:600,marginBottom:12}}>📡 SMS 연동 (httpSMS)</div>
+            <div style={{marginBottom:12}}><span style={{fontSize:12,color:apiKey?'#1D9E75':'#9BA3B2'}}>● {apiKey?'연결됨':'미설정'}</span></div>
+            <div className="form-grid">
+              <div className="form-field"><label className="label">API 키</label><input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} className="input" placeholder="httpSMS API Key" /></div>
+              <div className="form-field"><label className="label">발신 번호</label><input value={apiPhone} onChange={e => setApiPhone(e.target.value)} className="input" placeholder="010-0000-0000" /></div>
+            </div>
+            <button className="btn-primary" style={{fontSize:12}} onClick={() => { save('httpsms_api_key',apiKey); save('httpsms_phone',apiPhone); alert('저장 완료'); }}>SMS 설정 저장</button>
+          </div>
+
+          <div style={{background:'#fff',border:'1px solid #DDE1EB',borderRadius:8,padding:20,marginBottom:16}}>
+            <div style={{fontSize:15,fontWeight:600,marginBottom:12}}>👤 처리자 관리</div>
+            {techs.map(t => (
+              <div key={t.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderBottom:'1px solid #F0F2F7'}}>
+                {editTech === t.id ? (
+                  <><input className="input" style={{flex:1,height:32}} defaultValue={t.name} id={`tech-${t.id}`} />
+                  <button className="btn-primary" style={{fontSize:11,padding:'4px 10px'}} onClick={async () => { const v=document.getElementById(`tech-${t.id}`).value; await supabase.from('technicians').update({name:v}).eq('id',t.id); setTechs(p=>p.map(x=>x.id===t.id?{...x,name:v}:x)); setEditTech(null); }}>저장</button>
+                  <button className="btn-secondary" style={{fontSize:11,padding:'4px 10px'}} onClick={() => setEditTech(null)}>취소</button></>
+                ) : (
+                  <><span style={{flex:1,fontSize:13}}>{t.name}</span>
+                  <button className="btn-text-edit" style={{fontSize:11}} onClick={() => setEditTech(t.id)}>수정</button>
+                  <button className="btn-text-danger" style={{fontSize:11}} onClick={async () => { if(!confirm(`${t.name}을(를) 삭제?`)) return; await supabase.from('technicians').delete().eq('id',t.id); setTechs(p=>p.filter(x=>x.id!==t.id)); }}>삭제</button></>
+                )}
+              </div>
+            ))}
+            <div style={{display:'flex',gap:8,marginTop:8}}>
+              <input className="input" style={{flex:1,height:32}} value={newTechName} onChange={e => setNewTechName(e.target.value)} placeholder="새 처리자 이름" onKeyDown={e => {if(e.key==='Enter') e.preventDefault();}} />
+              <button className="btn-primary" style={{fontSize:11,padding:'4px 12px'}} onClick={async () => { if(!newTechName.trim()) return; const {data}=await supabase.from('technicians').insert({name:newTechName.trim()}).select(); if(data) setTechs(p=>[...p,...data]); setNewTechName(''); }}>추가</button>
+            </div>
+          </div>
+
+          <div style={{background:'#fff',border:'1px solid #DDE1EB',borderRadius:8,padding:20,marginBottom:16}}>
+            <div style={{fontSize:15,fontWeight:600,marginBottom:12}}>🛡️ 보증 기간 설정</div>
+            <div className="form-grid">
+              <div className="form-field"><label className="label">새 제품 구매 시</label><div style={{display:'flex',alignItems:'center',gap:6}}><input value={warrantyNew} onChange={e => setWarrantyNew(e.target.value.replace(/\D/g,''))} className="input" style={{width:80,textAlign:'center'}} /><span style={{fontSize:13,color:'#5A6070'}}>개월</span></div></div>
+              <div className="form-field"><label className="label">AS 후 동일 부속</label><div style={{display:'flex',alignItems:'center',gap:6}}><input value={warrantyRepair} onChange={e => setWarrantyRepair(e.target.value.replace(/\D/g,''))} className="input" style={{width:80,textAlign:'center'}} /><span style={{fontSize:13,color:'#5A6070'}}>개월</span></div></div>
+            </div>
+            <button className="btn-primary" style={{fontSize:12,marginTop:8}} onClick={() => { save('warranty_new_months',parseInt(warrantyNew)||12); save('warranty_repair_months',parseInt(warrantyRepair)||6); alert('저장 완료'); }}>보증 설정 저장</button>
+          </div>
+
+          <div style={{background:'#fff',border:'1px solid #DDE1EB',borderRadius:8,padding:20,marginBottom:16}}>
+            <div style={{fontSize:15,fontWeight:600,marginBottom:12}}>🔐 관리자 비밀번호 변경</div>
+            <div style={{maxWidth:300}}>
+              <div className="form-field"><label className="label">현재 비밀번호</label><input type="password" maxLength={4} value={curPw} onChange={e => setCurPw(e.target.value.replace(/\D/g,''))} className="input" placeholder="4자리" /></div>
+              <div className="form-field"><label className="label">새 비밀번호</label><input type="password" maxLength={4} value={newPw} onChange={e => setNewPw(e.target.value.replace(/\D/g,''))} className="input" placeholder="4자리" /></div>
+              <div className="form-field"><label className="label">새 비밀번호 확인</label><input type="password" maxLength={4} value={newPwC} onChange={e => setNewPwC(e.target.value.replace(/\D/g,''))} className="input" placeholder="4자리" /></div>
+            </div>
+            <button className="btn-primary" style={{fontSize:12,marginTop:8}} onClick={() => {
+              if(curPw!==(stg.admin_password||'1234')){alert('현재 비밀번호가 틀립니다');return;}
+              if(newPw.length!==4){alert('4자리 필요');return;} if(newPw!==newPwC){alert('불일치');return;}
+              save('admin_password',newPw); setStg(p=>({...p,admin_password:newPw}));
+              setCurPw('');setNewPw('');setNewPwC(''); alert('변경 완료');
+            }}>비밀번호 변경</button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
