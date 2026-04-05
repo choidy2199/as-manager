@@ -33,6 +33,7 @@ export default function Home() {
 
   /* ── AS 필터 ── */
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('전체');
   const [statusFilter, setStatusFilter] = useState('전체');
   const [brandFilter, setBrandFilter] = useState('전체');
@@ -43,6 +44,12 @@ export default function Home() {
   const [kpiFilter, setKpiFilter] = useState(null);
   const [customerPopup, setCustomerPopup] = useState(null); // { name, phone, company }
   const searchWrapRef = useRef(null);
+
+  /* ── 검색 debounce ── */
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   /* ── 검색 드롭다운 바깥 클릭 닫기 ── */
   useEffect(() => {
@@ -83,7 +90,6 @@ export default function Home() {
   /* ── Data Load (월별 최적화, 검색어 있으면 전체) ── */
   const loadData = useCallback(async (month, fullSearch) => {
     const m = month || monthFilter;
-    setLoading(true);
     let asQuery = supabase.from('as_records').select('*').order('receipt_date', { ascending: false });
     if (!fullSearch) {
       const [y, mo] = m.split('-').map(Number);
@@ -98,10 +104,10 @@ export default function Home() {
     if (asRes.data) setAsRecords(asRes.data);
     if (shipRes.data) setShipRecords(shipRes.data);
     if (partsRes.data) setParts(partsRes.data);
-    setLoading(false);
+    if (loading) setLoading(false);
   }, [monthFilter]);
 
-  useEffect(() => { if (user) loadData(monthFilter, search.length >= 2); }, [user, monthFilter, loadData, search]);
+  useEffect(() => { if (user) loadData(monthFilter, debouncedSearch.length >= 2); }, [user, monthFilter, loadData, debouncedSearch]);
 
   /* ── Realtime ── */
   useEffect(() => {
@@ -610,13 +616,13 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 
   const DEFAULT_WIDTHS = {
     record_type:70, receipt_date:120, brand:70, intake_carrier:70, shipping_fee:80,
-    invoice_type:70, company_name:160, customer_phone:120, model:100, symptom:180, memo:100,
+    invoice_type:70, company_name:160, _msg:30, customer_phone:120, model:100, symptom:180, memo:100,
     repair_result:160, technician:80, status:80, repair_cost:90,
     payment_status:70, payer:80,
     release_date:120, release_carrier:70, tracking_number:130, _ship_btn:55,
   };
   const COL_GROUPS = [
-    { label: '입고', bg: '#E6F1FB', color: '#0C447C', border: '#85B7EB', span: 11 },
+    { label: '입고', bg: '#E6F1FB', color: '#0C447C', border: '#85B7EB', span: 12 },
     { label: 'AS 처리', bg: '#E1F5EE', color: '#085041', border: '#5DCAA5', span: 4 },
     { label: '입금', bg: '#FAEEDA', color: '#412402', border: '#EF9F27', span: 2 },
     { label: '출고', bg: '#EEEDFE', color: '#26215C', border: '#AFA9EC', span: 4 },
@@ -631,6 +637,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'shipping_fee', label:'운임', w:80, type:'text' },
     { key:'invoice_type', label:'계산서', w:75, type:'select', opts: INVOICE_TYPES },
     { key:'company_name', label:'거래처/성함', w:150, type:'text', combined: true, isLink: true },
+    { key:'_msg', label:'msg', w:30, type:'action', isMsgCol: true },
     { key:'customer_phone', label:'연락처', w:115, type:'text' },
     { key:'model', label:'모델명', w:100, type:'select', opts: MODELS },
     { key:'symptom', label:'증상', w:180, type:'text' },
@@ -719,6 +726,10 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       if (col.key === 'tracking_number') return B('#E8EBF0','#3A3F4B',val,{fontFamily:'monospace',fontSize:10});
       return B('#E8EBF0','#3A3F4B',val);
     }
+    // 문자 아이콘 컬럼
+    if (col.key === '_msg') {
+      return <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{cursor:'pointer',opacity:0.7,display:'block',margin:'0 auto'}} onClick={e => { e.stopPropagation(); onOpenCustomer && onOpenCustomer(r.customer_name, r.customer_phone, r.company_name); }} onMouseOver={e => e.currentTarget.style.opacity='1'} onMouseOut={e => e.currentTarget.style.opacity='0.7'}><path d="M2 2.5C2 1.7 2.7 1 3.5 1h7C11.3 1 12 1.7 12 2.5v5c0 .8-.7 1.5-1.5 1.5H8l-2.5 2.5V9H3.5C2.7 9 2 8.3 2 7.5v-5z" fill="#185FA5"/></svg>;
+    }
     // 입고일
     if (col.type === 'date') return val ? B('#E8EBF0','#3A3F4B',fmtDate(val)) : empty;
     // 택배 버튼
@@ -733,10 +744,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     if (col.key === 'company_name') {
       const p = [r.company_name, r.customer_name].filter(Boolean);
       if (p.length === 0) return empty;
-      return <span style={{display:'inline-flex',alignItems:'center',gap:4}}>
-        <span className="customer-link" onClick={e => { e.stopPropagation(); onOpenCustomer && onOpenCustomer(r.customer_name, r.customer_phone, r.company_name); }}>{p.join(' / ')}</span>
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{cursor:'pointer',flexShrink:0,opacity:0.7}} onClick={e => { e.stopPropagation(); onOpenCustomer && onOpenCustomer(r.customer_name, r.customer_phone, r.company_name); }} onMouseOver={e => e.currentTarget.style.opacity='1'} onMouseOut={e => e.currentTarget.style.opacity='0.7'}><path d="M2 2.5C2 1.7 2.7 1 3.5 1h7C11.3 1 12 1.7 12 2.5v5c0 .8-.7 1.5-1.5 1.5H8l-2.5 2.5V9H3.5C2.7 9 2 8.3 2 7.5v-5z" fill="#185FA5"/></svg>
-      </span>;
+      return <span className="customer-link" onClick={e => { e.stopPropagation(); onOpenCustomer && onOpenCustomer(r.customer_name, r.customer_phone, r.company_name); }}>{p.join(' / ')}</span>;
     }
     // 연락처
     if (col.key === 'customer_phone') return val ? <span style={{fontSize:12,color:'#5A6070'}}>{val}</span> : empty;
@@ -806,7 +814,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         <tr className="as-col-header">
           {COLS.map((c, idx) => (
             <th key={c.key} style={{ position: 'sticky', top: 34, zIndex: 20, background: '#EAECF2', borderRight: c.groupEnd && c.groupBorderColor ? `2px solid ${c.groupBorderColor}` : '1px solid #DDE1EB', color: c.isLink ? '#185FA5' : undefined }}>
-              {c.label}
+              {c.isMsgCol ? <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{verticalAlign:'middle'}}><path d="M2 2.5C2 1.7 2.7 1 3.5 1h7C11.3 1 12 1.7 12 2.5v5c0 .8-.7 1.5-1.5 1.5H8l-2.5 2.5V9H3.5C2.7 9 2 8.3 2 7.5v-5z" fill="#185FA5"/></svg> : c.label}
               <span className="col-resize-handle" onMouseDown={e => startResize(idx, c.key, e)} />
             </th>
           ))}
