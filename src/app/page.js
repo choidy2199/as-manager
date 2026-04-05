@@ -1040,7 +1040,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
     const [bg, c] = dbVal ? getShipBadgeColor(col.key, dbVal) : ['#F4F6FA','#9BA3B2'];
     return (
       <div className="badge-expand-panel" onClick={e => e.stopPropagation()}>
-        <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color:c,cursor:'pointer',border:isOpen?`2px solid ${c}`:'2px solid transparent'}}
+        <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:12,fontWeight:600,whiteSpace:'nowrap',background:bg,color:c,cursor:'pointer',border:isOpen?`2px solid ${c}`:'2px solid transparent'}}
           onClick={e => { if (isOpen) { setShipBadgeOpen(null); } else { const rect = e.currentTarget.getBoundingClientRect(); setShipBadgePos({top:rect.bottom+2,left:rect.left}); setShipBadgeOpen({id:r.id,field:col.key}); } }}>
           {dbVal || '●'}
         </span>
@@ -1048,7 +1048,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
           <div style={{position:'fixed',top:shipBadgePos.top,left:shipBadgePos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,minWidth:80,maxHeight:200,overflowY:'auto'}}>
             {col.opts.map(o => {
               const [obg,oc] = getShipBadgeColor(col.key, o);
-              return <div key={o} style={{padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer',background:obg,color:oc,marginBottom:2,border:dbVal===o?`2px solid ${oc}`:'2px solid transparent',whiteSpace:'nowrap'}}
+              return <div key={o} style={{padding:'3px 10px',borderRadius:4,fontSize:12,fontWeight:600,cursor:'pointer',background:obg,color:oc,marginBottom:2,border:dbVal===o?`2px solid ${oc}`:'2px solid transparent',whiteSpace:'nowrap'}}
                 onClick={() => saveShipBadge(r.id, col.key, o)}>{o}</div>;
             })}
           </div>
@@ -1061,7 +1061,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
     const val = r[col.key];
     const isEditing = editCell?.id === r.id && editCell?.field === col.key;
     const empty = <span className="empty-dot">●</span>;
-    const B = (bg,c,t,ex) => <span style={{display:'inline-flex',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color:c,...(ex||{})}}>{t}</span>;
+    const B = (bg,c,t,ex) => <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:12,fontWeight:600,whiteSpace:'nowrap',background:bg,color:c,...(ex||{})}}>{t}</span>;
 
     // 고정값 셀
     if (col.type === 'static') return B('#F4F6FA','#5A6070', col.value);
@@ -1070,14 +1070,14 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
     // 읽기전용
     if (col.type === 'readonly') {
       if (!val) return <span className="empty-dot">●</span>;
-      if (col.key === 'ship_date') return <span style={{fontSize:12,color:'#3A3F4B'}}>{fmtDate(val)}</span>;
-      return <span style={{fontSize:12,color:'#3A3F4B'}}>{val}</span>;
+      if (col.key === 'ship_date') return <span style={{fontSize:13,color:'#3A3F4B'}}>{fmtDate(val)}</span>;
+      return <span style={{fontSize:13,color:'#3A3F4B'}}>{val}</span>;
     }
     // 뱃지 선택
     if (col.type === 'select') return renderShipBadge(r, col);
     // 삭제 버튼
     if (col.key === '_delete') {
-      return <button className="btn-text-danger" style={{fontSize:11}} onClick={async (e) => {
+      return <button className="btn-text-danger" style={{fontSize:12}} onClick={async (e) => {
         e.stopPropagation();
         if (!confirm('이 발송 건을 삭제하시겠습니까?')) return;
         if (r.as_record_id) {
@@ -1091,8 +1091,8 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
       return <input className="as-cell-input" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={commitEdit} onKeyDown={e => e.key === 'Enter' && commitEdit()} />;
     }
     // 운송장번호
-    if (col.key === 'tracking_no') return val ? <span style={{fontFamily:'monospace',fontSize:11,fontWeight:600,color:'#1A1D23'}}>{val}</span> : <span style={{fontSize:10,color:'#9BA3B2'}}>미입력</span>;
-    return val || empty;
+    if (col.key === 'tracking_no') return val ? <span style={{fontFamily:'monospace',fontSize:13,fontWeight:600,color:'#1A1D23'}}>{val}</span> : <span style={{fontSize:13,color:'#9BA3B2'}}>미입력</span>;
+    return <span style={{fontSize:13,color:'#1A1D23'}}>{val}</span> || empty;
   };
 
   const noTracking = (r) => !r.tracking_no;
@@ -1103,7 +1103,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
       <thead>
         <tr className="as-col-header">
           {COLS.map((c, idx) => (
-            <th key={c.key} style={{background:'#EAECF2',cursor:'pointer'}} onClick={() => toggleSort(c.key)}>
+            <th key={c.key} style={{background:'#EAECF2',cursor:'pointer',fontSize:13}} onClick={() => toggleSort(c.key)}>
               {c.label}{sortKey === c.key ? (sortAsc ? ' ↑' : ' ↓') : ''}
               <span className="col-resize-handle" onMouseDown={e => startResize(idx, c.key, e)} />
             </th>
