@@ -25,7 +25,7 @@ const dbToRecordType = (t) => ({ 'as_repair':'AS 수리','product_sale':'제품 
 export default function Home() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [tab, setTab] = useState('as');
+  const [tab, setTab] = useState(() => { if (typeof window !== 'undefined') { return localStorage.getItem('as_active_tab') || 'as'; } return 'as'; });
   const [asRecords, setAsRecords] = useState([]);
   const [shipRecords, setShipRecords] = useState([]);
   const [parts, setParts] = useState([]);
@@ -80,16 +80,18 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
-  /* ── Data Load (월별 최적화) ── */
-  const loadData = useCallback(async (month) => {
+  /* ── Data Load (월별 최적화, 검색어 있으면 전체) ── */
+  const loadData = useCallback(async (month, fullSearch) => {
     const m = month || monthFilter;
     setLoading(true);
-    const [y, mo] = m.split('-').map(Number);
-    const lastDay = new Date(y, mo, 0).getDate();
-    const startDate = m + '-01';
-    const endDate = m + '-' + String(lastDay).padStart(2, '0');
+    let asQuery = supabase.from('as_records').select('*').order('receipt_date', { ascending: false });
+    if (!fullSearch) {
+      const [y, mo] = m.split('-').map(Number);
+      const lastDay = new Date(y, mo, 0).getDate();
+      asQuery = asQuery.gte('receipt_date', m + '-01').lte('receipt_date', m + '-' + String(lastDay).padStart(2, '0'));
+    }
     const [asRes, shipRes, partsRes] = await Promise.all([
-      supabase.from('as_records').select('*').gte('receipt_date', startDate).lte('receipt_date', endDate).order('receipt_date', { ascending: false }),
+      asQuery,
       supabase.from('ship_records').select('*').order('ship_date', { ascending: false }).limit(100),
       supabase.from('parts').select('*').order('code'),
     ]);
@@ -99,7 +101,7 @@ export default function Home() {
     setLoading(false);
   }, [monthFilter]);
 
-  useEffect(() => { if (user) loadData(monthFilter); }, [user, monthFilter, loadData]);
+  useEffect(() => { if (user) loadData(monthFilter, search.length >= 2); }, [user, monthFilter, loadData, search]);
 
   /* ── Realtime ── */
   useEffect(() => {
@@ -175,7 +177,7 @@ export default function Home() {
     const mt = typeFilter === '전체' || dbToRecordType(r.record_type) === typeFilter;
     const mst = statusFilter === '전체' || r.status === statusFilter;
     const mb = brandFilter === '전체' || r.brand === brandFilter;
-    const mm = !monthFilter || r.receipt_date?.startsWith(monthFilter);
+    const mm = search.length >= 2 || !monthFilter || r.receipt_date?.startsWith(monthFilter);
     const mk = !kpiFilter || (KPI_STATUS_MAP[kpiFilter] || []).includes(r.status);
     return ms && mt && mst && mb && mm && mk;
   });
@@ -221,7 +223,7 @@ export default function Home() {
         </div>
         <div className="nav-tabs">
           {[['as','AS 일지'],['ship','택배발송'],['parts','부속가격'],['settings','설정']].map(([k,v]) => (
-            <button key={k} onClick={() => setTab(k)} className={`nav-tab ${tab===k?'active':''}`}>{v}</button>
+            <button key={k} onClick={() => { setTab(k); localStorage.setItem('as_active_tab', k); }} className={`nav-tab ${tab===k?'active':''}`}>{v}</button>
           ))}
         </div>
         <div className="nav-actions">
@@ -557,9 +559,8 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     if (!badgeOpen) return;
     const handler = (e) => { if (!e.target.closest('.badge-expand-panel')) setBadgeOpen(null); };
     const escHandler = (e) => { if (e.key === 'Escape') setBadgeOpen(null); };
-    document.addEventListener('mousedown', handler);
-    document.addEventListener('keydown', escHandler);
-    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('keydown', escHandler); };
+    const timer = setTimeout(() => { document.addEventListener('click', handler); document.addEventListener('keydown', escHandler); }, 0);
+    return () => { clearTimeout(timer); document.removeEventListener('click', handler); document.removeEventListener('keydown', escHandler); };
   }, [badgeOpen]);
 
   // 뱃지 선택 → 즉시 저장
@@ -665,7 +666,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     const displayVal = col.fromDb ? col.fromDb(dbVal) : dbVal;
     const isOpen = badgeOpen?.id === r.id && badgeOpen?.field === col.key;
     const [bg, c] = getBadgeColor(col.key, dbVal || displayVal);
-    const empty = <span className="empty-dot" />;
+    const empty = <span className="empty-dot">●</span>;
     return (
       <div style={{position:'relative'}} className="badge-expand-panel" onClick={e => e.stopPropagation()}>
         <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background: displayVal ? bg : '#F4F6FA',color: displayVal ? c : '#9BA3B2',cursor:'pointer',border: isOpen ? `2px solid ${c}` : '2px solid transparent'}}
@@ -709,11 +710,11 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 
     // Display
     const B = (bg, color, text, extra) => <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color,...(extra||{})}}>{text}</span>;
-    const empty = <span className="empty-dot" />;
+    const empty = <span className="empty-dot">●</span>;
 
     // 읽기전용 셀 (출고 그룹 — 택배발송에서 자동 입력)
     if (col.type === 'readonly') {
-      if (!val) return <span style={{color:'#9BA3B2',fontSize:11}}>—</span>;
+      if (!val) return <span className="empty-dot">●</span>;
       if (col.key === 'release_date') return B('#E8EBF0','#3A3F4B',fmtDate(val));
       if (col.key === 'tracking_number') return B('#E8EBF0','#3A3F4B',val,{fontFamily:'monospace',fontSize:10});
       return B('#E8EBF0','#3A3F4B',val);
@@ -732,7 +733,10 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     if (col.key === 'company_name') {
       const p = [r.company_name, r.customer_name].filter(Boolean);
       if (p.length === 0) return empty;
-      return <span className="customer-link" onClick={e => { e.stopPropagation(); onOpenCustomer && onOpenCustomer(r.customer_name, r.customer_phone, r.company_name); }}>{p.join(' / ')}</span>;
+      return <span style={{display:'inline-flex',alignItems:'center',gap:4}}>
+        <span className="customer-link" onClick={e => { e.stopPropagation(); onOpenCustomer && onOpenCustomer(r.customer_name, r.customer_phone, r.company_name); }}>{p.join(' / ')}</span>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{cursor:'pointer',flexShrink:0,opacity:0.7}} onClick={e => { e.stopPropagation(); onOpenCustomer && onOpenCustomer(r.customer_name, r.customer_phone, r.company_name); }} onMouseOver={e => e.currentTarget.style.opacity='1'} onMouseOut={e => e.currentTarget.style.opacity='0.7'}><path d="M2 2.5C2 1.7 2.7 1 3.5 1h7C11.3 1 12 1.7 12 2.5v5c0 .8-.7 1.5-1.5 1.5H8l-2.5 2.5V9H3.5C2.7 9 2 8.3 2 7.5v-5z" fill="#185FA5"/></svg>
+      </span>;
     }
     // 연락처
     if (col.key === 'customer_phone') return val ? <span style={{fontSize:12,color:'#5A6070'}}>{val}</span> : empty;
@@ -745,8 +749,8 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     if (!newBadgeOpen) return;
     const h = (e) => { if (!e.target.closest('.badge-expand-panel')) setNewBadgeOpen(null); };
     const esc = (e) => { if (e.key === 'Escape') setNewBadgeOpen(null); };
-    document.addEventListener('mousedown', h); document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
+    const timer = setTimeout(() => { document.addEventListener('click', h); document.addEventListener('keydown', esc); }, 0);
+    return () => { clearTimeout(timer); document.removeEventListener('click', h); document.removeEventListener('keydown', esc); };
   }, [newBadgeOpen]);
 
   const renderNewCell = (col) => {
@@ -920,8 +924,9 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
     if (!open) return;
     const h = (e) => { if (!e.target.closest('.badge-expand-panel')) { setShipBadgeOpen(null); setNewShipBadgeOpen(null); } };
     const esc = (e) => { if (e.key === 'Escape') { setShipBadgeOpen(null); setNewShipBadgeOpen(null); } };
-    document.addEventListener('mousedown', h); document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
+    // setTimeout으로 다음 틱에 리스너 등록 — 현재 클릭 이벤트와 충돌 방지
+    const timer = setTimeout(() => { document.addEventListener('click', h); document.addEventListener('keydown', esc); }, 0);
+    return () => { clearTimeout(timer); document.removeEventListener('click', h); document.removeEventListener('keydown', esc); };
   }, [shipBadgeOpen, newShipBadgeOpen]);
 
   const saveShipBadge = async (id, field, value) => {
@@ -976,7 +981,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
       <div style={{position:'relative'}} className="badge-expand-panel" onClick={e => e.stopPropagation()}>
         <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color:c,cursor:'pointer',border:isOpen?`2px solid ${c}`:'2px solid transparent'}}
           onClick={() => setShipBadgeOpen(isOpen?null:{id:r.id,field:col.key})}>
-          {dbVal || '—'}
+          {dbVal || '●'}
         </span>
         {isOpen && (
           <div style={{position:'absolute',top:'100%',left:0,zIndex:20,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,marginTop:2,minWidth:80,maxHeight:200,overflowY:'auto'}}>
@@ -994,16 +999,16 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
   const renderCell = (r, col) => {
     const val = r[col.key];
     const isEditing = editCell?.id === r.id && editCell?.field === col.key;
-    const empty = <span className="empty-dot" />;
+    const empty = <span className="empty-dot">●</span>;
     const B = (bg,c,t,ex) => <span style={{display:'inline-flex',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color:c,...(ex||{})}}>{t}</span>;
 
     // 고정값 셀
     if (col.type === 'static') return B('#F4F6FA','#5A6070', col.value);
     // 읽기전용 뱃지
-    if (col.type === 'readonly-badge') return val ? B('#E6F1FB','#0C447C',val) : <span style={{color:'#9BA3B2',fontSize:11}}>—</span>;
+    if (col.type === 'readonly-badge') return val ? B('#E6F1FB','#0C447C',val) : <span className="empty-dot">●</span>;
     // 읽기전용
     if (col.type === 'readonly') {
-      if (!val) return <span style={{color:'#9BA3B2',fontSize:11}}>—</span>;
+      if (!val) return <span className="empty-dot">●</span>;
       if (col.key === 'ship_date') return <span style={{fontSize:12,color:'#3A3F4B'}}>{fmtDate(val)}</span>;
       return <span style={{fontSize:12,color:'#3A3F4B'}}>{val}</span>;
     }
@@ -1058,7 +1063,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
                 {c.type === 'static' ? (
                   <span style={{display:'inline-flex',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,background:'#F4F6FA',color:'#5A6070'}}>{c.value}</span>
                 ) : (c.type === 'readonly' || c.type === 'readonly-badge') ? (
-                  <span style={{fontSize:11,color: newRow[c.key] ? (c.type === 'readonly-badge' ? '#0C447C' : '#3A3F4B') : '#9BA3B2', ...(c.type === 'readonly-badge' && newRow[c.key] ? {background:'#E6F1FB',padding:'3px 8px',borderRadius:4,fontWeight:600,display:'inline-flex'} : {})}}>{c.key === 'ship_date' ? fmtDate(newRow.ship_date) : (newRow[c.key] || '—')}</span>
+                  <span style={{fontSize:11,color: newRow[c.key] ? (c.type === 'readonly-badge' ? '#0C447C' : '#3A3F4B') : '#9BA3B2', ...(c.type === 'readonly-badge' && newRow[c.key] ? {background:'#E6F1FB',padding:'3px 8px',borderRadius:4,fontWeight:600,display:'inline-flex'} : {})}}>{c.key === 'ship_date' ? fmtDate(newRow.ship_date) : (newRow[c.key] || '●')}</span>
                 ) : c.key === '_delete' ? (
                   <div style={{display:'flex',gap:4}}>
                     <button className="btn-primary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={handleNewSave}>저장</button>
