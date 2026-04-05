@@ -254,13 +254,7 @@ export default function Home() {
             {/* 섹션 헤더 */}
             <div className="section">
               <div className="section-header">
-                <span style={{fontSize:12,fontWeight:600}}>AS 일지</span>
-                <div className="section-header-badges">
-                  <span className="sh-badge" style={{color:'#7EB8E8',background:'rgba(126,184,232,0.12)'}}>입고 / 고객 / 제품</span>
-                  <span className="sh-badge" style={{color:'#6BC8A0',background:'rgba(107,200,160,0.12)'}}>AS 처리 및 비용</span>
-                  <span className="sh-badge" style={{color:'#E8C86B',background:'rgba(232,200,107,0.12)'}}>입금</span>
-                  <span className="sh-badge" style={{color:'#B08DE8',background:'rgba(176,141,232,0.12)'}}>출고</span>
-                </div>
+                <span style={{fontSize:13,fontWeight:600}}>AS 일지</span>
               </div>
               <div className="as-table-wrapper">
                 <ASTable
@@ -504,10 +498,10 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     release_date:120, release_carrier:70, tracking_number:130,
   };
   const COL_GROUPS = [
-    { label: '입고 / 고객 / 제품', color: '#0C447C', span: 12 },
-    { label: 'AS 처리 및 비용', color: '#085041', span: 4 },
-    { label: '입금', color: '#412402', span: 2 },
-    { label: '출고', color: '#3C3489', span: 3 },
+    { label: '입고', bg: '#E6F1FB', color: '#0C447C', border: '#85B7EB', span: 12 },
+    { label: 'AS 처리', bg: '#E1F5EE', color: '#085041', border: '#5DCAA5', span: 4 },
+    { label: '입금', bg: '#FAEEDA', color: '#412402', border: '#EF9F27', span: 2 },
+    { label: '출고', bg: '#EEEDFE', color: '#26215C', border: '#AFA9EC', span: 3 },
   ];
 
   const COLS = [
@@ -523,15 +517,15 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'customer_phone', label:'연락처', w:115, type:'text' },
     { key:'model', label:'모델명', w:100, type:'select', opts: MODELS },
     { key:'symptom', label:'증상', w:180, type:'text' },
-    { key:'memo', label:'비고', w:100, type:'text', groupEnd: true },
+    { key:'memo', label:'비고', w:100, type:'text', groupEnd: true, groupBorderColor: '#B5D4F4', groupBorderColorBody: '#E6F1FB' },
     // 초록 그룹
     { key:'repair_result', label:'처리결과', w:160, type:'text' },
     { key:'technician', label:'처리자', w:80, type:'text' },
     { key:'status', label:'AS상태', w:80, type:'select', opts: STATUS_LIST },
-    { key:'repair_cost', label:'AS비용', w:90, type:'number', groupEnd: true },
+    { key:'repair_cost', label:'AS비용', w:90, type:'number', groupEnd: true, groupBorderColor: '#9FE1CB', groupBorderColorBody: '#E1F5EE' },
     // 노란 그룹
     { key:'payment_status', label:'입금', w:80, type:'select', opts: PAYMENT_STATUS },
-    { key:'payer', label:'입금자', w:80, type:'text', groupEnd: true },
+    { key:'payer', label:'입금자', w:80, type:'text', groupEnd: true, groupBorderColor: '#FAC775', groupBorderColorBody: '#FAEEDA' },
     // 보라 그룹
     { key:'release_date', label:'출고일', w:115, type:'date' },
     { key:'release_carrier', label:'택배', w:70, type:'select', opts: CARRIERS_OUT },
@@ -662,9 +656,16 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         {COLS.map(c => <col key={c.key} style={{width: getColWidth(c.key)}} />)}
       </colgroup>
       <thead>
+        <tr className="as-group-header">
+          {COL_GROUPS.map((g, i) => (
+            <th key={i} colSpan={g.span} style={{ background: g.bg, color: g.color, fontSize: 12, fontWeight: 700, padding: '8px 0', textAlign: 'center', borderBottom: `2px solid ${g.border}`, borderRight: i < COL_GROUPS.length - 1 ? `2px solid ${g.border}` : 'none', position: 'sticky', top: 0, zIndex: 21 }}>
+              {g.label}
+            </th>
+          ))}
+        </tr>
         <tr className="as-col-header">
           {COLS.map((c, idx) => (
-            <th key={c.key} className={c.groupEnd ? 'as-group-border-th' : ''} style={{ position: 'sticky', top: 0, zIndex: 20, background: '#EAECF2' }}>
+            <th key={c.key} style={{ position: 'sticky', top: 34, zIndex: 20, background: '#EAECF2', borderRight: c.groupEnd && c.groupBorderColor ? `2px solid ${c.groupBorderColor}` : '1px solid #DDE1EB' }}>
               {c.isSmsHeader ? (
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{verticalAlign:'middle'}}><path d="M1 2.5A1.5 1.5 0 012.5 1h9A1.5 1.5 0 0113 2.5v6A1.5 1.5 0 0111.5 10H5l-3 2.5V10H2.5A1.5 1.5 0 011 8.5v-6z" stroke="#9BA3B2" strokeWidth="1.2" strokeLinejoin="round"/></svg>
               ) : c.label}
@@ -678,7 +679,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         {showNewRow && (
           <tr className="as-new-row">
             {COLS.map(c => (
-              <td key={c.key} className={c.groupEnd ? 'as-group-border-td' : ''}>
+              <td key={c.key} style={c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : undefined}>
                 {c.key === '_sms' ? (
                   <div style={{display:'flex',gap:4}}>
                     <button className="btn-primary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={handleNewRowSave}>저장</button>
@@ -690,10 +691,10 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
           </tr>
         )}
         {/* 데이터 행 */}
-        {records.map(r => (
-          <tr key={r.id} className="as-data-row" style={smsPanelId === r.id ? {background:'#E6F1FB'} : undefined}>
+        {records.map((r, rowIdx) => (
+          <tr key={r.id} className="as-data-row" style={smsPanelId === r.id ? {background:'#E6F1FB'} : (rowIdx % 2 === 1 ? {background:'#FAFBFC'} : undefined)}>
             {COLS.map(c => (
-                <td key={c.key} className={c.groupEnd ? 'as-group-border-td' : ''}
+                <td key={c.key} style={c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : undefined}
                   onClick={() => {
                     if (c.key === '_sms') return;
                     const val = c.key === 'company_name' ? (r.company_name || '') :
