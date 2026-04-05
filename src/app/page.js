@@ -136,7 +136,8 @@ export default function Home() {
       receiver_address: d.receiverAddress, contents: d.contents, memo: d.memo,
     };
     if (d.asRecordId) row.as_record_id = d.asRecordId;
-    await supabase.from('ship_records').insert(row);
+    const { error } = await supabase.from('ship_records').insert(row);
+    if (error) { console.error('Ship insert error:', error); alert('택배 등록 실패: ' + error.message); }
     loadData();
   };
   const updateShip = async (id, d) => {
@@ -731,17 +732,40 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     return val || empty;
   };
 
+  const [newBadgeOpen, setNewBadgeOpen] = useState(null); // field name
+
+  useEffect(() => {
+    if (!newBadgeOpen) return;
+    const h = (e) => { if (!e.target.closest('.badge-expand-panel')) setNewBadgeOpen(null); };
+    const esc = (e) => { if (e.key === 'Escape') setNewBadgeOpen(null); };
+    document.addEventListener('mousedown', h); document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
+  }, [newBadgeOpen]);
+
   const renderNewCell = (col) => {
     const val = col.key === 'company_name' ? newRow.company_name : newRow[col.key] ?? '';
     if (col.type === 'select') {
+      const dbVal = col.toDb ? col.toDb(val) : val;
+      const displayVal = col.fromDb ? col.fromDb(dbVal) : dbVal;
+      const isOpen = newBadgeOpen === col.key;
+      const [bg, c] = getBadgeColor(col.key, dbVal || displayVal);
       return (
-        <select className="as-cell-input" value={col.toDb ? col.toDb(val) : val} onChange={e => {
-          const v = col.fromDb ? col.fromDb(e.target.value) : e.target.value;
-          setNewRow(p => ({ ...p, [col.key]: col.toDb ? col.toDb(v || e.target.value) : e.target.value }));
-        }}>
-          <option value=""></option>
-          {col.opts.map(o => <option key={o} value={col.toDb ? col.toDb(o) : o}>{o}</option>)}
-        </select>
+        <div style={{position:'relative'}} className="badge-expand-panel" onClick={e => e.stopPropagation()}>
+          <span style={{display:'inline-flex',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:displayVal?bg:'#F4F6FA',color:displayVal?c:'#9BA3B2',cursor:'pointer',border:isOpen?`2px solid ${c}`:'2px solid transparent'}}
+            onClick={() => setNewBadgeOpen(isOpen ? null : col.key)}>
+            {displayVal ? getBadgeLabel(col, dbVal) : '선택'}
+          </span>
+          {isOpen && (
+            <div style={{position:'absolute',top:'100%',left:0,zIndex:30,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,marginTop:2,minWidth:80,maxHeight:200,overflowY:'auto'}}>
+              {col.opts.map(o => {
+                const ov = col.toDb ? col.toDb(o) : o;
+                const [obg,oc] = getBadgeColor(col.key, ov);
+                return <div key={o} style={{padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer',background:obg,color:oc,marginBottom:2,whiteSpace:'nowrap',border:dbVal===ov?`2px solid ${oc}`:'2px solid transparent'}}
+                  onClick={() => { setNewRow(p => ({...p, [col.key]: ov})); setNewBadgeOpen(null); }}>{getBadgeLabel(col, ov)}</div>;
+              })}
+            </div>
+          )}
+        </div>
       );
     }
     if (col.type === 'date') {
@@ -782,7 +806,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         {showNewRow && (
           <tr className="as-new-row">
             {COLS.map(c => (
-              <td key={c.key} style={c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : undefined}>
+              <td key={c.key} style={{...(c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {})}}>
                 {c.key === '_ship_btn' ? (
                   <div style={{display:'flex',gap:4}}>
                     <button className="btn-primary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={handleNewRowSave}>저장</button>
@@ -796,10 +820,12 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         {/* 데이터 행 */}
         {records.map((r, rowIdx) => (
           <tr key={r.id} className="as-data-row" style={rowIdx % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
-            {COLS.map(c => (
-                <td key={c.key} style={c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : undefined}
+            {COLS.map(c => {
+                const tdStyle = { ...(c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {}) };
+                return (
+                <td key={c.key} style={Object.keys(tdStyle).length ? tdStyle : undefined}
                   onClick={() => {
-                    if (c.isLink || c.type === 'action' || c.type === 'select') return; // select는 뱃지 펼침에서 처리
+                    if (c.isLink || c.type === 'action' || c.type === 'select') return;
                     const val = c.key === 'company_name' ? (r.company_name || '') :
                       c.fromDb ? (c.fromDb(r[c.key]) || '') :
                       (c.key === 'repair_cost' ? (r[c.key]?.toString() || '') : (r[c.key] || ''));
@@ -807,8 +833,8 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
                   }}
                 >
                   {renderCell(r, c)}
-                </td>
-            ))}
+                </td>);
+            })}
           </tr>
         ))}
         {records.length === 0 && (
@@ -1053,7 +1079,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
         {sorted.map((r, i) => (
           <tr key={r.id} className="as-data-row" style={{background: noTracking(r) ? '#FAEEDA' : (i % 2 === 1 ? '#FAFBFC' : undefined)}}>
             {COLS.map(c => (
-              <td key={c.key} style={c.key === 'tracking_no' && noTracking(r) ? {border:'2px solid #1D9E75'} : undefined}
+              <td key={c.key} style={{...(c.key === 'tracking_no' && noTracking(r) ? {border:'2px solid #1D9E75'} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {})}}
                 onClick={() => { if (c.type === 'action' || c.type === 'select') return; startEdit(r.id, c.key, r[c.key] || ''); }}>
                 {renderCell(r, c)}
               </td>
