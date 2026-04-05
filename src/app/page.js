@@ -1245,19 +1245,10 @@ function CustomerPopup({ customer, onClose }) {
 
   const handleSend = async () => {
     if (!msgInput.trim() || !phone) return;
-    // httpSMS API 호출
-    const { data: stgData } = await supabase.from('settings').select('*');
-    const stgMap = {}; (stgData||[]).forEach(s => { stgMap[s.key] = s.value; });
-    const apiKey = stgMap.httpsms_api_key;
-    const senderPhone = stgMap.httpsms_phone;
-    if (!apiKey || !senderPhone) { alert('SMS 설정이 필요합니다. 설정 탭에서 API 키를 입력해주세요.'); return; }
     try {
-      const res = await fetch('https://api.httpsms.com/v1/messages/send', {
-        method: 'POST',
-        headers: { 'x-api-key': String(apiKey).replace(/"/g,''), 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ content: msgInput.trim(), from: toE164(String(senderPhone).replace(/"/g,'')), to: toE164(phone) }),
-      });
-      if (!res.ok) { const err = await res.text(); alert('문자 발송 실패: ' + err); return; }
+      const res = await fetch('/api/sms/send', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to: phone, content: msgInput.trim() }) });
+      const result = await res.json();
+      if (result.error) { alert('문자 발송 실패: ' + result.error); return; }
     } catch (e) { alert('문자 발송 실패: ' + e.message); return; }
     const msg = { phone, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString() };
     const { data } = await supabase.from('sms_messages').insert(msg).select();
@@ -1699,13 +1690,11 @@ function SettingsTab({ asRecords, monthFilter }) {
             <div style={{display:'flex',gap:8,marginTop:8}}>
               <button className="btn-primary" style={{fontSize:12}} onClick={async () => { await save('httpsms_api_key',apiKey); await save('httpsms_phone',apiPhone); alert('저장 완료'); }}>SMS 설정 저장</button>
               <button className="btn-outline-secondary" style={{fontSize:12}} onClick={async () => {
-                if (!apiKey || !apiPhone) { alert('API 키와 발신번호를 먼저 입력하세요'); return; }
+                if (!apiKey || !apiPhone) { alert('API 키와 발신번호를 먼저 저장하세요'); return; }
                 try {
-                  const res = await fetch('https://api.httpsms.com/v1/messages/send', {
-                    method:'POST', headers:{'x-api-key':String(apiKey).replace(/"/g,''),'Content-Type':'application/json','Accept':'application/json'},
-                    body: JSON.stringify({content:'AS Manager 테스트 문자입니다',from:toE164(String(apiPhone).replace(/"/g,'')),to:toE164(String(apiPhone).replace(/"/g,''))}),
-                  });
-                  if (res.ok) alert('✅ 테스트 문자 발송 성공!'); else { const e = await res.text(); alert('❌ 발송 실패: '+e); }
+                  const res = await fetch('/api/sms/send', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to: apiPhone, content: 'AS Manager 테스트 문자입니다' }) });
+                  const result = await res.json();
+                  if (result.error) alert('❌ 발송 실패: ' + result.error); else alert('✅ 테스트 문자 발송 성공!');
                 } catch(e) { alert('❌ 발송 실패: '+e.message); }
               }}>테스트 문자 발송</button>
             </div>
