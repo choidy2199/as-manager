@@ -177,15 +177,23 @@ export default function Home() {
     <>
       {/* ── NAV ── */}
       <nav className="top-nav">
-        <div className="nav-logo">AS Manager</div>
+        <div className="nav-logo">
+          <span className="nav-logo-icon">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h8" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>
+          </span>
+          AS Manager
+        </div>
         <div className="nav-tabs">
           {[['as','AS 일지'],['ship','택배발송'],['history','수리내역조회'],['parts','부속가격'],['settings','설정']].map(([k,v]) => (
             <button key={k} onClick={() => setTab(k)} className={`nav-tab ${tab===k?'active':''}`}>{v}</button>
           ))}
         </div>
         <div className="nav-actions">
+          <span className="nav-user-avatar">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="4" r="2.5" stroke="white" strokeWidth="1.2"/><path d="M1.5 11c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4" stroke="white" strokeWidth="1.2" strokeLinecap="round"/></svg>
+          </span>
           <span className="nav-user">{user.email?.split('@')[0]}</span>
-          <button onClick={logout} className="btn-ghost">로그아웃</button>
+          <button onClick={logout} className="btn-ghost nav-logout-btn">로그아웃</button>
         </div>
       </nav>
 
@@ -197,22 +205,25 @@ export default function Home() {
             {/* KPI */}
             <div className="as-kpi-row">
               {[
-                { key: null, label: '전체 건수', value: kpiTotal, color: '#1A1D23' },
-                { key: 'reception', label: '접수/진단', value: kpiReception, color: '#185FA5' },
-                { key: 'repairing', label: '수리중', value: kpiRepairing, color: '#EF9F27' },
-                { key: 'done', label: '완료', value: kpiDone, color: '#1D9E75' },
-                { key: 'norepair', label: '수리불가', value: kpiNoRepair, color: '#CC2222' },
+                { key: null, label: '전체 건수', value: kpiTotal, bg: '#185FA5', labelColor: 'rgba(255,255,255,0.8)', valueColor: '#fff', unitColor: 'rgba(255,255,255,0.7)', valueFz: 24, flex: 1.8 },
+                { key: 'reception', label: '접수/진단', value: kpiReception, bg: '#E6F1FB', labelColor: '#5A6070', valueColor: '#185FA5', unitColor: '#5A6070', valueFz: 22, flex: 1 },
+                { key: 'repairing', label: '수리중', value: kpiRepairing, bg: '#FAEEDA', labelColor: '#5A6070', valueColor: '#EF9F27', unitColor: '#5A6070', valueFz: 22, flex: 1 },
+                { key: 'done', label: '완료', value: kpiDone, bg: '#E1F5EE', labelColor: '#5A6070', valueColor: '#1D9E75', unitColor: '#5A6070', valueFz: 22, flex: 1 },
+                { key: 'norepair', label: '수리불가', value: kpiNoRepair, bg: '#FCEBEB', labelColor: '#5A6070', valueColor: '#CC2222', unitColor: '#5A6070', valueFz: 22, flex: 1 },
               ].map(k => (
-                <div key={k.label} className="as-kpi-item" style={{ cursor:'pointer', border: kpiFilter === k.key ? `2px solid ${k.color}` : '2px solid transparent' }} onClick={() => setKpiFilter(kpiFilter === k.key ? null : k.key)}>
-                  <div className="as-kpi-label">{k.label}</div>
-                  <div className="as-kpi-value" style={{color:k.color}}>{k.value}<span className="as-kpi-unit">건</span></div>
+                <div key={k.label} className="as-kpi-item" style={{ cursor:'pointer', background: k.bg, flex: k.flex, border: kpiFilter === k.key ? `2px solid ${k.valueColor}` : '2px solid transparent' }} onClick={() => setKpiFilter(kpiFilter === k.key ? null : k.key)}>
+                  <div className="as-kpi-label" style={{color: k.labelColor}}>{k.label}</div>
+                  <div className="as-kpi-value" style={{color: k.valueColor, fontSize: k.valueFz}}>{k.value}<span className="as-kpi-unit" style={{color: k.unitColor}}>건</span></div>
                 </div>
               ))}
             </div>
 
             {/* 필터 */}
             <div className="as-filter-row">
-              <input className="input as-filter-search" placeholder="이름, 연락처, 모델, 증상 검색..." value={search} onChange={e => setSearch(e.target.value)} autoComplete="off" />
+              <div className="as-filter-search-wrap">
+                <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                <input className="input as-filter-search" placeholder="이름, 연락처, 모델, 증상 검색..." value={search} onChange={e => setSearch(e.target.value)} autoComplete="off" />
+              </div>
               <select className="input as-filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
                 <option>전체</option>{RECORD_TYPES.map(t => <option key={t}>{t}</option>)}
               </select>
@@ -227,9 +238,15 @@ export default function Home() {
 
             {/* 페이지 헤더 */}
             <div className="page-header">
-              <h1 className="page-title" style={{marginBottom:0}}>AS 일지</h1>
+              <div className="page-header-summary">
+                <span style={{fontSize:12,color:'var(--tl-text-hint)'}}>{monthLabel}</span>
+                <span style={{fontSize:13,fontWeight:700,color:'var(--tl-text)',marginLeft:4}}>— {filteredAS.length}건</span>
+              </div>
               <div style={{display:'flex',gap:8}}>
-                <button className="btn-secondary">엑셀 다운로드</button>
+                <button className="btn-outline-secondary">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{marginRight:4,verticalAlign:-1}}><path d="M2 1.5h8M3 4.5h6M4 7.5h4M5 10.5h2" stroke="#5A6070" strokeWidth="1" strokeLinecap="round"/></svg>
+                  엑셀 다운로드
+                </button>
                 <button className="btn-primary" onClick={() => setShowNewRow(true)}>+ 새 접수</button>
               </div>
             </div>
@@ -237,8 +254,13 @@ export default function Home() {
             {/* 섹션 헤더 */}
             <div className="section">
               <div className="section-header">
-                <span>AS 일지</span>
-                <span style={{fontSize:13,fontWeight:400}}>{monthLabel} — {filteredAS.length}건</span>
+                <span style={{fontSize:12,fontWeight:600}}>AS 일지</span>
+                <div className="section-header-badges">
+                  <span className="sh-badge" style={{color:'#7EB8E8',background:'rgba(126,184,232,0.12)'}}>입고 / 고객 / 제품</span>
+                  <span className="sh-badge" style={{color:'#6BC8A0',background:'rgba(107,200,160,0.12)'}}>AS 처리 및 비용</span>
+                  <span className="sh-badge" style={{color:'#E8C86B',background:'rgba(232,200,107,0.12)'}}>입금</span>
+                  <span className="sh-badge" style={{color:'#B08DE8',background:'rgba(176,141,232,0.12)'}}>출고</span>
+                </div>
               </div>
               <div className="as-table-wrapper">
                 <ASTable
@@ -497,7 +519,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'shipping_fee', label:'운임', w:80, type:'text' },
     { key:'invoice_type', label:'계산서', w:75, type:'select', opts: INVOICE_TYPES },
     { key:'company_name', label:'거래처/성함', w:150, type:'text', combined: true },
-    { key:'_sms', label:'💬', w:36, type:'icon' },
+    { key:'_sms', label:'sms', w:36, type:'icon', isSmsHeader: true },
     { key:'customer_phone', label:'연락처', w:115, type:'text' },
     { key:'model', label:'모델명', w:100, type:'select', opts: MODELS },
     { key:'symptom', label:'증상', w:180, type:'text' },
@@ -550,7 +572,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     const empty = <span className="empty-dot" />;
 
     if (col.key === '_sms') {
-      return <span className="sms-icon" title="문자" onClick={e => { e.stopPropagation(); onOpenSms && onOpenSms(r.id); }}>💬</span>;
+      return <span className="sms-icon" title="문자" onClick={e => { e.stopPropagation(); onOpenSms && onOpenSms(r.id); }}><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 2.5A1.5 1.5 0 012.5 1h9A1.5 1.5 0 0113 2.5v6A1.5 1.5 0 0111.5 10H5l-3 2.5V10H2.5A1.5 1.5 0 011 8.5v-6z" stroke="#9BA3B2" strokeWidth="1.2" strokeLinejoin="round"/></svg></span>;
     }
     // 1. 구분
     if (col.key === 'record_type') {
@@ -640,17 +662,12 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         {COLS.map(c => <col key={c.key} style={{width: getColWidth(c.key)}} />)}
       </colgroup>
       <thead>
-        <tr className="as-group-header">
-          {COL_GROUPS.map((g, i) => (
-            <th key={i} colSpan={g.span} style={{ background: g.color, color: '#fff', fontSize: 12, fontWeight: 600, padding: '6px 8px', textAlign: 'center', borderRight: i < COL_GROUPS.length - 1 ? '2px solid rgba(255,255,255,0.3)' : 'none', position: 'sticky', top: 0, zIndex: 20 }}>
-              {g.label}
-            </th>
-          ))}
-        </tr>
         <tr className="as-col-header">
           {COLS.map((c, idx) => (
-            <th key={c.key} className={c.groupEnd ? 'as-group-border-th' : ''} style={{ position: 'sticky', top: 29, zIndex: 19, background: '#EAECF2' }}>
-              {c.label}
+            <th key={c.key} className={c.groupEnd ? 'as-group-border-th' : ''} style={{ position: 'sticky', top: 0, zIndex: 20, background: '#EAECF2' }}>
+              {c.isSmsHeader ? (
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{verticalAlign:'middle'}}><path d="M1 2.5A1.5 1.5 0 012.5 1h9A1.5 1.5 0 0113 2.5v6A1.5 1.5 0 0111.5 10H5l-3 2.5V10H2.5A1.5 1.5 0 011 8.5v-6z" stroke="#9BA3B2" strokeWidth="1.2" strokeLinejoin="round"/></svg>
+              ) : c.label}
               <span className="col-resize-handle" onMouseDown={e => startResize(idx, c.key, e)} />
             </th>
           ))}
