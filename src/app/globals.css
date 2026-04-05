@@ -252,8 +252,8 @@ textarea.input { height: auto; padding: 10px; resize: vertical; }
 .search-dropdown-avatar { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; font-weight: 700; flex-shrink: 0; }
 
 /* ── Customer Link ── */
-.customer-link { color: #185FA5; text-decoration: underline; cursor: pointer; font-size: 13px; }
-.customer-link:hover { color: #0C447C; }
+.customer-link { display: inline-flex; background: #E6F1FB; color: #0C447C; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: none; white-space: nowrap; transition: background 0.15s; }
+.customer-link:hover { background: #B5D4F4; }
 
 /* ── AS Table ── */
 .as-table-wrapper { overflow: auto; max-height: calc(100vh - 280px); border: 1px solid var(--tl-border); border-top: none; border-radius: 0 0 6px 6px; }
