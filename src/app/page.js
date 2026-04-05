@@ -129,11 +129,13 @@ export default function Home() {
 
   /* ── Ship CRUD (기존 유지) ── */
   const addShip = async (d) => {
-    await supabase.from('ship_records').insert({
+    const row = {
       ship_date: d.shipDate, carrier: d.carrier, tracking_no: d.trackingNo,
       sender_name: d.senderName, receiver_name: d.receiverName, receiver_phone: d.receiverPhone,
       receiver_address: d.receiverAddress, contents: d.contents, memo: d.memo,
-    });
+    };
+    if (d.asRecordId) row.as_record_id = d.asRecordId;
+    await supabase.from('ship_records').insert(row);
     loadData();
   };
   const updateShip = async (id, d) => {
@@ -805,9 +807,10 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, onHideNewRow, saveASField }) {
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState('');
-  const [newRow, setNewRow] = useState({ ship_date: today(), carrier: 'CJ대한통운', tracking_no: '', sender_name: '', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '' });
+  const [newRow, setNewRow] = useState({ ship_date: today(), carrier: 'CJ대한통운', tracking_no: '', sender_name: '', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
   const [sortKey, setSortKey] = useState('ship_date');
   const [sortAsc, setSortAsc] = useState(false);
+  const [recipientQuery, setRecipientQuery] = useState('');
   const SHIP_CARRIERS = ['롯데택배','CJ대한통운','한진택배','경동택배','로젠택배','우체국','대신택배'];
   const tableRef = useRef(null);
   const savedWidthsRef = useRef((() => {
@@ -865,9 +868,13 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
     setEditCell(null);
     if (String(prev) !== String(editValue || '')) {
       await onSave(id, field, editValue || null);
-      // 송장번호 변경 시 연동된 AS건에 자동 반영
-      if (field === 'tracking_no' && row?.as_record_id) {
-        await saveASField(row.as_record_id, 'tracking_number', editValue || null);
+      // 송장번호 변경 시 연동된 AS건 출고 정보 자동 업데이트
+      if (field === 'tracking_no' && row?.as_record_id && editValue) {
+        await supabase.from('as_records').update({
+          tracking_number: editValue,
+          release_date: today(),
+          release_carrier: row.carrier || null,
+        }).eq('id', row.as_record_id);
       }
     }
   };
@@ -877,8 +884,9 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
     const row = { ...newRow };
     Object.keys(row).forEach(k => { if (row[k] === '') row[k] = null; });
     row.ship_date = row.ship_date || today();
-    await onAdd({ shipDate: row.ship_date, carrier: row.carrier, trackingNo: row.tracking_no, senderName: row.sender_name, receiverName: row.receiver_name, receiverPhone: row.receiver_phone, receiverAddress: row.receiver_address, contents: row.contents, memo: row.memo });
-    setNewRow({ ship_date: today(), carrier: 'CJ대한통운', tracking_no: '', sender_name: '', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '' });
+    await onAdd({ shipDate: row.ship_date, carrier: row.carrier, trackingNo: row.tracking_no, senderName: row.sender_name, receiverName: row.receiver_name, receiverPhone: row.receiver_phone, receiverAddress: row.receiver_address, contents: row.contents, memo: row.memo, asRecordId: row.as_record_id });
+    setNewRow({ ship_date: today(), carrier: 'CJ대한통운', tracking_no: '', sender_name: '', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
+    setRecipientQuery('');
     onHideNewRow();
   };
 
@@ -913,15 +921,51 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
         </tr>
       </thead>
       <tbody>
-        {showNewRow && (
+        {showNewRow && (() => {
+          // 미출고 고객 검색 (status=완료, tracking_number 비어있음)
+          const pendingShip = recipientQuery.length >= 1
+            ? asRecords.filter(r => r.status === '완료' && !r.tracking_number && r.customer_name?.toLowerCase().includes(recipientQuery.toLowerCase()))
+            : [];
+          return (
           <tr className="as-new-row">
             {COLS.map(c => (
-              <td key={c.key}>
+              <td key={c.key} style={c.key === 'receiver_name' ? {position:'relative',overflow:'visible'} : undefined}>
                 {c.key === 'tracking_no' ? (
                   <div style={{display:'flex',gap:4}}>
                     <button className="btn-primary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={handleNewSave}>저장</button>
                     <button className="btn-secondary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={onHideNewRow}>취소</button>
                   </div>
+                ) : c.key === 'receiver_name' ? (
+                  <>
+                    <input className="as-cell-input" value={newRow.receiver_name||''} placeholder="수령자명"
+                      onChange={e => { setNewRow(p=>({...p, receiver_name: e.target.value, as_record_id: null})); setRecipientQuery(e.target.value); }}
+                      onKeyDown={e => e.key==='Enter' && handleNewSave()} />
+                    {pendingShip.length > 0 && (
+                      <div className="search-dropdown" style={{minWidth:350,top:'100%',left:0}}>
+                        <div className="search-dropdown-header">
+                          <span style={{fontSize:10,fontWeight:600,color:'#5A6070'}}>발송 대기 {pendingShip.length}건</span>
+                        </div>
+                        {pendingShip.slice(0,8).map((ar,i) => (
+                          <div key={ar.id} className="search-dropdown-item" onClick={() => {
+                            setNewRow(p => ({...p, receiver_name: ar.customer_name || '', receiver_phone: ar.customer_phone || '', contents: ar.model || '', as_record_id: ar.id }));
+                            setRecipientQuery('');
+                          }}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{display:'flex',alignItems:'center',gap:6}}>
+                                <span style={{fontSize:12,fontWeight:600,color:'#1A1D23'}}>{ar.customer_name || '-'}</span>
+                                {ar.model && <span style={{display:'inline-flex',padding:'1px 6px',borderRadius:4,fontSize:10,fontWeight:600,background:'#E6F1FB',color:'#0C447C'}}>{ar.model}</span>}
+                              </div>
+                              <div style={{fontSize:11,color:'#5A6070'}}>{ar.customer_phone || '-'}</div>
+                            </div>
+                            <div style={{textAlign:'right',flexShrink:0}}>
+                              <div style={{fontSize:10,color:'#5A6070',maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ar.repair_result || ar.symptom || '-'}</div>
+                              <div style={{fontSize:10,color:'#9BA3B2'}}>{fmtDate(ar.receipt_date)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 ) : c.type === 'select' ? (
                   <select className="as-cell-input" value={newRow[c.key]||''} onChange={e => setNewRow(p=>({...p,[c.key]:e.target.value}))}><option value=""></option>{c.opts.map(o=><option key={o}>{o}</option>)}</select>
                 ) : c.type === 'date' ? (
@@ -932,7 +976,8 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
               </td>
             ))}
           </tr>
-        )}
+          );
+        })()}
         {sorted.map((r, i) => (
           <tr key={r.id} className="as-data-row" style={{background: noTracking(r) ? '#FAEEDA' : (i % 2 === 1 ? '#FAFBFC' : undefined)}}>
             {COLS.map(c => (
