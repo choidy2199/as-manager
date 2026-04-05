@@ -56,7 +56,14 @@ export default function Home() {
     return () => document.removeEventListener('mousedown', handler);
   }, [search]);
 
-  /* ── 택배/부속 기존 state ── */
+  /* ── 택배 필터 ── */
+  const [shipSearch, setShipSearch] = useState('');
+  const [shipCarrierFilter, setShipCarrierFilter] = useState('전체');
+  const [shipTrackingFilter, setShipTrackingFilter] = useState('전체');
+  const [shipMonthFilter, setShipMonthFilter] = useState(new Date().toISOString().slice(0,7));
+  const [showNewShipRow, setShowNewShipRow] = useState(false);
+
+  /* ── 부속 기존 state ── */
   const [partsSearch, setPartsSearch] = useState('');
   const [partsCatFilter, setPartsCatFilter] = useState('전체');
   const [modal, setModal] = useState(null);
@@ -144,6 +151,17 @@ export default function Home() {
   };
 
   const logout = async () => { await supabase.auth.signOut(); setUser(null); };
+
+  /* ── 택배 엑셀 출력 ── */
+  const exportShipExcel = (data, label) => {
+    const headers = ['수령자명','수령자HP','수령자주소','품목명','수량','배송메시지','신용/착불','택배사','송장번호'];
+    const rows = data.map(r => [r.receiver_name||'',r.receiver_phone||'',r.receiver_address||'',r.contents||'','1',r.memo||'','선불',r.carrier||'',r.tracking_no||'']);
+    let csv = '\uFEFF' + headers.join(',') + '\n' + rows.map(r => r.map(c => `"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `택배발송_${label}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   /* ── AS 필터링 ── */
   const KPI_STATUS_MAP = { reception: ['접수','진단중'], repairing: ['수리중','부품대기'], done: ['완료'], norepair: ['수리X','폐기'] };
@@ -326,41 +344,69 @@ export default function Home() {
           </>
         )}
 
-        {/* ═══ 택배발송 (기존 유지) ═══ */}
-        {tab === 'ship' && (
+        {/* ═══ 택배발송 ═══ */}
+        {tab === 'ship' && (() => {
+          const SHIP_CARRIERS = ['롯데택배','CJ대한통운','한진택배','경동택배','로젠택배','우체국','대신택배'];
+          const filtered = shipRecords.filter(r => {
+            const ms = !shipSearch || [r.receiver_name, r.receiver_phone, r.contents].some(f => f?.toLowerCase().includes(shipSearch.toLowerCase()));
+            const mc = shipCarrierFilter === '전체' || r.carrier === shipCarrierFilter;
+            const mt = shipTrackingFilter === '전체' || (shipTrackingFilter === '미입력' ? !r.tracking_no : !!r.tracking_no);
+            const mm = !shipMonthFilter || r.ship_date?.startsWith(shipMonthFilter);
+            return ms && mc && mt && mm;
+          });
+          const shipMonthLabel = (() => { const [y,m] = shipMonthFilter.split('-'); return `${y}년 ${parseInt(m)}월`; })();
+          return (
           <>
+            <div className="as-filter-row">
+              <div className="as-filter-search-wrap">
+                <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                <input className="input as-filter-search" placeholder="수령자명, 연락처, 품목 검색..." value={shipSearch} onChange={e => setShipSearch(e.target.value)} autoComplete="off" />
+              </div>
+              <div className="as-filter-pair"><span className="as-filter-label">택배사</span>
+                <select className="input as-filter-select" value={shipCarrierFilter} onChange={e => setShipCarrierFilter(e.target.value)}>
+                  <option>전체</option>{SHIP_CARRIERS.map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="as-filter-pair"><span className="as-filter-label">송장</span>
+                <select className="input as-filter-select" value={shipTrackingFilter} onChange={e => setShipTrackingFilter(e.target.value)}>
+                  <option>전체</option><option>미입력</option><option>입력완료</option>
+                </select>
+              </div>
+              <div className="as-filter-pair"><span className="as-filter-label">기간</span>
+                <input className="input as-filter-month" type="month" value={shipMonthFilter} onChange={e => setShipMonthFilter(e.target.value)} />
+              </div>
+            </div>
             <div className="page-header">
-              <h1 className="page-title" style={{marginBottom:0}}>택배 발송 관리</h1>
-              <button onClick={() => setModal({ type:'ship-new' })} className="btn-primary">+ 새 발송</button>
+              <div />
+              <div style={{display:'flex',gap:8}}>
+                <button className="btn-outline-secondary" onClick={() => exportShipExcel(filtered, shipMonthLabel)}>
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{marginRight:4,verticalAlign:-1}}><path d="M2 1.5h8M3 4.5h6M4 7.5h4M5 10.5h2" stroke="#5A6070" strokeWidth="1" strokeLinecap="round"/></svg>
+                  송장 엑셀 출력
+                </button>
+                <button className="btn-primary" onClick={() => setShowNewShipRow(true)}>+ 새 발송</button>
+              </div>
             </div>
             <div className="section">
-              <div className="section-header"><span>발송 목록 ({shipRecords.length}건)</span></div>
-              <div className="section-body">
-                {shipRecords.length === 0 ? <div className="empty">아직 발송 내역이 없습니다</div> : (
-                  <div className="scroll-x"><table className="data-table"><thead><tr>
-                    {['발송일','택배사','송장번호','보내는분','수령인','연락처','내용물','메모',''].map(h => <th key={h}>{h}</th>)}
-                  </tr></thead><tbody>
-                    {shipRecords.map(r => (
-                      <tr key={r.id}>
-                        <td>{r.ship_date}</td><td>{r.carrier}</td>
-                        <td className="mono fw600">{r.tracking_no}</td>
-                        <td>{r.sender_name || '-'}</td><td>{r.receiver_name}</td><td>{r.receiver_phone || '-'}</td>
-                        <td className="ellipsis" style={{maxWidth:160}}>{r.contents}</td>
-                        <td className="text-secondary ellipsis" style={{maxWidth:120}}>{r.memo || '-'}</td>
-                        <td>
-                          <div style={{ display:'flex', gap:8 }}>
-                            <button className="btn-text-edit" onClick={() => setModal({ type:'ship-edit', data:r })}>수정</button>
-                            <button className="btn-text-danger" onClick={() => deleteShip(r.id)}>삭제</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody></table></div>
-                )}
+              <div className="section-header">
+                <span style={{fontSize:12,fontWeight:600}}>택배 발송</span>
+                <span style={{fontSize:12,color:'rgba(255,255,255,0.5)'}}>{shipMonthLabel} — {filtered.length}건</span>
+              </div>
+              <div className="as-table-wrapper" style={{maxHeight:'calc(100vh - 220px)'}}>
+                <ShipTable
+                  records={filtered}
+                  asRecords={asRecords}
+                  onSave={async (id, field, value) => { await supabase.from('ship_records').update({[field]:value}).eq('id',id); loadData(monthFilter); }}
+                  onAdd={addShip}
+                  onDelete={deleteShip}
+                  showNewRow={showNewShipRow}
+                  onHideNewRow={() => setShowNewShipRow(false)}
+                  saveASField={saveASField}
+                />
               </div>
             </div>
           </>
-        )}
+          );
+        })()}
 
         {/* ═══ 수리내역조회 (신규 빈 페이지) ═══ */}
         {tab === 'history' && (
@@ -412,14 +458,10 @@ export default function Home() {
         )}
       </div>
 
-      {/* ═══ 택배 MODALS (기존 유지) ═══ */}
+      {/* ═══ 기타 MODALS ═══ */}
       {modal && (
         <div className="modal-overlay" onClick={() => setModal(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            {(modal.type === 'ship-new' || modal.type === 'ship-edit') && (
-              <ShipForm initial={modal.data} onSave={d => { modal.type === 'ship-new' ? addShip(d) : updateShip(modal.data.id, d); setModal(null); }} onClose={() => setModal(null)} />
-            )}
-          </div>
+          <div className="modal-content" onClick={e => e.stopPropagation()} />
         </div>
       )}
 
@@ -759,38 +801,123 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 }
 
 
-/* ═══ SHIP FORM (기존 유지) ═══ */
-function ShipForm({ initial, onSave, onClose }) {
-  const i = initial || {};
-  const [f, setF] = useState({
-    shipDate: i.ship_date || today(), carrier: i.carrier || 'CJ대한통운', trackingNo: i.tracking_no || '',
-    senderName: i.sender_name || '', receiverName: i.receiver_name || '', receiverPhone: i.receiver_phone || '',
-    receiverAddress: i.receiver_address || '', contents: i.contents || '', memo: i.memo || '',
+/* ═══ SHIP TABLE — 인라인 편집 ═══ */
+function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, onHideNewRow, saveASField }) {
+  const [editCell, setEditCell] = useState(null);
+  const [editValue, setEditValue] = useState('');
+  const [newRow, setNewRow] = useState({ ship_date: today(), carrier: 'CJ대한통운', tracking_no: '', sender_name: '', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '' });
+  const [sortKey, setSortKey] = useState('ship_date');
+  const [sortAsc, setSortAsc] = useState(false);
+  const SHIP_CARRIERS = ['롯데택배','CJ대한통운','한진택배','경동택배','로젠택배','우체국','대신택배'];
+
+  const COLS = [
+    { key:'ship_date', label:'날짜', w:110, type:'date' },
+    { key:'receiver_name', label:'수령자명', w:100, type:'text' },
+    { key:'receiver_phone', label:'수령자HP', w:120, type:'text' },
+    { key:'receiver_address', label:'수령자 주소', w:200, type:'text' },
+    { key:'contents', label:'품목명', w:150, type:'text' },
+    { key:'memo', label:'메모', w:120, type:'text' },
+    { key:'carrier', label:'택배사', w:100, type:'select', opts: SHIP_CARRIERS },
+    { key:'tracking_no', label:'송장번호', w:140, type:'text' },
+    { key:'sender_name', label:'보내는분', w:90, type:'text' },
+  ];
+
+  const sorted = [...records].sort((a, b) => {
+    const va = a[sortKey] || '', vb = b[sortKey] || '';
+    return sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
   });
-  const set = (k, v) => setF(p => ({ ...p, [k]: v }));
-  const CARRIERS = ["CJ대한통운","한진택배","롯데택배","로젠택배","우체국택배","경동택배","대신택배","대신화물","기타"];
+
+  const toggleSort = (key) => { if (sortKey === key) setSortAsc(!sortAsc); else { setSortKey(key); setSortAsc(true); } };
+
+  const startEdit = (id, field, value) => { setEditCell({ id, field }); setEditValue(value ?? ''); };
+  const commitEdit = async () => {
+    if (!editCell) return;
+    const { id, field } = editCell;
+    const row = records.find(r => r.id === id);
+    const prev = row ? (row[field] ?? '') : '';
+    setEditCell(null);
+    if (String(prev) !== String(editValue || '')) {
+      await onSave(id, field, editValue || null);
+      // 송장번호 변경 시 연동된 AS건에 자동 반영
+      if (field === 'tracking_no' && row?.as_record_id) {
+        await saveASField(row.as_record_id, 'tracking_number', editValue || null);
+      }
+    }
+  };
+
+  const handleNewSave = async () => {
+    if (!newRow.ship_date) return;
+    const row = { ...newRow };
+    Object.keys(row).forEach(k => { if (row[k] === '') row[k] = null; });
+    row.ship_date = row.ship_date || today();
+    await onAdd({ shipDate: row.ship_date, carrier: row.carrier, trackingNo: row.tracking_no, senderName: row.sender_name, receiverName: row.receiver_name, receiverPhone: row.receiver_phone, receiverAddress: row.receiver_address, contents: row.contents, memo: row.memo });
+    setNewRow({ ship_date: today(), carrier: 'CJ대한통운', tracking_no: '', sender_name: '', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '' });
+    onHideNewRow();
+  };
+
+  const renderCell = (r, col) => {
+    const val = r[col.key];
+    const isEditing = editCell?.id === r.id && editCell?.field === col.key;
+    if (isEditing) {
+      if (col.type === 'select') return <select className="as-cell-input" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={commitEdit}><option value=""></option>{col.opts.map(o => <option key={o}>{o}</option>)}</select>;
+      if (col.type === 'date') return <input type="date" className="as-cell-input" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={commitEdit} />;
+      return <input className="as-cell-input" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={commitEdit} onKeyDown={e => e.key === 'Enter' && commitEdit()} />;
+    }
+    const empty = <span className="empty-dot" />;
+    if (col.type === 'date') return val ? <span style={{fontSize:12,color:'#3A3F4B'}}>{fmtDate(val)}</span> : empty;
+    if (col.key === 'carrier') return val ? <span style={{display:'inline-flex',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:600,background:'#E8EBF0',color:'#3A3F4B',whiteSpace:'nowrap'}}>{val}</span> : empty;
+    if (col.key === 'tracking_no') return val ? <span style={{fontFamily:'monospace',fontSize:11,fontWeight:600,color:'#1A1D23'}}>{val}</span> : <span style={{fontSize:10,color:'#9BA3B2'}}>미입력</span>;
+    return val || empty;
+  };
+
+  const noTracking = (r) => !r.tracking_no;
 
   return (
-    <>
-      <div className="modal-header"><h2>{initial ? '발송 수정' : '새 택배 발송'}</h2><button onClick={onClose} className="modal-close">✕</button></div>
-      <div className="modal-body">
-        <div className="form-grid">
-          <div className="form-field"><label className="label">발송일</label><input type="date" value={f.shipDate} onChange={e => set('shipDate', e.target.value)} className="input" /></div>
-          <div className="form-field"><label className="label">택배사</label><select value={f.carrier} onChange={e => set('carrier', e.target.value)} className="input">{CARRIERS.map(c => <option key={c}>{c}</option>)}</select></div>
-        </div>
-        <div className="form-field"><label className="label">송장번호</label><input value={f.trackingNo} onChange={e => set('trackingNo', e.target.value)} placeholder="송장번호 입력" className="input mono" /></div>
-        <hr className="form-divider" />
-        <div className="form-field"><label className="label">보내는분</label><input value={f.senderName} onChange={e => set('senderName', e.target.value)} placeholder="보내는분" className="input" /></div>
-        <div className="form-grid">
-          <div className="form-field"><label className="label">수령인</label><input value={f.receiverName} onChange={e => set('receiverName', e.target.value)} placeholder="받는분 이름" className="input" /></div>
-          <div className="form-field"><label className="label">수령인 연락처</label><input value={f.receiverPhone} onChange={e => set('receiverPhone', e.target.value)} placeholder="010-0000-0000" className="input" /></div>
-        </div>
-        <div className="form-field"><label className="label">수령인 주소</label><input value={f.receiverAddress} onChange={e => set('receiverAddress', e.target.value)} placeholder="주소" className="input" /></div>
-        <div className="form-field"><label className="label">내용물</label><input value={f.contents} onChange={e => set('contents', e.target.value)} placeholder="메인보드, 모터 등" className="input" /></div>
-        <div className="form-field"><label className="label">메모</label><input value={f.memo} onChange={e => set('memo', e.target.value)} placeholder="메모" className="input" /></div>
-      </div>
-      <div className="modal-footer"><button onClick={onClose} className="btn-secondary">취소</button><button onClick={() => onSave(f)} className="btn-primary">저장</button></div>
-    </>
+    <table className="as-table" style={{width: COLS.reduce((s,c) => s + c.w, 0)}}>
+      <colgroup>{COLS.map(c => <col key={c.key} style={{width:c.w}} />)}</colgroup>
+      <thead>
+        <tr className="as-col-header">
+          {COLS.map(c => (
+            <th key={c.key} style={{background:'#EAECF2',cursor:'pointer'}} onClick={() => toggleSort(c.key)}>
+              {c.label}{sortKey === c.key ? (sortAsc ? ' ↑' : ' ↓') : ''}
+              </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {showNewRow && (
+          <tr className="as-new-row">
+            {COLS.map(c => (
+              <td key={c.key}>
+                {c.key === 'tracking_no' ? (
+                  <div style={{display:'flex',gap:4}}>
+                    <button className="btn-primary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={handleNewSave}>저장</button>
+                    <button className="btn-secondary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={onHideNewRow}>취소</button>
+                  </div>
+                ) : c.type === 'select' ? (
+                  <select className="as-cell-input" value={newRow[c.key]||''} onChange={e => setNewRow(p=>({...p,[c.key]:e.target.value}))}><option value=""></option>{c.opts.map(o=><option key={o}>{o}</option>)}</select>
+                ) : c.type === 'date' ? (
+                  <input type="date" className="as-cell-input" value={newRow[c.key]||''} onChange={e => setNewRow(p=>({...p,[c.key]:e.target.value}))} />
+                ) : (
+                  <input className="as-cell-input" value={newRow[c.key]||''} placeholder={c.label} onChange={e => setNewRow(p=>({...p,[c.key]:e.target.value}))} onKeyDown={e => e.key==='Enter' && handleNewSave()} />
+                )}
+              </td>
+            ))}
+          </tr>
+        )}
+        {sorted.map((r, i) => (
+          <tr key={r.id} className="as-data-row" style={{background: noTracking(r) ? '#FAEEDA' : (i % 2 === 1 ? '#FAFBFC' : undefined)}}>
+            {COLS.map(c => (
+              <td key={c.key} style={c.key === 'tracking_no' && noTracking(r) ? {border:'2px solid #1D9E75'} : undefined}
+                onClick={() => startEdit(r.id, c.key, r[c.key] || '')}>
+                {renderCell(r, c)}
+              </td>
+            ))}
+          </tr>
+        ))}
+        {sorted.length === 0 && <tr><td colSpan={COLS.length} className="empty">택배 발송 내역이 없습니다</td></tr>}
+      </tbody>
+    </table>
   );
 }
 
