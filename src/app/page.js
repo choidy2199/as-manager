@@ -487,8 +487,9 @@ export default function Home() {
    AS 테이블 — 인라인 편집
    ═══════════════════════════════════════════════ */
 function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip }) {
-  const [editCell, setEditCell] = useState(null); // {id, field}
+  const [editCell, setEditCell] = useState(null); // {id, field} — 텍스트/숫자/날짜용
   const [editValue, setEditValue] = useState('');
+  const [badgeOpen, setBadgeOpen] = useState(null); // {id, field} — 뱃지 펼침용
   const [newRow, setNewRow] = useState(emptyRow());
   const savedWidthsRef = useRef((() => {
     if (typeof window === 'undefined') return {};
@@ -547,6 +548,23 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       release_date: '', release_carrier: '', tracking_number: '', release_memo: '',
     };
   }
+
+  // 뱃지 펼침 바깥 클릭 닫기
+  useEffect(() => {
+    if (!badgeOpen) return;
+    const handler = (e) => { if (!e.target.closest('.badge-expand-panel')) setBadgeOpen(null); };
+    const escHandler = (e) => { if (e.key === 'Escape') setBadgeOpen(null); };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('keydown', escHandler);
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('keydown', escHandler); };
+  }, [badgeOpen]);
+
+  // 뱃지 선택 → 즉시 저장
+  const saveBadge = async (id, field, value) => {
+    setBadgeOpen(null);
+    await onSaveField(id, field, value);
+    onReload();
+  };
 
   const startEdit = (id, field, value) => {
     setEditCell({ id, field });
@@ -628,23 +646,52 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'_ship_btn', label:'택배', w:55, type:'action' },
   ];
 
+  // 뱃지 색상 매핑
+  const BADGE_COLORS = {
+    record_type: { as_repair:['#E6F1FB','#0C447C'], product_sale:['#E1F5EE','#085041'], parts_sale:['#FAEEDA','#412402'] },
+    brand: { '콜라보':['#E6F1FB','#0C447C'],'마끼다':['#E1F5EE','#085041'],'디월트':['#FAEEDA','#412402'],'프레레':['#EEEDFE','#26215C'],'기타':['#F1EFE8','#2C2C2A'] },
+    status: { '접수':['#E6F1FB','#0C447C'],'진단중':['#E6F1FB','#0C447C'],'부품대기':['#FAEEDA','#412402'],'수리중':['#FAEEDA','#412402'],'완료':['#E1F5EE','#085041'],'수리X':['#FCEBEB','#791F1F'],'폐기':['#FCEBEB','#791F1F'] },
+    payment_status: { '완료':['#E1F5EE','#085041'],'대기':['#FAEEDA','#412402'],'명세서':['#FAEEDA','#412402'],'무상':['#F1EFE8','#2C2C2A'],'카드':['#E6F1FB','#0C447C'],'방문결제':['#EEEDFE','#26215C'] },
+    invoice_type: { '없음(일반소매)':['#F1EFE8','#2C2C2A'],'계산서(거래처)':['#E6F1FB','#0C447C'],'월말':['#FAEEDA','#412402'] },
+  };
+  const getBadgeColor = (field, v) => (BADGE_COLORS[field] && BADGE_COLORS[field][v]) || ['#F4F6FA','#1A1D23'];
+  const getBadgeLabel = (col, v) => col.fromDb ? col.fromDb(v) : (col.key === 'invoice_type' ? (v === '없음(일반소매)' ? '일반' : v === '계산서(거래처)' ? '계산서' : v) : v);
+
+  const renderBadgeExpand = (r, col) => {
+    const dbVal = r[col.key];
+    const displayVal = col.fromDb ? col.fromDb(dbVal) : dbVal;
+    const isOpen = badgeOpen?.id === r.id && badgeOpen?.field === col.key;
+    const [bg, c] = getBadgeColor(col.key, dbVal || displayVal);
+    const empty = <span className="empty-dot" />;
+    return (
+      <div style={{position:'relative'}} className="badge-expand-panel" onClick={e => e.stopPropagation()}>
+        <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background: displayVal ? bg : '#F4F6FA',color: displayVal ? c : '#9BA3B2',cursor:'pointer',border: isOpen ? `2px solid ${c}` : '2px solid transparent'}}
+          onClick={() => setBadgeOpen(isOpen ? null : {id:r.id, field:col.key})}>
+          {displayVal ? getBadgeLabel(col, dbVal) : '—'}
+        </span>
+        {isOpen && (
+          <div style={{position:'absolute',top:'100%',left:0,zIndex:20,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,marginTop:2,minWidth:80,maxHeight:200,overflowY:'auto'}}>
+            {col.opts.map(o => {
+              const ov = col.toDb ? col.toDb(o) : o;
+              const [obg,oc] = getBadgeColor(col.key, ov);
+              const selected = (dbVal === ov) || (displayVal === o);
+              return <div key={o} style={{display:'flex',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer',background:obg,color:oc,marginBottom:2,border: selected ? `2px solid ${oc}` : '2px solid transparent',whiteSpace:'nowrap'}}
+                onClick={() => saveBadge(r.id, col.key, ov)}>{getBadgeLabel(col, ov)}</div>;
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderCell = (r, col) => {
     const val = col.fromDb ? col.fromDb(r[col.key]) : r[col.key];
     const isEditing = editCell?.id === r.id && editCell?.field === col.key;
 
+    // 드롭다운 셀 → 뱃지 펼침
+    if (col.type === 'select') return renderBadgeExpand(r, col);
+
     if (isEditing) {
-      if (col.type === 'select') {
-        return (
-          <select className="as-cell-input" value={editValue} autoFocus
-            onChange={e => setEditValue(e.target.value)}
-            onBlur={commitEdit}
-            onKeyDown={e => e.key === 'Enter' && commitEdit()}
-          >
-            <option value=""></option>
-            {col.opts.map(o => <option key={o} value={col.toDb ? col.toDb(o) : o}>{o}</option>)}
-          </select>
-        );
-      }
       if (col.type === 'date') {
         return <input type="date" className="as-cell-input" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={commitEdit} />;
       }
@@ -661,49 +708,8 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     const B = (bg, color, text, extra) => <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color,...(extra||{})}}>{text}</span>;
     const empty = <span className="empty-dot" />;
 
-    // 1. 구분
-    if (col.key === 'record_type') {
-      const label = dbToRecordType(r.record_type);
-      const m = { as_repair:['#E6F1FB','#0C447C'], product_sale:['#E1F5EE','#085041'], parts_sale:['#FAEEDA','#412402'] };
-      const [bg,c] = m[r.record_type] || ['#F4F6FA','#5A6070'];
-      return B(bg, c, label);
-    }
-    // 2. 입고일 / 11. 출고일
+    // 입고일 / 출고일
     if (col.type === 'date') return val ? B('#E8EBF0','#3A3F4B',fmtDate(val)) : empty;
-    // 3. 브랜드
-    if (col.key === 'brand') {
-      if (!val) return empty;
-      const m = {'콜라보':['#EEEDFE','#3C3489'],'마끼다':['#FAEEDA','#412402'],'디월트':['#E1F5EE','#085041'],'프레레':['#E6F1FB','#0C447C']};
-      const [bg,c] = m[val] || ['#EEEDFE','#3C3489'];
-      return B(bg, c, val);
-    }
-    // 4. 택배(입고) / 10. 택배(출고)
-    if (col.key === 'intake_carrier' || col.key === 'release_carrier') return val ? B('#E8EBF0','#3A3F4B',val) : empty;
-    // 5. 계산서
-    if (col.key === 'invoice_type') {
-      if (!val || val === '없음(일반소매)') return val ? B('#E8EBF0','#7A8194','일반') : empty;
-      if (val === '계산서(거래처)') return B('#E6F1FB','#0C447C','계산서');
-      if (val === '월말') return B('#FAEEDA','#412402','월말');
-      return B('#E8EBF0','#7A8194',val);
-    }
-    // 6. 모델명
-    if (col.key === 'model') return val ? B('#E6F1FB','#0C447C',val) : empty;
-    // 7. 처리자
-    if (col.key === 'technician') return val ? B('#E6F1FB','#0C447C',val) : empty;
-    // 8. AS상태
-    if (col.key === 'status') {
-      if (!val) return empty;
-      const m = {'접수':['#E6F1FB','#0C447C'],'진단중':['#FAEEDA','#412402'],'부품대기':['#FAEEDA','#412402'],'수리중':['#FAEEDA','#412402'],'완료':['#E1F5EE','#085041'],'수리X':['#FCEBEB','#791F1F'],'폐기':['#FCEBEB','#791F1F']};
-      const [bg,c] = m[val] || ['#E8EBF0','#3A3F4B'];
-      return B(bg, c, val);
-    }
-    // 9. 입금
-    if (col.key === 'payment_status') {
-      if (!val) return empty;
-      const m = {'완료':['#E1F5EE','#085041'],'무상':['#E8EBF0','#3A3F4B'],'대기':['#FAEEDA','#412402'],'명세서':['#FAEEDA','#412402'],'카드':['#E6F1FB','#0C447C'],'방문결제':['#E6F1FB','#0C447C']};
-      const [bg,c] = m[val] || ['#FAEEDA','#412402'];
-      return B(bg, c, val);
-    }
     // 12. 운송장번호
     if (col.key === 'tracking_number') return val ? B('#E8EBF0','#3A3F4B',val,{fontFamily:'monospace',fontSize:10}) : empty;
     // 택배 버튼
@@ -793,7 +799,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
             {COLS.map(c => (
                 <td key={c.key} style={c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : undefined}
                   onClick={() => {
-                    if (c.isLink || c.type === 'action') return;
+                    if (c.isLink || c.type === 'action' || c.type === 'select') return; // select는 뱃지 펼침에서 처리
                     const val = c.key === 'company_name' ? (r.company_name || '') :
                       c.fromDb ? (c.fromDb(r[c.key]) || '') :
                       (c.key === 'repair_cost' ? (r[c.key]?.toString() || '') : (r[c.key] || ''));
@@ -870,6 +876,26 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
 
   const toggleSort = (key) => { if (sortKey === key) setSortAsc(!sortAsc); else { setSortKey(key); setSortAsc(true); } };
 
+  const [shipBadgeOpen, setShipBadgeOpen] = useState(null);
+
+  useEffect(() => {
+    if (!shipBadgeOpen) return;
+    const h = (e) => { if (!e.target.closest('.badge-expand-panel')) setShipBadgeOpen(null); };
+    const esc = (e) => { if (e.key === 'Escape') setShipBadgeOpen(null); };
+    document.addEventListener('mousedown', h); document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
+  }, [shipBadgeOpen]);
+
+  const saveShipBadge = async (id, field, value) => {
+    setShipBadgeOpen(null);
+    const row = records.find(r => r.id === id);
+    await onSave(id, field, value);
+    // 택배사 변경 시 이미 운송장번호가 있으면 AS건 택배사도 동기화
+    if (field === 'carrier' && row?.as_record_id && row.tracking_no) {
+      await supabase.from('as_records').update({ release_carrier: value || null }).eq('id', row.as_record_id);
+    }
+  };
+
   const startEdit = (id, field, value) => { setEditCell({ id, field }); setEditValue(value ?? ''); };
   const commitEdit = async () => {
     if (!editCell) return;
@@ -887,12 +913,6 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
           release_carrier: row.carrier || null,
         }).eq('id', row.as_record_id);
       }
-      // 택배사 변경 시 이미 운송장번호가 있으면 AS건 택배사도 동기화
-      if (field === 'carrier' && row?.as_record_id && row.tracking_no) {
-        await supabase.from('as_records').update({
-          release_carrier: editValue || null,
-        }).eq('id', row.as_record_id);
-      }
     }
   };
 
@@ -907,11 +927,34 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
     onHideNewRow();
   };
 
+  const renderShipBadge = (r, col) => {
+    const dbVal = r[col.key];
+    const isOpen = shipBadgeOpen?.id === r.id && shipBadgeOpen?.field === col.key;
+    const empty = <span className="empty-dot" />;
+    return (
+      <div style={{position:'relative'}} className="badge-expand-panel" onClick={e => e.stopPropagation()}>
+        <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:dbVal?'#E8EBF0':'#F4F6FA',color:dbVal?'#3A3F4B':'#9BA3B2',cursor:'pointer',border:isOpen?'2px solid #3A3F4B':'2px solid transparent'}}
+          onClick={() => setShipBadgeOpen(isOpen?null:{id:r.id,field:col.key})}>
+          {dbVal || '—'}
+        </span>
+        {isOpen && (
+          <div style={{position:'absolute',top:'100%',left:0,zIndex:20,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,marginTop:2,minWidth:80,maxHeight:200,overflowY:'auto'}}>
+            {col.opts.map(o => (
+              <div key={o} style={{padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer',background:dbVal===o?'#E6F1FB':'#F4F6FA',color:'#1A1D23',marginBottom:2,border:dbVal===o?'2px solid #0C447C':'2px solid transparent',whiteSpace:'nowrap'}}
+                onClick={() => saveShipBadge(r.id, col.key, o)}>{o}</div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderCell = (r, col) => {
     const val = r[col.key];
     const isEditing = editCell?.id === r.id && editCell?.field === col.key;
+    // 드롭다운 → 뱃지 펼침
+    if (col.type === 'select') return renderShipBadge(r, col);
     if (isEditing) {
-      if (col.type === 'select') return <select className="as-cell-input" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={commitEdit}><option value=""></option>{col.opts.map(o => <option key={o}>{o}</option>)}</select>;
       if (col.type === 'date') return <input type="date" className="as-cell-input" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={commitEdit} />;
       return <input className="as-cell-input" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={commitEdit} onKeyDown={e => e.key === 'Enter' && commitEdit()} />;
     }
@@ -1011,7 +1054,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
           <tr key={r.id} className="as-data-row" style={{background: noTracking(r) ? '#FAEEDA' : (i % 2 === 1 ? '#FAFBFC' : undefined)}}>
             {COLS.map(c => (
               <td key={c.key} style={c.key === 'tracking_no' && noTracking(r) ? {border:'2px solid #1D9E75'} : undefined}
-                onClick={() => { if (c.type === 'action') return; startEdit(r.id, c.key, r[c.key] || ''); }}>
+                onClick={() => { if (c.type === 'action' || c.type === 'select') return; startEdit(r.id, c.key, r[c.key] || ''); }}>
                 {renderCell(r, c)}
               </td>
             ))}
