@@ -42,6 +42,19 @@ export default function Home() {
   const [showNewRow, setShowNewRow] = useState(false);
   const [kpiFilter, setKpiFilter] = useState(null);
   const [smsPanelId, setSmsPanelId] = useState(null);
+  const searchWrapRef = useRef(null);
+
+  /* ── 검색 드롭다운 바깥 클릭 닫기 ── */
+  useEffect(() => {
+    const handler = (e) => {
+      if (searchWrapRef.current && !searchWrapRef.current.contains(e.target) && search.length >= 2) {
+        // 바깥 클릭 시 검색어 유지하되 드롭다운만 닫기 위해 blur 처리
+        if (document.activeElement?.closest('.as-filter-search-wrap')) document.activeElement.blur();
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [search]);
 
   /* ── 택배/부속 기존 state ── */
   const [partsSearch, setPartsSearch] = useState('');
@@ -202,56 +215,94 @@ export default function Home() {
         {/* ═══ AS 일지 ═══ */}
         {tab === 'as' && (
           <>
-            {/* KPI */}
-            <div className="as-kpi-row">
-              {[
-                { key: null, label: '전체 건수', value: kpiTotal, bg: '#185FA5', labelColor: 'rgba(255,255,255,0.8)', valueColor: '#fff', unitColor: 'rgba(255,255,255,0.7)', valueFz: 24, flex: 1.8 },
-                { key: 'reception', label: '접수/진단', value: kpiReception, bg: '#E6F1FB', labelColor: '#5A6070', valueColor: '#185FA5', unitColor: '#5A6070', valueFz: 22, flex: 1 },
-                { key: 'repairing', label: '수리중', value: kpiRepairing, bg: '#FAEEDA', labelColor: '#5A6070', valueColor: '#EF9F27', unitColor: '#5A6070', valueFz: 22, flex: 1 },
-                { key: 'done', label: '완료', value: kpiDone, bg: '#E1F5EE', labelColor: '#5A6070', valueColor: '#1D9E75', unitColor: '#5A6070', valueFz: 22, flex: 1 },
-                { key: 'norepair', label: '수리불가', value: kpiNoRepair, bg: '#FCEBEB', labelColor: '#5A6070', valueColor: '#CC2222', unitColor: '#5A6070', valueFz: 22, flex: 1 },
-              ].map(k => (
-                <div key={k.label} className="as-kpi-item" style={{ cursor:'pointer', background: k.bg, flex: k.flex, border: kpiFilter === k.key ? `2px solid ${k.valueColor}` : '2px solid transparent' }} onClick={() => setKpiFilter(kpiFilter === k.key ? null : k.key)}>
-                  <div className="as-kpi-label" style={{color: k.labelColor}}>{k.label}</div>
-                  <div className="as-kpi-value" style={{color: k.valueColor, fontSize: k.valueFz}}>{k.value}<span className="as-kpi-unit" style={{color: k.unitColor}}>건</span></div>
+            {/* 상단 영역: 좌측(검색+필터+요약) | 우측(KPI 세로바) */}
+            <div className="as-top-area">
+              <div className="as-top-left">
+                {/* 필터 */}
+                <div className="as-filter-row">
+                  <div className="as-filter-search-wrap" ref={searchWrapRef}>
+                    <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                    <input className="input as-filter-search" placeholder="이름, 연락처, 모델, 증상 검색..." value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Escape' && setSearch('')} autoComplete="off" />
+                    {/* 고객 검색 드롭다운 */}
+                    {search.length >= 2 && (() => {
+                      const q = search.toLowerCase();
+                      const matched = asRecords.filter(r => [r.customer_name, r.company_name, r.customer_phone].some(f => f?.toLowerCase().includes(q)));
+                      const grouped = {};
+                      matched.forEach(r => {
+                        const k = `${r.customer_name||''}__${r.customer_phone||''}`;
+                        if (!grouped[k]) grouped[k] = { name: r.customer_name, phone: r.customer_phone, company: r.company_name, count: 0, latest: null };
+                        grouped[k].count++;
+                        if (!grouped[k].latest || r.receipt_date > grouped[k].latest) grouped[k].latest = r.receipt_date;
+                      });
+                      const customers = Object.values(grouped).filter(c => c.name || c.phone);
+                      if (customers.length === 0) return null;
+                      return (
+                        <div className="search-dropdown">
+                          <div className="search-dropdown-header">
+                            <span style={{fontSize:10,fontWeight:600,color:'#5A6070'}}>고객 검색 결과 {customers.length}건</span>
+                            <span style={{fontSize:9,color:'#9BA3B2'}}>클릭 → 수리내역</span>
+                          </div>
+                          {customers.slice(0, 8).map((c, i) => (
+                            <div key={i} className="search-dropdown-item" onClick={() => { console.log('고객 클릭:', c.name, c.phone); setSearch(''); }}>
+                              <div className="search-dropdown-avatar" style={{background: i === 0 ? '#185FA5' : '#5A6070'}}>{(c.name || '?')[0]}</div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:12,fontWeight:600,color:'#1A1D23'}}>{c.name || '-'}{c.company ? <span style={{fontSize:10,color:'#9BA3B2',marginLeft:6}}>{c.company}</span> : null}</div>
+                                <div style={{fontSize:10,color:'#5A6070'}}>{c.phone || '-'}</div>
+                              </div>
+                              <div style={{textAlign:'right',flexShrink:0}}>
+                                <div style={{fontSize:11,fontWeight:700,color:'#185FA5'}}>AS {c.count}건</div>
+                                {c.latest && <div style={{fontSize:9,color:'#9BA3B2'}}>최근 {fmtDate(c.latest)}</div>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <select className="input as-filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+                    <option>전체</option>{RECORD_TYPES.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                  <select className="input as-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+                    <option>전체</option>{STATUS_LIST.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                  <select className="input as-filter-select" value={brandFilter} onChange={e => setBrandFilter(e.target.value)}>
+                    <option>전체</option>{BRANDS.map(b => <option key={b}>{b}</option>)}
+                  </select>
+                  <input className="input as-filter-month" type="month" value={monthFilter} onChange={e => setMonthFilter(e.target.value)} />
                 </div>
-              ))}
-            </div>
-
-            {/* 필터 */}
-            <div className="as-filter-row">
-              <div className="as-filter-search-wrap">
-                <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                <input className="input as-filter-search" placeholder="이름, 연락처, 모델, 증상 검색..." value={search} onChange={e => setSearch(e.target.value)} autoComplete="off" />
+                {/* 페이지 요약 + 버튼 */}
+                <div className="page-header" style={{marginBottom:0}}>
+                  <div className="page-header-summary">
+                    <span style={{fontSize:12,color:'var(--tl-text-hint)'}}>{monthLabel}</span>
+                    <span style={{fontSize:13,fontWeight:700,color:'var(--tl-text)',marginLeft:4}}>— {filteredAS.length}건</span>
+                  </div>
+                  <div style={{display:'flex',gap:8}}>
+                    <button className="btn-outline-secondary">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{marginRight:4,verticalAlign:-1}}><path d="M2 1.5h8M3 4.5h6M4 7.5h4M5 10.5h2" stroke="#5A6070" strokeWidth="1" strokeLinecap="round"/></svg>
+                      엑셀 다운로드
+                    </button>
+                    <button className="btn-primary" onClick={() => setShowNewRow(true)}>+ 새 접수</button>
+                  </div>
+                </div>
               </div>
-              <select className="input as-filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-                <option>전체</option>{RECORD_TYPES.map(t => <option key={t}>{t}</option>)}
-              </select>
-              <select className="input as-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-                <option>전체</option>{STATUS_LIST.map(s => <option key={s}>{s}</option>)}
-              </select>
-              <select className="input as-filter-select" value={brandFilter} onChange={e => setBrandFilter(e.target.value)}>
-                <option>전체</option>{BRANDS.map(b => <option key={b}>{b}</option>)}
-              </select>
-              <input className="input as-filter-month" type="month" value={monthFilter} onChange={e => setMonthFilter(e.target.value)} />
-            </div>
-
-            {/* 페이지 헤더 */}
-            <div className="page-header">
-              <div className="page-header-summary">
-                <span style={{fontSize:12,color:'var(--tl-text-hint)'}}>{monthLabel}</span>
-                <span style={{fontSize:13,fontWeight:700,color:'var(--tl-text)',marginLeft:4}}>— {filteredAS.length}건</span>
-              </div>
-              <div style={{display:'flex',gap:8}}>
-                <button className="btn-outline-secondary">
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{marginRight:4,verticalAlign:-1}}><path d="M2 1.5h8M3 4.5h6M4 7.5h4M5 10.5h2" stroke="#5A6070" strokeWidth="1" strokeLinecap="round"/></svg>
-                  엑셀 다운로드
-                </button>
-                <button className="btn-primary" onClick={() => setShowNewRow(true)}>+ 새 접수</button>
+              {/* KPI 세로바 */}
+              <div className="as-kpi-sidebar">
+                {[
+                  { key: null, label: '전체', value: kpiTotal, bg: '#185FA5', labelColor: 'rgba(255,255,255,0.8)', valueColor: '#fff', valueFz: 18, pad: '7px 2px' },
+                  { key: 'reception', label: '접수/진단', value: kpiReception, bg: '#E6F1FB', labelColor: '#5A6070', valueColor: '#185FA5', valueFz: 15, pad: '6px 2px' },
+                  { key: 'repairing', label: '수리중', value: kpiRepairing, bg: '#FAEEDA', labelColor: '#5A6070', valueColor: '#EF9F27', valueFz: 15, pad: '6px 2px' },
+                  { key: 'done', label: '완료', value: kpiDone, bg: '#E1F5EE', labelColor: '#5A6070', valueColor: '#1D9E75', valueFz: 15, pad: '6px 2px' },
+                  { key: 'norepair', label: '수리불가', value: kpiNoRepair, bg: '#FCEBEB', labelColor: '#5A6070', valueColor: '#CC2222', valueFz: 15, pad: '6px 2px' },
+                ].map(k => (
+                  <div key={k.label} className="as-kpi-v-item" style={{ background: k.bg, padding: k.pad, border: kpiFilter === k.key ? `2px solid ${k.valueColor}` : '2px solid transparent' }} onClick={() => setKpiFilter(kpiFilter === k.key ? null : k.key)}>
+                    <div style={{fontSize:8,fontWeight:500,color:k.labelColor,lineHeight:1.2}}>{k.label}</div>
+                    <div style={{fontSize:k.valueFz,fontWeight:700,color:k.valueColor,lineHeight:1.2}}>{k.value}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* 섹션 헤더 */}
+            {/* 섹션 헤더 + 테이블 — 풀 너비 */}
             <div className="section">
               <div className="section-header">
                 <span style={{fontSize:13,fontWeight:600}}>AS 일지</span>
@@ -512,7 +563,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'intake_carrier', label:'택배', w:80, type:'select', opts: CARRIERS_IN },
     { key:'shipping_fee', label:'운임', w:80, type:'text' },
     { key:'invoice_type', label:'계산서', w:75, type:'select', opts: INVOICE_TYPES },
-    { key:'company_name', label:'거래처/성함', w:150, type:'text', combined: true },
+    { key:'company_name', label:'거래처/성함', w:150, type:'text', combined: true, isLink: true },
     { key:'_sms', label:'sms', w:36, type:'icon', isSmsHeader: true },
     { key:'customer_phone', label:'연락처', w:115, type:'text' },
     { key:'model', label:'모델명', w:100, type:'select', opts: MODELS },
@@ -615,10 +666,11 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     if (col.key === 'tracking_number') return val ? B('#E8EBF0','#3A3F4B',val,{fontFamily:'monospace',fontSize:10}) : empty;
     // AS비용
     if (col.key === 'repair_cost') return val ? <span style={{color:'#185FA5',fontWeight:700}}>{fmt(val)}</span> : empty;
-    // 거래처/성함
+    // 거래처/성함 — 파란 링크 스타일
     if (col.key === 'company_name') {
       const p = [r.company_name, r.customer_name].filter(Boolean);
-      return p.length > 0 ? p.join(' / ') : empty;
+      if (p.length === 0) return empty;
+      return <span className="customer-link" onClick={e => { e.stopPropagation(); console.log('고객 클릭:', r.customer_name, r.customer_phone); }}>{p.join(' / ')}</span>;
     }
     // 연락처
     if (col.key === 'customer_phone') return val ? <span style={{fontSize:12,color:'#5A6070'}}>{val}</span> : empty;
@@ -665,7 +717,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         </tr>
         <tr className="as-col-header">
           {COLS.map((c, idx) => (
-            <th key={c.key} style={{ position: 'sticky', top: 34, zIndex: 20, background: '#EAECF2', borderRight: c.groupEnd && c.groupBorderColor ? `2px solid ${c.groupBorderColor}` : '1px solid #DDE1EB' }}>
+            <th key={c.key} style={{ position: 'sticky', top: 34, zIndex: 20, background: '#EAECF2', borderRight: c.groupEnd && c.groupBorderColor ? `2px solid ${c.groupBorderColor}` : '1px solid #DDE1EB', color: c.isLink ? '#185FA5' : undefined }}>
               {c.isSmsHeader ? (
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{verticalAlign:'middle'}}><path d="M1 2.5A1.5 1.5 0 012.5 1h9A1.5 1.5 0 0113 2.5v6A1.5 1.5 0 0111.5 10H5l-3 2.5V10H2.5A1.5 1.5 0 011 8.5v-6z" stroke="#9BA3B2" strokeWidth="1.2" strokeLinejoin="round"/></svg>
               ) : c.label}
