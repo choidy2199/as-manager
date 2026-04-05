@@ -132,6 +132,7 @@ export default function Home() {
   const addShip = async (d) => {
     const row = {
       ship_date: d.shipDate, carrier: d.carrier, tracking_no: d.trackingNo,
+      sender_name: d.senderName || '선불',
       receiver_name: d.receiverName, receiver_phone: d.receiverPhone,
       receiver_address: d.receiverAddress, contents: d.contents, memo: d.memo,
     };
@@ -158,8 +159,8 @@ export default function Home() {
 
   /* ── 택배 엑셀 출력 ── */
   const exportShipExcel = (data, label) => {
-    const headers = ['수령자명','수령자HP','수령자주소','품목명','수량','배송메시지','신용/착불','택배사','송장번호'];
-    const rows = data.map(r => [r.receiver_name||'',r.receiver_phone||'',r.receiver_address||'',r.contents||'','1',r.memo||'','선불',r.carrier||'',r.tracking_no||'']);
+    const headers = ['수령자명','수령자HP','수령자주소','품목명','수량','배송메시지','선불/착불','택배사'];
+    const rows = data.map(r => [r.receiver_name||'',r.receiver_phone||'',r.receiver_address||'',r.contents||'','1',r.memo||'',r.sender_name||'선불',r.carrier||'']);
     let csv = '\uFEFF' + headers.join(',') + '\n' + rows.map(r => r.map(c => `"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -343,7 +344,7 @@ export default function Home() {
                   onHideNewRow={() => setShowNewRow(false)}
                   onOpenCustomer={(name, phone, company) => setCustomerPopup({ name, phone, company })}
                   onAddShip={async (r) => {
-                    await addShip({ shipDate: today(), carrier: null, trackingNo: null, receiverName: r.customer_name, receiverPhone: r.customer_phone, receiverAddress: null, contents: null, memo: r.model || null, asRecordId: r.id });
+                    await addShip({ shipDate: today(), carrier: null, trackingNo: null, senderName: '선불', receiverName: r.customer_name, receiverPhone: r.customer_phone, receiverAddress: null, contents: r.model || null, memo: null, asRecordId: r.id });
                     alert('택배발송에 입력되었습니다');
                   }}
                 />
@@ -856,7 +857,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, onHideNewRow, saveASField }) {
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState('');
-  const [newRow, setNewRow] = useState({ ship_date: today(), carrier: 'CJ대한통운', tracking_no: '', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
+  const [newRow, setNewRow] = useState({ ship_date: today(), carrier: 'CJ대한통운', tracking_no: '', sender_name: '선불', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
   const [sortKey, setSortKey] = useState('ship_date');
   const [sortAsc, setSortAsc] = useState(false);
   const [recipientQuery, setRecipientQuery] = useState('');
@@ -868,18 +869,21 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
   })());
 
   const COLS = [
-    { key:'ship_date', label:'날짜', w:110, type:'date' },
-    { key:'receiver_name', label:'수령자명', w:100, type:'text' },
-    { key:'receiver_phone', label:'수령자HP', w:120, type:'text' },
-    { key:'receiver_address', label:'수령자 주소', w:200, type:'text' },
-    { key:'contents', label:'운임', w:80, type:'select', opts: ['선불','착불'] },
-    { key:'memo', label:'메모', w:120, type:'text' },
+    { key:'ship_date', label:'날짜', w:90, type:'readonly' },
+    { key:'receiver_name', label:'수령자명', w:90, type:'readonly-badge' },
+    { key:'receiver_phone', label:'수령자HP', w:110, type:'readonly' },
+    { key:'receiver_address', label:'수령자주소', w:180, type:'text' },
+    { key:'contents', label:'품목명', w:90, type:'readonly-badge' },
+    { key:'_qty', label:'수량', w:45, type:'static', value:'1' },
+    { key:'memo', label:'배송메시지', w:120, type:'text' },
+    { key:'sender_name', label:'선불/착불', w:80, type:'select', opts: ['선불','착불'] },
+    { key:'_origin', label:'출고처', w:50, type:'static', value:'AS' },
     { key:'carrier', label:'택배사', w:100, type:'select', opts: SHIP_CARRIERS },
-    { key:'tracking_no', label:'송장번호', w:140, type:'text' },
-    { key:'_delete', label:'', w:50, type:'action' },
+    { key:'tracking_no', label:'운송장번호', w:140, type:'text' },
+    { key:'_delete', label:'', w:45, type:'action' },
   ];
 
-  const DEFAULT_SHIP_WIDTHS = { ship_date:110, receiver_name:100, receiver_phone:120, receiver_address:200, contents:80, memo:120, carrier:100, tracking_no:140, _delete:50 };
+  const DEFAULT_SHIP_WIDTHS = { ship_date:90, receiver_name:90, receiver_phone:110, receiver_address:180, contents:90, _qty:45, memo:120, sender_name:80, _origin:50, carrier:100, tracking_no:140, _delete:45 };
   const getColWidth = (key) => savedWidthsRef.current[key] || DEFAULT_SHIP_WIDTHS[key] || 80;
 
   const startResize = (colIdx, colKey, e) => {
@@ -955,14 +959,14 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
     const row = { ...newRow };
     Object.keys(row).forEach(k => { if (row[k] === '') row[k] = null; });
     row.ship_date = row.ship_date || today();
-    await onAdd({ shipDate: row.ship_date, carrier: row.carrier, trackingNo: row.tracking_no, receiverName: row.receiver_name, receiverPhone: row.receiver_phone, receiverAddress: row.receiver_address, contents: row.contents, memo: row.memo, asRecordId: row.as_record_id });
-    setNewRow({ ship_date: today(), carrier: 'CJ대한통운', tracking_no: '', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
+    await onAdd({ shipDate: row.ship_date, carrier: row.carrier, trackingNo: row.tracking_no, senderName: row.sender_name, receiverName: row.receiver_name, receiverPhone: row.receiver_phone, receiverAddress: row.receiver_address, contents: row.contents, memo: row.memo, asRecordId: row.as_record_id });
+    setNewRow({ ship_date: today(), carrier: 'CJ대한통운', tracking_no: '', sender_name: '선불', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
     setRecipientQuery('');
     onHideNewRow();
   };
 
   const SHIP_BADGE_COLORS = { '선불':['#E6F1FB','#0C447C'], '착불':['#FAEEDA','#412402'] };
-  const getShipBadgeColor = (key, v) => (key === 'contents' && SHIP_BADGE_COLORS[v]) || ['#E8EBF0','#3A3F4B'];
+  const getShipBadgeColor = (key, v) => (key === 'sender_name' && SHIP_BADGE_COLORS[v]) || ['#E8EBF0','#3A3F4B'];
 
   const renderShipBadge = (r, col) => {
     const dbVal = r[col.key];
@@ -990,26 +994,37 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
   const renderCell = (r, col) => {
     const val = r[col.key];
     const isEditing = editCell?.id === r.id && editCell?.field === col.key;
-    // 드롭다운 → 뱃지 펼침
-    if (col.type === 'select') return renderShipBadge(r, col);
-    if (isEditing) {
-      if (col.type === 'date') return <input type="date" className="as-cell-input" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={commitEdit} />;
-      return <input className="as-cell-input" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={commitEdit} onKeyDown={e => e.key === 'Enter' && commitEdit()} />;
-    }
     const empty = <span className="empty-dot" />;
+    const B = (bg,c,t,ex) => <span style={{display:'inline-flex',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color:c,...(ex||{})}}>{t}</span>;
+
+    // 고정값 셀
+    if (col.type === 'static') return B('#F4F6FA','#5A6070', col.value);
+    // 읽기전용 뱃지
+    if (col.type === 'readonly-badge') return val ? B('#E6F1FB','#0C447C',val) : <span style={{color:'#9BA3B2',fontSize:11}}>—</span>;
+    // 읽기전용
+    if (col.type === 'readonly') {
+      if (!val) return <span style={{color:'#9BA3B2',fontSize:11}}>—</span>;
+      if (col.key === 'ship_date') return <span style={{fontSize:12,color:'#3A3F4B'}}>{fmtDate(val)}</span>;
+      return <span style={{fontSize:12,color:'#3A3F4B'}}>{val}</span>;
+    }
+    // 뱃지 선택
+    if (col.type === 'select') return renderShipBadge(r, col);
+    // 삭제 버튼
     if (col.key === '_delete') {
       return <button className="btn-text-danger" style={{fontSize:11}} onClick={async (e) => {
         e.stopPropagation();
         if (!confirm('이 발송 건을 삭제하시겠습니까?')) return;
-        // 연동된 AS건 출고 정보 초기화
         if (r.as_record_id) {
           await supabase.from('as_records').update({ tracking_number: null, release_date: null, release_carrier: null }).eq('id', r.as_record_id);
         }
         await onDelete(r.id);
       }}>삭제</button>;
     }
-    if (col.type === 'date') return val ? <span style={{fontSize:12,color:'#3A3F4B'}}>{fmtDate(val)}</span> : empty;
-    if (col.key === 'carrier') return val ? <span style={{display:'inline-flex',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:600,background:'#E8EBF0',color:'#3A3F4B',whiteSpace:'nowrap'}}>{val}</span> : empty;
+    // 편집 모드
+    if (isEditing) {
+      return <input className="as-cell-input" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={commitEdit} onKeyDown={e => e.key === 'Enter' && commitEdit()} />;
+    }
+    // 운송장번호
     if (col.key === 'tracking_no') return val ? <span style={{fontFamily:'monospace',fontSize:11,fontWeight:600,color:'#1A1D23'}}>{val}</span> : <span style={{fontSize:10,color:'#9BA3B2'}}>미입력</span>;
     return val || empty;
   };
@@ -1039,8 +1054,12 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
           return (
           <tr className="as-new-row">
             {COLS.map(c => (
-              <td key={c.key} style={(c.key === 'receiver_name' || c.type === 'select') ? {position:'relative',overflow:'visible'} : undefined}>
-                {c.key === '_delete' ? (
+              <td key={c.key} style={{...(c.key === 'receiver_name' || c.type === 'select' ? {position:'relative',overflow:'visible'} : {}), ...((c.type === 'readonly' || c.type === 'readonly-badge' || c.type === 'static') ? {cursor:'default'} : {})}}>
+                {c.type === 'static' ? (
+                  <span style={{display:'inline-flex',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,background:'#F4F6FA',color:'#5A6070'}}>{c.value}</span>
+                ) : (c.type === 'readonly' || c.type === 'readonly-badge') ? (
+                  <span style={{fontSize:11,color: newRow[c.key] ? (c.type === 'readonly-badge' ? '#0C447C' : '#3A3F4B') : '#9BA3B2', ...(c.type === 'readonly-badge' && newRow[c.key] ? {background:'#E6F1FB',padding:'3px 8px',borderRadius:4,fontWeight:600,display:'inline-flex'} : {})}}>{c.key === 'ship_date' ? fmtDate(newRow.ship_date) : (newRow[c.key] || '—')}</span>
+                ) : c.key === '_delete' ? (
                   <div style={{display:'flex',gap:4}}>
                     <button className="btn-primary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={handleNewSave}>저장</button>
                     <button className="btn-secondary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={onHideNewRow}>취소</button>
@@ -1057,7 +1076,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
                         </div>
                         {pendingShip.slice(0,8).map((ar,i) => (
                           <div key={ar.id} className="search-dropdown-item" onClick={() => {
-                            setNewRow(p => ({...p, receiver_name: ar.customer_name || '', receiver_phone: ar.customer_phone || '', memo: ar.model || '', as_record_id: ar.id }));
+                            setNewRow(p => ({...p, receiver_name: ar.customer_name || '', receiver_phone: ar.customer_phone || '', contents: ar.model || '', as_record_id: ar.id }));
                             setRecipientQuery('');
                           }}>
                             <div style={{flex:1,minWidth:0}}>
@@ -1104,8 +1123,8 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
         {sorted.map((r, i) => (
           <tr key={r.id} className="as-data-row" style={{background: noTracking(r) ? '#FAEEDA' : (i % 2 === 1 ? '#FAFBFC' : undefined)}}>
             {COLS.map(c => (
-              <td key={c.key} style={{...(c.key === 'tracking_no' && noTracking(r) ? {border:'2px solid #1D9E75'} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {})}}
-                onClick={() => { if (c.type === 'action' || c.type === 'select') return; startEdit(r.id, c.key, r[c.key] || ''); }}>
+              <td key={c.key} style={{...(c.key === 'tracking_no' && noTracking(r) ? {border:'2px solid #1D9E75'} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {}), ...((c.type === 'readonly' || c.type === 'readonly-badge' || c.type === 'static') ? {cursor:'default'} : {})}}
+                onClick={() => { if (c.type === 'action' || c.type === 'select' || c.type === 'readonly' || c.type === 'readonly-badge' || c.type === 'static') return; startEdit(r.id, c.key, r[c.key] || ''); }}>
                 {renderCell(r, c)}
               </td>
             ))}
