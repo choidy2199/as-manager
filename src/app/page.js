@@ -267,19 +267,19 @@ export default function Home() {
                   return (
                     <div className="search-dropdown">
                       <div className="search-dropdown-header">
-                        <span style={{fontSize:10,fontWeight:600,color:'#5A6070'}}>고객 검색 결과 {customers.length}건</span>
-                        <span style={{fontSize:9,color:'#9BA3B2'}}>클릭 → 수리내역</span>
+                        <span style={{fontSize:12,fontWeight:600,color:'#5A6070'}}>고객 검색 결과 {customers.length}건</span>
+                        <span style={{fontSize:11,color:'#9BA3B2'}}>클릭 → 수리내역</span>
                       </div>
                       {customers.slice(0, 8).map((c, i) => (
-                        <div key={i} className="search-dropdown-item" onClick={() => { setCustomerPopup({ name: c.name, phone: c.phone, company: c.company }); setSearch(''); }}>
-                          <div className="search-dropdown-avatar" style={{background: i === 0 ? '#185FA5' : '#5A6070'}}>{(c.name || '?')[0]}</div>
+                        <div key={i} className="search-dropdown-item" style={{padding:'12px 16px'}} onClick={() => { setCustomerPopup({ name: c.name, phone: c.phone, company: c.company }); setSearch(''); }}>
+                          <div className="search-dropdown-avatar" style={{background: i === 0 ? '#185FA5' : '#5A6070',width:38,height:38,fontSize:14}}>{(c.name || '?')[0]}</div>
                           <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:12,fontWeight:600,color:'#1A1D23'}}>{c.name || '-'}{c.company ? <span style={{fontSize:10,color:'#9BA3B2',marginLeft:6}}>{c.company}</span> : null}</div>
-                            <div style={{fontSize:10,color:'#5A6070'}}>{c.phone || '-'}</div>
+                            <div style={{fontSize:15,fontWeight:600,color:'#1A1D23'}}>{c.name || '-'}{c.company ? <span style={{fontSize:13,color:'#9BA3B2',marginLeft:6}}>{c.company}</span> : null}</div>
+                            <div style={{fontSize:13,color:'#5A6070'}}>{c.phone || '-'}</div>
                           </div>
                           <div style={{textAlign:'right',flexShrink:0}}>
-                            <div style={{fontSize:11,fontWeight:700,color:'#185FA5'}}>AS {c.count}건</div>
-                            {c.latest && <div style={{fontSize:9,color:'#9BA3B2'}}>최근 {fmtDate(c.latest)}</div>}
+                            <div style={{fontSize:14,fontWeight:700,color:'#185FA5'}}>AS {c.count}건</div>
+                            {c.latest && <div style={{fontSize:12,color:'#9BA3B2'}}>최근 {fmtDate(c.latest)}</div>}
                           </div>
                         </div>
                       ))}
@@ -925,7 +925,9 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
   const toggleSort = (key) => { if (sortKey === key) setSortAsc(!sortAsc); else { setSortKey(key); setSortAsc(true); } };
 
   const [shipBadgeOpen, setShipBadgeOpen] = useState(null);
+  const [shipBadgePos, setShipBadgePos] = useState(null); // {top, left}
   const [newShipBadgeOpen, setNewShipBadgeOpen] = useState(null);
+  const [newShipBadgePos, setNewShipBadgePos] = useState(null);
 
   useEffect(() => {
     const open = shipBadgeOpen || newShipBadgeOpen;
@@ -986,13 +988,13 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
     const isOpen = shipBadgeOpen?.id === r.id && shipBadgeOpen?.field === col.key;
     const [bg, c] = dbVal ? getShipBadgeColor(col.key, dbVal) : ['#F4F6FA','#9BA3B2'];
     return (
-      <div style={{position:'relative'}} className="badge-expand-panel" onClick={e => e.stopPropagation()}>
+      <div className="badge-expand-panel" onClick={e => e.stopPropagation()}>
         <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color:c,cursor:'pointer',border:isOpen?`2px solid ${c}`:'2px solid transparent'}}
-          onClick={() => setShipBadgeOpen(isOpen?null:{id:r.id,field:col.key})}>
+          onClick={e => { if (isOpen) { setShipBadgeOpen(null); } else { const rect = e.currentTarget.getBoundingClientRect(); setShipBadgePos({top:rect.bottom+2,left:rect.left}); setShipBadgeOpen({id:r.id,field:col.key}); } }}>
           {dbVal || '●'}
         </span>
-        {isOpen && (
-          <div style={{position:'absolute',top:'100%',left:0,zIndex:20,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,marginTop:2,minWidth:80,maxHeight:200,overflowY:'auto'}}>
+        {isOpen && shipBadgePos && (
+          <div style={{position:'fixed',top:shipBadgePos.top,left:shipBadgePos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,minWidth:80,maxHeight:200,overflowY:'auto'}}>
             {col.opts.map(o => {
               const [obg,oc] = getShipBadgeColor(col.key, o);
               return <div key={o} style={{padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer',background:obg,color:oc,marginBottom:2,border:dbVal===o?`2px solid ${oc}`:'2px solid transparent',whiteSpace:'nowrap'}}
@@ -1109,14 +1111,14 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
                     )}
                   </>
                 ) : c.type === 'select' ? (
-                  <div style={{position:'relative'}} className="badge-expand-panel" onClick={e => e.stopPropagation()}>
+                  <div className="badge-expand-panel" onClick={e => e.stopPropagation()}>
                     {(() => { const [nbg,nc] = newRow[c.key] ? getShipBadgeColor(c.key, newRow[c.key]) : ['#F4F6FA','#9BA3B2']; return (
                     <span style={{display:'inline-flex',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:nbg,color:nc,cursor:'pointer',border:newShipBadgeOpen===c.key?`2px solid ${nc}`:'2px solid transparent'}}
-                      onClick={() => setNewShipBadgeOpen(newShipBadgeOpen===c.key?null:c.key)}>
+                      onClick={e => { if (newShipBadgeOpen===c.key) { setNewShipBadgeOpen(null); } else { const rect=e.currentTarget.getBoundingClientRect(); setNewShipBadgePos({top:rect.bottom+2,left:rect.left}); setNewShipBadgeOpen(c.key); } }}>
                       {newRow[c.key] || '선택'}
                     </span>); })()}
-                    {newShipBadgeOpen===c.key && (
-                      <div style={{position:'absolute',top:'100%',left:0,zIndex:30,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,marginTop:2,minWidth:80,maxHeight:200,overflowY:'auto'}}>
+                    {newShipBadgeOpen===c.key && newShipBadgePos && (
+                      <div style={{position:'fixed',top:newShipBadgePos.top,left:newShipBadgePos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,minWidth:80,maxHeight:200,overflowY:'auto'}}>
                         {c.opts.map(o => { const [obg,oc] = getShipBadgeColor(c.key, o); return (
                           <div key={o} style={{padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer',background:obg,color:oc,marginBottom:2,border:newRow[c.key]===o?`2px solid ${oc}`:'2px solid transparent',whiteSpace:'nowrap'}}
                             onClick={() => { setNewRow(p=>({...p,[c.key]:o})); setNewShipBadgeOpen(null); }}>{o}</div>); })}
