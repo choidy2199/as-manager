@@ -88,7 +88,7 @@ body {
   background: var(--tl-text);
   color: #fff;
   padding: 0 16px;
-  height: 38px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -226,17 +226,18 @@ textarea.input { height: auto; padding: 10px; resize: vertical; }
 .fw600 { font-weight: 600; }
 .text-secondary { color: var(--tl-text-secondary); font-size: 12px; }
 
-/* ── AS Top Area (flex: left + right KPI sidebar) ── */
-.as-top-area { display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid #EAECF2; padding-bottom: 12px; }
-.as-top-left { flex: 1; min-width: 0; }
-
-/* ── AS KPI Sidebar (vertical) ── */
-.as-kpi-sidebar { width: 62px; flex-shrink: 0; border-left: 1px solid #EAECF2; padding: 8px 4px; display: flex; flex-direction: column; gap: 5px; }
-.as-kpi-v-item { border-radius: 5px; text-align: center; cursor: pointer; transition: filter 0.15s; }
-.as-kpi-v-item:hover { filter: brightness(0.95); }
+/* ── KPI Bar (inside dark section header) ── */
+.kpi-bar { display: flex; gap: 4px; align-items: center; }
+.kpi-btn { display: flex; align-items: center; gap: 4px; border-radius: 5px; padding: 4px 10px; cursor: pointer; font-family: inherit; transition: filter 0.15s; white-space: nowrap; }
+.kpi-btn:hover { filter: brightness(1.2); }
+.kpi-btn.active { filter: brightness(1.3); }
+.kpi-btn-label { font-size: 11px; font-weight: 500; }
+.kpi-btn-value { font-size: 13px; font-weight: 700; }
 
 /* ── AS Filter ── */
-.as-filter-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
+.as-filter-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+.as-filter-pair { display: flex; align-items: center; gap: 4px; }
+.as-filter-label { font-size: 10px; font-weight: 500; color: #5A6070; white-space: nowrap; }
 .as-filter-search-wrap { position: relative; flex: 1; min-width: 200px; }
 .as-filter-search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; z-index: 1; }
 .as-filter-search { flex: 1; min-width: 200px; height: 34px; padding-left: 30px !important; }

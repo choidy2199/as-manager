@@ -215,97 +215,100 @@ export default function Home() {
         {/* ═══ AS 일지 ═══ */}
         {tab === 'as' && (
           <>
-            {/* 상단 영역: 좌측(검색+필터+요약) | 우측(KPI 세로바) */}
-            <div className="as-top-area">
-              <div className="as-top-left">
-                {/* 필터 */}
-                <div className="as-filter-row">
-                  <div className="as-filter-search-wrap" ref={searchWrapRef}>
-                    <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                    <input className="input as-filter-search" placeholder="이름, 연락처, 모델, 증상 검색..." value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Escape' && setSearch('')} autoComplete="off" />
-                    {/* 고객 검색 드롭다운 */}
-                    {search.length >= 2 && (() => {
-                      const q = search.toLowerCase();
-                      const matched = asRecords.filter(r => [r.customer_name, r.company_name, r.customer_phone].some(f => f?.toLowerCase().includes(q)));
-                      const grouped = {};
-                      matched.forEach(r => {
-                        const k = `${r.customer_name||''}__${r.customer_phone||''}`;
-                        if (!grouped[k]) grouped[k] = { name: r.customer_name, phone: r.customer_phone, company: r.company_name, count: 0, latest: null };
-                        grouped[k].count++;
-                        if (!grouped[k].latest || r.receipt_date > grouped[k].latest) grouped[k].latest = r.receipt_date;
-                      });
-                      const customers = Object.values(grouped).filter(c => c.name || c.phone);
-                      if (customers.length === 0) return null;
-                      return (
-                        <div className="search-dropdown">
-                          <div className="search-dropdown-header">
-                            <span style={{fontSize:10,fontWeight:600,color:'#5A6070'}}>고객 검색 결과 {customers.length}건</span>
-                            <span style={{fontSize:9,color:'#9BA3B2'}}>클릭 → 수리내역</span>
+            {/* 필터 행 (라벨 포함) */}
+            <div className="as-filter-row">
+              <div className="as-filter-search-wrap" ref={searchWrapRef}>
+                <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                <input className="input as-filter-search" placeholder="이름, 연락처, 모델, 증상 검색..." value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Escape' && setSearch('')} autoComplete="off" />
+                {/* 고객 검색 드롭다운 */}
+                {search.length >= 2 && (() => {
+                  const q = search.toLowerCase();
+                  const matched = asRecords.filter(r => [r.customer_name, r.company_name, r.customer_phone].some(f => f?.toLowerCase().includes(q)));
+                  const grouped = {};
+                  matched.forEach(r => {
+                    const k = `${r.customer_name||''}__${r.customer_phone||''}`;
+                    if (!grouped[k]) grouped[k] = { name: r.customer_name, phone: r.customer_phone, company: r.company_name, count: 0, latest: null };
+                    grouped[k].count++;
+                    if (!grouped[k].latest || r.receipt_date > grouped[k].latest) grouped[k].latest = r.receipt_date;
+                  });
+                  const customers = Object.values(grouped).filter(c => c.name || c.phone);
+                  if (customers.length === 0) return null;
+                  return (
+                    <div className="search-dropdown">
+                      <div className="search-dropdown-header">
+                        <span style={{fontSize:10,fontWeight:600,color:'#5A6070'}}>고객 검색 결과 {customers.length}건</span>
+                        <span style={{fontSize:9,color:'#9BA3B2'}}>클릭 → 수리내역</span>
+                      </div>
+                      {customers.slice(0, 8).map((c, i) => (
+                        <div key={i} className="search-dropdown-item" onClick={() => { console.log('고객 클릭:', c.name, c.phone); setSearch(''); }}>
+                          <div className="search-dropdown-avatar" style={{background: i === 0 ? '#185FA5' : '#5A6070'}}>{(c.name || '?')[0]}</div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:12,fontWeight:600,color:'#1A1D23'}}>{c.name || '-'}{c.company ? <span style={{fontSize:10,color:'#9BA3B2',marginLeft:6}}>{c.company}</span> : null}</div>
+                            <div style={{fontSize:10,color:'#5A6070'}}>{c.phone || '-'}</div>
                           </div>
-                          {customers.slice(0, 8).map((c, i) => (
-                            <div key={i} className="search-dropdown-item" onClick={() => { console.log('고객 클릭:', c.name, c.phone); setSearch(''); }}>
-                              <div className="search-dropdown-avatar" style={{background: i === 0 ? '#185FA5' : '#5A6070'}}>{(c.name || '?')[0]}</div>
-                              <div style={{flex:1,minWidth:0}}>
-                                <div style={{fontSize:12,fontWeight:600,color:'#1A1D23'}}>{c.name || '-'}{c.company ? <span style={{fontSize:10,color:'#9BA3B2',marginLeft:6}}>{c.company}</span> : null}</div>
-                                <div style={{fontSize:10,color:'#5A6070'}}>{c.phone || '-'}</div>
-                              </div>
-                              <div style={{textAlign:'right',flexShrink:0}}>
-                                <div style={{fontSize:11,fontWeight:700,color:'#185FA5'}}>AS {c.count}건</div>
-                                {c.latest && <div style={{fontSize:9,color:'#9BA3B2'}}>최근 {fmtDate(c.latest)}</div>}
-                              </div>
-                            </div>
-                          ))}
+                          <div style={{textAlign:'right',flexShrink:0}}>
+                            <div style={{fontSize:11,fontWeight:700,color:'#185FA5'}}>AS {c.count}건</div>
+                            {c.latest && <div style={{fontSize:9,color:'#9BA3B2'}}>최근 {fmtDate(c.latest)}</div>}
+                          </div>
                         </div>
-                      );
-                    })()}
-                  </div>
-                  <select className="input as-filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-                    <option>전체</option>{RECORD_TYPES.map(t => <option key={t}>{t}</option>)}
-                  </select>
-                  <select className="input as-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-                    <option>전체</option>{STATUS_LIST.map(s => <option key={s}>{s}</option>)}
-                  </select>
-                  <select className="input as-filter-select" value={brandFilter} onChange={e => setBrandFilter(e.target.value)}>
-                    <option>전체</option>{BRANDS.map(b => <option key={b}>{b}</option>)}
-                  </select>
-                  <input className="input as-filter-month" type="month" value={monthFilter} onChange={e => setMonthFilter(e.target.value)} />
-                </div>
-                {/* 페이지 요약 + 버튼 */}
-                <div className="page-header" style={{marginBottom:0}}>
-                  <div className="page-header-summary">
-                    <span style={{fontSize:12,color:'var(--tl-text-hint)'}}>{monthLabel}</span>
-                    <span style={{fontSize:13,fontWeight:700,color:'var(--tl-text)',marginLeft:4}}>— {filteredAS.length}건</span>
-                  </div>
-                  <div style={{display:'flex',gap:8}}>
-                    <button className="btn-outline-secondary">
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{marginRight:4,verticalAlign:-1}}><path d="M2 1.5h8M3 4.5h6M4 7.5h4M5 10.5h2" stroke="#5A6070" strokeWidth="1" strokeLinecap="round"/></svg>
-                      엑셀 다운로드
-                    </button>
-                    <button className="btn-primary" onClick={() => setShowNewRow(true)}>+ 새 접수</button>
-                  </div>
-                </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
-              {/* KPI 세로바 */}
-              <div className="as-kpi-sidebar">
-                {[
-                  { key: null, label: '전체', value: kpiTotal, bg: '#185FA5', labelColor: 'rgba(255,255,255,0.8)', valueColor: '#fff', valueFz: 18, pad: '7px 2px' },
-                  { key: 'reception', label: '접수/진단', value: kpiReception, bg: '#E6F1FB', labelColor: '#5A6070', valueColor: '#185FA5', valueFz: 15, pad: '6px 2px' },
-                  { key: 'repairing', label: '수리중', value: kpiRepairing, bg: '#FAEEDA', labelColor: '#5A6070', valueColor: '#EF9F27', valueFz: 15, pad: '6px 2px' },
-                  { key: 'done', label: '완료', value: kpiDone, bg: '#E1F5EE', labelColor: '#5A6070', valueColor: '#1D9E75', valueFz: 15, pad: '6px 2px' },
-                  { key: 'norepair', label: '수리불가', value: kpiNoRepair, bg: '#FCEBEB', labelColor: '#5A6070', valueColor: '#CC2222', valueFz: 15, pad: '6px 2px' },
-                ].map(k => (
-                  <div key={k.label} className="as-kpi-v-item" style={{ background: k.bg, padding: k.pad, border: kpiFilter === k.key ? `2px solid ${k.valueColor}` : '2px solid transparent' }} onClick={() => setKpiFilter(kpiFilter === k.key ? null : k.key)}>
-                    <div style={{fontSize:8,fontWeight:500,color:k.labelColor,lineHeight:1.2}}>{k.label}</div>
-                    <div style={{fontSize:k.valueFz,fontWeight:700,color:k.valueColor,lineHeight:1.2}}>{k.value}</div>
-                  </div>
-                ))}
+              <div className="as-filter-pair"><span className="as-filter-label">구분</span>
+                <select className="input as-filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+                  <option>전체</option>{RECORD_TYPES.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="as-filter-pair"><span className="as-filter-label">브랜드</span>
+                <select className="input as-filter-select" value={brandFilter} onChange={e => setBrandFilter(e.target.value)}>
+                  <option>전체</option>{BRANDS.map(b => <option key={b}>{b}</option>)}
+                </select>
+              </div>
+              <div className="as-filter-pair"><span className="as-filter-label">상태</span>
+                <select className="input as-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+                  <option>전체</option>{STATUS_LIST.map(s => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="as-filter-pair"><span className="as-filter-label">기간</span>
+                <input className="input as-filter-month" type="month" value={monthFilter} onChange={e => setMonthFilter(e.target.value)} />
               </div>
             </div>
 
-            {/* 섹션 헤더 + 테이블 — 풀 너비 */}
+            {/* 페이지 요약 + 버튼 */}
+            <div className="page-header">
+              <div className="page-header-summary">
+                <span style={{fontSize:12,color:'var(--tl-text-hint)'}}>{monthLabel}</span>
+                <span style={{fontSize:13,fontWeight:700,color:'var(--tl-text)',marginLeft:4}}>— {filteredAS.length}건</span>
+              </div>
+              <div style={{display:'flex',gap:8}}>
+                <button className="btn-outline-secondary">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{marginRight:4,verticalAlign:-1}}><path d="M2 1.5h8M3 4.5h6M4 7.5h4M5 10.5h2" stroke="#5A6070" strokeWidth="1" strokeLinecap="round"/></svg>
+                  엑셀 다운로드
+                </button>
+                <button className="btn-primary" onClick={() => setShowNewRow(true)}>+ 새 접수</button>
+              </div>
+            </div>
+
+            {/* 섹션 헤더 (다크바 + KPI 버튼) + 테이블 */}
             <div className="section">
               <div className="section-header">
-                <span style={{fontSize:13,fontWeight:600}}>AS 일지</span>
+                <span style={{fontSize:12,fontWeight:600}}>AS 일지</span>
+                <div className="kpi-bar">
+                  {[
+                    { key: null, label: '전체', value: kpiTotal, bg: 'rgba(255,255,255,0.15)', border: 'rgba(255,255,255,0.25)', color: '#fff' },
+                    { key: 'reception', label: '접수', value: kpiReception, bg: 'rgba(36,99,173,0.4)', border: 'rgba(133,183,235,0.4)', color: '#B5D4F4' },
+                    { key: 'repairing', label: '수리중', value: kpiRepairing, bg: 'rgba(186,117,23,0.3)', border: 'rgba(239,159,39,0.4)', color: '#FAC775' },
+                    { key: 'done', label: '완료', value: kpiDone, bg: 'rgba(29,158,117,0.25)', border: 'rgba(93,202,165,0.4)', color: '#5DCAA5' },
+                    { key: 'norepair', label: '불가', value: kpiNoRepair, bg: 'rgba(204,34,34,0.2)', border: 'rgba(240,149,149,0.35)', color: '#F09595' },
+                  ].map(k => (
+                    <button key={k.label} className={`kpi-btn${kpiFilter === k.key ? ' active' : ''}`} style={{ background: k.bg, border: `1px solid ${k.border}`, color: k.color }} onClick={() => setKpiFilter(kpiFilter === k.key ? null : k.key)}>
+                      <span className="kpi-btn-label">{k.label}</span>
+                      <span className="kpi-btn-value">{k.value}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="as-table-wrapper">
                 <ASTable
