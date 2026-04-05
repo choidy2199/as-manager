@@ -89,8 +89,8 @@ export default function Home() {
     const startDate = m + '-01';
     const endDate = m + '-' + String(lastDay).padStart(2, '0');
     const [asRes, shipRes, partsRes] = await Promise.all([
-      supabase.from('as_records').select('*').gte('receipt_date', startDate).lte('receipt_date', endDate).order('created_at', { ascending: false }),
-      supabase.from('ship_records').select('*').order('created_at', { ascending: false }).limit(100),
+      supabase.from('as_records').select('*').gte('receipt_date', startDate).lte('receipt_date', endDate).order('receipt_date', { ascending: false }),
+      supabase.from('ship_records').select('*').order('ship_date', { ascending: false }).limit(100),
       supabase.from('parts').select('*').order('code'),
     ]);
     if (asRes.data) setAsRecords(asRes.data);
@@ -344,6 +344,7 @@ export default function Home() {
                   onOpenCustomer={(name, phone, company) => setCustomerPopup({ name, phone, company })}
                   onAddShip={async (r) => {
                     await addShip({ shipDate: today(), carrier: null, trackingNo: null, receiverName: r.customer_name, receiverPhone: r.customer_phone, receiverAddress: null, contents: null, memo: r.model || null, asRecordId: r.id });
+                    alert('택배발송에 입력되었습니다');
                   }}
                 />
               </div>
@@ -903,11 +904,13 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
   const toggleSort = (key) => { if (sortKey === key) setSortAsc(!sortAsc); else { setSortKey(key); setSortAsc(true); } };
 
   const [shipBadgeOpen, setShipBadgeOpen] = useState(null);
+  const [newShipBadgeOpen, setNewShipBadgeOpen] = useState(null);
 
   useEffect(() => {
-    if (!shipBadgeOpen) return;
-    const h = (e) => { if (!e.target.closest('.badge-expand-panel')) setShipBadgeOpen(null); };
-    const esc = (e) => { if (e.key === 'Escape') setShipBadgeOpen(null); };
+    const open = shipBadgeOpen || newShipBadgeOpen;
+    if (!open) return;
+    const h = (e) => { if (!e.target.closest('.badge-expand-panel')) { setShipBadgeOpen(null); setNewShipBadgeOpen(null); } };
+    const esc = (e) => { if (e.key === 'Escape') { setShipBadgeOpen(null); setNewShipBadgeOpen(null); } };
     document.addEventListener('mousedown', h); document.addEventListener('keydown', esc);
     return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
   }, [shipBadgeOpen]);
@@ -1027,7 +1030,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
           return (
           <tr className="as-new-row">
             {COLS.map(c => (
-              <td key={c.key} style={c.key === 'receiver_name' ? {position:'relative',overflow:'visible'} : undefined}>
+              <td key={c.key} style={(c.key === 'receiver_name' || c.type === 'select') ? {position:'relative',overflow:'visible'} : undefined}>
                 {c.key === '_delete' ? (
                   <div style={{display:'flex',gap:4}}>
                     <button className="btn-primary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={handleNewSave}>저장</button>
@@ -1065,7 +1068,20 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
                     )}
                   </>
                 ) : c.type === 'select' ? (
-                  <select className="as-cell-input" value={newRow[c.key]||''} onChange={e => setNewRow(p=>({...p,[c.key]:e.target.value}))}><option value=""></option>{c.opts.map(o=><option key={o}>{o}</option>)}</select>
+                  <div style={{position:'relative'}} className="badge-expand-panel" onClick={e => e.stopPropagation()}>
+                    <span style={{display:'inline-flex',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:newRow[c.key]?'#E8EBF0':'#F4F6FA',color:newRow[c.key]?'#3A3F4B':'#9BA3B2',cursor:'pointer',border:newShipBadgeOpen===c.key?'2px solid #3A3F4B':'2px solid transparent'}}
+                      onClick={() => setNewShipBadgeOpen(newShipBadgeOpen===c.key?null:c.key)}>
+                      {newRow[c.key] || '선택'}
+                    </span>
+                    {newShipBadgeOpen===c.key && (
+                      <div style={{position:'absolute',top:'100%',left:0,zIndex:30,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,marginTop:2,minWidth:80,maxHeight:200,overflowY:'auto'}}>
+                        {c.opts.map(o => (
+                          <div key={o} style={{padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer',background:newRow[c.key]===o?'#E6F1FB':'#F4F6FA',color:'#1A1D23',marginBottom:2,border:newRow[c.key]===o?'2px solid #0C447C':'2px solid transparent',whiteSpace:'nowrap'}}
+                            onClick={() => { setNewRow(p=>({...p,[c.key]:o})); setNewShipBadgeOpen(null); }}>{o}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 ) : c.type === 'date' ? (
                   <input type="date" className="as-cell-input" value={newRow[c.key]||''} onChange={e => setNewRow(p=>({...p,[c.key]:e.target.value}))} />
                 ) : (
