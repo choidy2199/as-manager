@@ -258,7 +258,7 @@ textarea.input { height: auto; padding: 10px; resize: vertical; }
 /* ── AS Table ── */
 .as-table-wrapper { overflow: auto; max-height: calc(100vh - 280px); border: 1px solid var(--tl-border); border-top: none; border-radius: 0 0 6px 6px; }
 .as-table { table-layout: fixed; border-collapse: collapse; border-spacing: 0; font-size: 14px; }
-.as-table th { background: var(--tl-bg-tertiary); color: var(--tl-text-secondary); font-weight: 600; font-size: 12px; padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--tl-border); border-right: 1px solid #DDE1EB; white-space: nowrap; user-select: none; overflow: hidden; text-overflow: ellipsis; }
+.as-table th { background: var(--tl-bg-tertiary); color: var(--tl-text-secondary); font-weight: 600; font-size: 12px; padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--tl-border); border-right: 1px solid #DDE1EB; white-space: nowrap; user-select: none; overflow: hidden; text-overflow: ellipsis; position: relative; }
 .as-table th:last-child { border-right: none; }
 .as-table td { padding: 5px 6px; border-bottom: 1px solid #F0F2F7; border-right: 1px solid #F0F2F7; white-space: nowrap; cursor: pointer; font-size: 14px; overflow: hidden; text-overflow: ellipsis; max-width: 0; }
 .as-table td:last-child { border-right: none; }
