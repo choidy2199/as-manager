@@ -344,7 +344,7 @@ export default function Home() {
                   onHideNewRow={() => setShowNewRow(false)}
                   onOpenCustomer={(name, phone, company) => setCustomerPopup({ name, phone, company })}
                   onAddShip={async (r) => {
-                    await addShip({ shipDate: today(), carrier: null, trackingNo: null, senderName: '선불', receiverName: r.customer_name, receiverPhone: r.customer_phone, receiverAddress: null, contents: r.model || null, memo: null, asRecordId: r.id });
+                    await addShip({ shipDate: today(), carrier: null, trackingNo: null, senderName: '선불', receiverName: r.customer_name || r.company_name || '', receiverPhone: r.customer_phone, receiverAddress: null, contents: r.model || null, memo: null, asRecordId: r.id });
                     alert('택배발송에 입력되었습니다');
                   }}
                 />
@@ -922,7 +922,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
     const esc = (e) => { if (e.key === 'Escape') { setShipBadgeOpen(null); setNewShipBadgeOpen(null); } };
     document.addEventListener('mousedown', h); document.addEventListener('keydown', esc);
     return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
-  }, [shipBadgeOpen]);
+  }, [shipBadgeOpen, newShipBadgeOpen]);
 
   const saveShipBadge = async (id, field, value) => {
     setShipBadgeOpen(null);
