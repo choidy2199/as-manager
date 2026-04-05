@@ -759,6 +759,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     if (col.key === '_ship_btn') {
       if (r.release_date || r.tracking_number) return empty; // 이미 출고 완료
       if (r.status !== '완료') return empty; // 수리 미완료
+      if (r.payment_status !== '완료') return empty; // 입금 미완료
       return <button style={{background:'#EEEDFE',color:'#534AB7',border:'1px solid #AFA9EC',borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'inherit'}} onClick={e => { e.stopPropagation(); onAddShip && onAddShip(r); }}>발송</button>;
     }
     // AS비용
