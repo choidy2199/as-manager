@@ -44,26 +44,22 @@ body {
 }
 .nav-logo { color: white; font-size: 15px; font-weight: 700; margin-right: 12px; white-space: nowrap; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px; }
 .nav-logo-icon { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: rgba(255,255,255,0.15); border-radius: 6px; }
-.nav-tabs { display: flex; gap: 4px; flex: 1; overflow: auto; height: 100%; align-items: stretch; }
+.nav-tabs { display: flex; gap: 6px; flex: 1; overflow: auto; align-items: center; }
 .nav-tab {
   background: transparent;
-  color: rgba(255,255,255,0.65);
+  color: rgba(255,255,255,0.55);
   border: none;
-  border-radius: 0;
-  padding: 0 14px;
-  font-size: 13px;
-  font-weight: 500;
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
   font-family: inherit;
   white-space: nowrap;
-  transition: color 0.15s;
-  position: relative;
-  display: flex;
-  align-items: center;
+  transition: all 0.15s;
 }
-.nav-tab:hover { color: rgba(255,255,255,0.85); }
-.nav-tab.active { color: white; font-weight: 600; }
-.nav-tab.active::after { content: ''; position: absolute; bottom: 0; left: 8px; right: 8px; height: 3px; background: white; border-radius: 3px 3px 0 0; }
+.nav-tab:hover { color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.1); }
+.nav-tab.active { color: white; background: rgba(255,255,255,0.2); }
 .nav-actions { display: flex; gap: 8px; align-items: center; }
 .nav-user-avatar { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; background: rgba(255,255,255,0.18); border-radius: 50%; }
 .nav-user { color: rgba(255,255,255,0.85); font-size: 12px; font-weight: 500; }
