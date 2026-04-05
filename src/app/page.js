@@ -1337,6 +1337,12 @@ function CustomerPopup({ customer, onClose }) {
 function PartsTable({ parts, onEdit }) {
   const [sortKey, setSortKey] = useState('code');
   const [sortAsc, setSortAsc] = useState(true);
+  const tableRef = useRef(null);
+  const savedWidthsRef = useRef((() => {
+    if (typeof window === 'undefined') return {};
+    try { const v = JSON.parse(localStorage.getItem('parts_column_widths')); return (v && typeof v === 'object') ? v : {}; } catch { return {}; }
+  })());
+
   const toggleSort = (k) => { if (sortKey === k) setSortAsc(!sortAsc); else { setSortKey(k); setSortAsc(true); } };
   const sorted = [...parts].sort((a, b) => {
     let va = a[sortKey] ?? '', vb = b[sortKey] ?? '';
@@ -1350,33 +1356,56 @@ function PartsTable({ parts, onEdit }) {
     { key:'price', label:'공임비', w:100 },
     { key:'_edit', label:'관리', w:60 },
   ];
+  const DEFAULT_W = { code:90, name:280, category:120, price:100, _edit:60 };
+  const getW = (k) => savedWidthsRef.current[k] || DEFAULT_W[k] || 80;
+
+  const startResize = (colIdx, colKey, e) => {
+    e.preventDefault(); e.stopPropagation();
+    const table = tableRef.current; if (!table) return;
+    const col = table.querySelector('colgroup').children[colIdx]; if (!col) return;
+    const startX = e.clientX;
+    const startW = col.offsetWidth || getW(colKey);
+    const startTableW = table.offsetWidth;
+    document.body.style.userSelect = 'none'; document.body.style.cursor = 'col-resize';
+    const onMove = (ev) => { ev.preventDefault(); const newW = Math.max(40, startW + ev.clientX - startX); col.style.width = newW + 'px'; table.style.width = (startTableW + (newW - startW)) + 'px'; };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = ''; document.body.style.cursor = '';
+      const finalW = parseInt(col.style.width) || startW;
+      savedWidthsRef.current = { ...savedWidthsRef.current, [colKey]: finalW };
+      localStorage.setItem('parts_column_widths', JSON.stringify(savedWidthsRef.current));
+    };
+    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+  };
+
   return (
-    <table className="as-table" style={{width: COLS.reduce((s,c) => s + c.w, 0)}}>
-      <colgroup>{COLS.map(c => <col key={c.key} style={{width:c.w}} />)}</colgroup>
+    <table className="as-table" ref={tableRef} style={{width: COLS.reduce((s,c) => s + getW(c.key), 0)}}>
+      <colgroup>{COLS.map(c => <col key={c.key} style={{width: getW(c.key)}} />)}</colgroup>
       <thead><tr className="as-col-header">
-        {COLS.map(c => (
-          <th key={c.key} style={{background:'#EAECF2',cursor:c.key !== '_edit' ? 'pointer' : 'default'}} onClick={() => c.key !== '_edit' && toggleSort(c.key)}>
+        {COLS.map((c, idx) => (
+          <th key={c.key} style={{background:'#F4F6FA',cursor:c.key !== '_edit' ? 'pointer' : 'default'}} onClick={() => c.key !== '_edit' && toggleSort(c.key)}>
             {c.label}{sortKey === c.key ? (sortAsc ? ' ↑' : ' ↓') : ''}
+            <span className="col-resize-handle" onMouseDown={e => startResize(idx, c.key, e)} />
           </th>
         ))}
       </tr></thead>
       <tbody>
         {sorted.map((p, i) => (
           <tr key={p.id} className="as-data-row" style={i % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
-            <td style={{textAlign:'center'}}><span style={{fontFamily:'monospace',fontSize:12,color:'#5A6070'}}>{p.code || <span className="empty-dot">●</span>}</span></td>
-            <td style={{textAlign:'left'}}>
+            <td style={{textAlign:'center'}}><span style={{fontSize:13,color:'#5A6070'}}>{p.code || <span className="empty-dot">●</span>}</span></td>
+            <td style={{textAlign:'left',padding:'10px 8px'}}>
               <div style={{display:'flex',alignItems:'center',gap:10}}>
-                {p.image_url ? <img src={p.image_url} alt="" style={{width:48,height:48,objectFit:'cover',borderRadius:6,flexShrink:0}} />
-                  : <div style={{width:48,height:48,borderRadius:6,background:'#F4F6FA',display:'flex',alignItems:'center',justifyContent:'center',color:'#5A6070',fontSize:16,fontWeight:600,flexShrink:0}}>{(p.name||'?')[0]}</div>}
+                {p.image_url ? <img src={p.image_url} alt="" style={{width:48,height:48,objectFit:'cover',borderRadius:8,flexShrink:0}} />
+                  : <div style={{width:48,height:48,borderRadius:8,background:'#E6F1FB',display:'flex',alignItems:'center',justifyContent:'center',color:'#0C447C',fontSize:16,fontWeight:600,flexShrink:0}}>{(p.name||'?')[0]}</div>}
                 <div style={{minWidth:0}}>
-                  <div style={{fontSize:13,fontWeight:600,color:'#1A1D23',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.name || <span className="empty-dot">●</span>}</div>
-                  {p.spec && <div style={{fontSize:11,color:'#5A6070',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.spec}</div>}
+                  <div style={{fontSize:14,fontWeight:600,color:'#1A1D23',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.name || <span className="empty-dot">●</span>}</div>
+                  {p.spec && <div style={{fontSize:12,color:'#5A6070',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.spec}</div>}
                 </div>
               </div>
             </td>
-            <td style={{textAlign:'center'}}>{p.category ? <span style={{display:'inline-flex',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:600,background: p.category === '공용' ? '#E6F1FB' : '#F4F6FA',color: p.category === '공용' ? '#0C447C' : '#1A1D23'}}>{p.category}</span> : <span className="empty-dot">●</span>}</td>
-            <td style={{textAlign:'right',color:'#185FA5',fontWeight:700,fontSize:14}}>₩{p.price?.toLocaleString('ko-KR') || '0'}</td>
-            <td style={{textAlign:'center'}}><button className="btn-text-edit" style={{fontSize:11}} onClick={() => onEdit(p)}>수정</button></td>
+            <td style={{textAlign:'center'}}>{p.category ? <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:12,fontWeight:600,background: p.category === '공용' ? '#E6F1FB' : '#F4F6FA',color: p.category === '공용' ? '#0C447C' : '#1A1D23'}}>{p.category}</span> : <span className="empty-dot">●</span>}</td>
+            <td style={{textAlign:'right',color:'#185FA5',fontWeight:700,fontSize:15,padding:'10px 12px'}}>{p.price?.toLocaleString('ko-KR') || '0'}</td>
+            <td style={{textAlign:'center'}}><button className="btn-text-edit" style={{fontSize:12,fontWeight:500}} onClick={() => onEdit(p)}>수정</button></td>
           </tr>
         ))}
         {sorted.length === 0 && <tr><td colSpan={5} className="empty">부품이 없습니다</td></tr>}
