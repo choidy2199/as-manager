@@ -31,6 +31,7 @@ export default function Home() {
   const [asRecords, setAsRecords] = useState([]);
   const [shipRecords, setShipRecords] = useState([]);
   const [parts, setParts] = useState([]);
+  const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
 
   /* ── AS 필터 ── */
@@ -114,16 +115,18 @@ export default function Home() {
       const lastDay = new Date(y, mo, 0).getDate();
       asQuery = asQuery.gte('receipt_date', m + '-01').lte('receipt_date', m + '-' + String(lastDay).padStart(2, '0'));
     }
-    const [asRes, shipRes, partsRes, productsRes] = await Promise.all([
+    const [asRes, shipRes, partsRes, productsRes, techRes] = await Promise.all([
       asQuery,
       supabase.from('ship_records').select('*').order('ship_date', { ascending: false }).limit(100),
       supabase.from('parts').select('*').order('code'),
       supabase.from('products').select('*').order('created_at', { ascending: false }),
+      supabase.from('technicians').select('*').order('created_at'),
     ]);
     if (asRes.data) setAsRecords(asRes.data);
     if (shipRes.data) setShipRecords(shipRes.data);
     if (partsRes.data) setParts(partsRes.data);
     if (productsRes.data) setProducts(productsRes.data);
+    if (techRes.data) setTechnicians(techRes.data);
     if (loading) setLoading(false);
   }, [monthFilter]);
 
@@ -342,8 +345,8 @@ export default function Home() {
                 <span style={{fontSize:13,fontWeight:700,color:'var(--tl-text)',marginLeft:4}}>— {filteredAS.length}건</span>
               </div>
               <div style={{display:'flex',gap:8}}>
-                <button style={{position:'relative',display:'inline-flex',alignItems:'center',gap:5,padding:'6px 14px',borderRadius:6,border: unreadCount > 0 ? '1px solid #B5D4F4' : '0.5px solid #DDE1EB',background: unreadCount > 0 ? '#E6F1FB' : '#F4F6FA',cursor:'pointer',fontFamily:'inherit',fontSize:12,fontWeight:600,color: unreadCount > 0 ? '#0C447C' : '#5A6070'}} onClick={() => setSmsPopup(true)}>
-                  <svg width="16" height="16" viewBox="0 0 14 14" fill="none"><path d="M2 2.5C2 1.7 2.7 1 3.5 1h7C11.3 1 12 1.7 12 2.5v5c0 .8-.7 1.5-1.5 1.5H8l-2.5 2.5V9H3.5C2.7 9 2 8.3 2 7.5v-5z" fill={unreadCount > 0 ? '#185FA5' : '#9BA3B2'}/></svg>
+                <button style={{position:'relative',display:'inline-flex',alignItems:'center',gap:5,padding:'6px 14px',borderRadius:6,border:'1.5px solid #185FA5',background:'#fff',cursor:'pointer',fontFamily:'inherit',fontSize:12,fontWeight:600,color:'#185FA5'}} onClick={() => setSmsPopup(true)}>
+                  <svg width="16" height="16" viewBox="0 0 14 14" fill="none"><path d="M2 2.5C2 1.7 2.7 1 3.5 1h7C11.3 1 12 1.7 12 2.5v5c0 .8-.7 1.5-1.5 1.5H8l-2.5 2.5V9H3.5C2.7 9 2 8.3 2 7.5v-5z" fill="#185FA5"/></svg>
                   문자
                   {unreadCount > 0 && <span style={{position:'absolute',top:-6,right:-6,background:'#E24B4A',color:'#fff',fontSize:10,fontWeight:700,minWidth:18,height:18,borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{unreadCount}</span>}
                 </button>
@@ -386,6 +389,7 @@ export default function Home() {
                   showNewRow={showNewRow}
                   onHideNewRow={() => setShowNewRow(false)}
                   deleteMode={deleteMode}
+                  technicians={technicians}
                   onOpenCustomer={(name, phone, company) => setCustomerPopup({ name, phone, company })}
                   onAddShip={async (r) => {
                     await addShip({ shipDate: today(), carrier: null, trackingNo: null, senderName: '선불', receiverName: r.customer_name || r.company_name || '', receiverPhone: r.customer_phone, receiverAddress: null, contents: r.model || null, memo: null, asRecordId: r.id });
@@ -579,7 +583,7 @@ export default function Home() {
 /* ═══════════════════════════════════════════════
    AS 테이블 — 인라인 편집
    ═══════════════════════════════════════════════ */
-function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip, deleteMode }) {
+function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip, deleteMode, technicians }) {
   const [editCell, setEditCell] = useState(null); // {id, field} — 텍스트/숫자/날짜용
   const [editValue, setEditValue] = useState('');
   const [badgeOpen, setBadgeOpen] = useState(null); // {id, field} — 뱃지 펼침용
@@ -752,7 +756,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'memo', label:'비고', w:100, type:'memo', groupEnd: true, groupBorderColor: '#B5D4F4', groupBorderColorBody: '#E6F1FB' },
     // 초록 그룹
     { key:'repair_result', label:'처리결과', w:160, type:'text' },
-    { key:'technician', label:'처리자', w:80, type:'text' },
+    { key:'technician', label:'처리자', w:80, type:'select', opts: (technicians || []).map(t => t.name) },
     { key:'status', label:'AS상태', w:80, type:'select', opts: STATUS_LIST },
     { key:'repair_cost', label:'AS비용', w:90, type:'number', groupEnd: true, groupBorderColor: '#9FE1CB', groupBorderColorBody: '#E1F5EE' },
     // 노란 그룹
@@ -773,7 +777,10 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     payment_status: { '완료':['#E1F5EE','#085041'],'대기':['#FAEEDA','#412402'],'명세서':['#FAEEDA','#412402'],'무상':['#F1EFE8','#2C2C2A'],'카드':['#E6F1FB','#0C447C'],'방문결제':['#EEEDFE','#26215C'] },
     invoice_type: { '없음(일반소매)':['#F1EFE8','#2C2C2A'],'계산서(거래처)':['#E6F1FB','#0C447C'],'월말':['#FAEEDA','#412402'] },
   };
-  const getBadgeColor = (field, v) => (BADGE_COLORS[field] && BADGE_COLORS[field][v]) || ['#F4F6FA','#1A1D23'];
+  const getBadgeColor = (field, v) => {
+    if (field === 'technician' && v) return ['#E6F1FB','#0C447C'];
+    return (BADGE_COLORS[field] && BADGE_COLORS[field][v]) || ['#F4F6FA','#1A1D23'];
+  };
   const getBadgeLabel = (col, v) => col.fromDb ? col.fromDb(v) : (col.key === 'invoice_type' ? (v === '없음(일반소매)' ? '일반' : v === '계산서(거래처)' ? '계산서' : v) : v);
 
   const renderBadgeExpand = (r, col) => {
@@ -2395,9 +2402,12 @@ function SMSPopup({ onClose, onUnreadChange }) {
       <div ref={popupRef} style={{width:700,height:'80vh',minWidth:600,minHeight:500,maxWidth:'95vw',maxHeight:'95vh',background:'#fff',borderRadius:12,overflow:'hidden',display:'flex',boxShadow:'0 8px 32px rgba(0,0,0,0.18)',resize:'both'}} onClick={e => e.stopPropagation()}>
         {/* 좌측: 고객 목록 */}
         <div style={{width:280,flexShrink:0,display:'flex',flexDirection:'column',borderRight:'1px solid #EAECF2'}}>
-          <div style={{background:'#185FA5',padding:'14px 16px'}}>
-            <div style={{fontSize:16,fontWeight:500,color:'#fff'}}>문자함</div>
-            <div style={{fontSize:12,color:'rgba(255,255,255,0.6)'}}>{customers.reduce((s,c) => s + c.unread, 0)}건 새 문자</div>
+          <div style={{background:'#185FA5',padding:'14px 16px',display:'flex',alignItems:'flex-start',justifyContent:'space-between'}}>
+            <div>
+              <div style={{fontSize:16,fontWeight:500,color:'#fff'}}>문자함</div>
+              <div style={{fontSize:12,color:'rgba(255,255,255,0.6)'}}>{customers.reduce((s,c) => s + c.unread, 0)}건 새 문자</div>
+            </div>
+            <button onClick={onClose} style={{width:32,height:32,borderRadius:'50%',background:'rgba(255,255,255,0.2)',color:'#fff',border:'none',fontSize:18,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>✕</button>
           </div>
           <div style={{padding:8}}><input className="input" style={{height:34,fontSize:13,borderRadius:8}} placeholder="고객명, 연락처 검색..." value={searchQ} onChange={e => setSearchQ(e.target.value)} /></div>
           <div style={{flex:1,overflowY:'auto'}}>
