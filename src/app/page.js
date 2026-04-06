@@ -168,10 +168,57 @@ export default function Home() {
     if (error) { console.error('AS save error:', error); alert('저장 실패: ' + error.message); }
   };
 
+  /* ── 자동 문자 발송 유틸 ── */
+  const sendAutoSMS = async (type, record) => {
+    try {
+      const phone = record.customer_phone;
+      if (!phone) return;
+      // 중복 발송 방지: 같은 as_record_id + 같은 type
+      const tag = type === 'intake' ? '입고' : '출고';
+      const { count } = await supabase.from('sms_messages').select('*', { count: 'exact', head: true })
+        .eq('phone', phone).eq('direction', 'outgoing').ilike('content', `%${tag}%`)
+        .eq('as_record_id', record.id);
+      if (count > 0) return; // 이미 발송됨
+      // 템플릿 조회
+      const tplKey = type === 'intake' ? 'sms_template_intake' : 'sms_template_release';
+      const { data: tplData } = await supabase.from('settings').select('value').eq('key', tplKey).single();
+      let tpl = tplData?.value;
+      if (!tpl || typeof tpl !== 'string') {
+        tpl = tplData?.value;
+        if (typeof tpl === 'object' && tpl !== null) tpl = JSON.stringify(tpl);
+        if (!tpl) return;
+      }
+      tpl = tpl.replace(/^"+|"+$/g, '');
+      // 변수 치환
+      const intakeDate = record.receipt_date ? fmtDate(record.receipt_date) : '';
+      const releaseDate = record.release_date ? fmtDate(record.release_date) : '';
+      const content = tpl
+        .replace(/\{고객명\}/g, record.customer_name || record.company_name || '')
+        .replace(/\{거래처명\}/g, record.company_name || '')
+        .replace(/\{모델명\}/g, record.model || '')
+        .replace(/\{입고날짜\}/g, intakeDate)
+        .replace(/\{브랜드\}/g, record.brand || '')
+        .replace(/\{택배사\}/g, record.release_carrier || '')
+        .replace(/\{운송장번호\}/g, record.tracking_number || '')
+        .replace(/\{출고날짜\}/g, releaseDate);
+      if (!content.trim()) return;
+      // 발송
+      const res = await fetch('/api/sms/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: phone, content }) });
+      const result = await res.json();
+      if (result.error) { console.error('자동 문자 발송 실패:', result.error); return; }
+      // sms_messages 기록
+      await supabase.from('sms_messages').insert({ phone, content, direction: 'outgoing', sent_at: new Date().toISOString(), as_record_id: record.id });
+    } catch (e) { console.error('자동 문자 발송 에러:', e); }
+  };
+
   const addNewAS = async (row) => {
-    const { error } = await supabase.from('as_records').insert(row);
+    const { data, error } = await supabase.from('as_records').insert(row).select().single();
     if (error) { alert('저장 실패: ' + error.message); console.error('addNewAS error:', error); return; }
     loadData();
+    // 입고 알림 자동 발송: 연락처+성함/거래처+모델명 모두 있을 때
+    if (data && data.customer_phone && (data.customer_name || data.company_name) && data.model) {
+      sendAutoSMS('intake', data);
+    }
   };
 
   const deleteAS = async (id) => {
@@ -425,6 +472,7 @@ export default function Home() {
                   deleteMode={deleteMode}
                   technicians={technicians}
                   products={products}
+                  sendAutoSMS={sendAutoSMS}
                   onOpenCustomer={(name, phone, company) => setCustomerPopup({ name, phone, company })}
                   onAddShip={async (r) => {
                     await addShip({ shipDate: today(), carrier: null, trackingNo: null, senderName: '선불', receiverName: r.customer_name || r.company_name || '', receiverPhone: r.customer_phone, receiverAddress: null, contents: r.model || null, memo: null, asRecordId: r.id });
@@ -493,6 +541,7 @@ export default function Home() {
                   showNewRow={showNewShipRow}
                   onHideNewRow={() => setShowNewShipRow(false)}
                   saveASField={saveASField}
+                  sendAutoSMS={sendAutoSMS}
                 />
               </div>
             </div>
@@ -619,7 +668,7 @@ export default function Home() {
 /* ═══════════════════════════════════════════════
    AS 테이블 — 인라인 편집
    ═══════════════════════════════════════════════ */
-function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip, deleteMode, technicians, products }) {
+function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip, deleteMode, technicians, products, sendAutoSMS }) {
   const [editCell, setEditCell] = useState(null); // {id, field} — 텍스트/숫자/날짜용
   const [editValue, setEditValue] = useState('');
   const [badgeOpen, setBadgeOpen] = useState(null); // {id, field} — 뱃지 펼침용
@@ -705,6 +754,11 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     if (field === 'release_carrier' && value === '방문') {
       await onSaveField(id, 'release_date', today());
       await onSaveField(id, 'tracking_number', '방문');
+      // 출고 알림 자동 발송
+      const row = records.find(r => r.id === id);
+      if (row && sendAutoSMS) {
+        sendAutoSMS('release', { ...row, release_carrier: '방문', release_date: today(), tracking_number: '방문' });
+      }
     }
     onReload();
   };
@@ -1164,7 +1218,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 
 
 /* ═══ SHIP TABLE — 인라인 편집 ═══ */
-function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, onHideNewRow, saveASField }) {
+function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, onHideNewRow, saveASField, sendAutoSMS }) {
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [newRow, setNewRow] = useState({ ship_date: today(), carrier: 'CJ대한통운', tracking_no: '', sender_name: '선불', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
@@ -1263,6 +1317,13 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
           release_date: today(),
           release_carrier: row.carrier || null,
         }).eq('id', row.as_record_id);
+        // 출고 알림 자동 발송
+        if (sendAutoSMS) {
+          const asRow = asRecords.find(r => r.id === row.as_record_id);
+          if (asRow) {
+            sendAutoSMS('release', { ...asRow, tracking_number: editValue, release_date: today(), release_carrier: row.carrier || null });
+          }
+        }
       }
     }
   };
