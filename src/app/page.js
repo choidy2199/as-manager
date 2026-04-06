@@ -470,32 +470,31 @@ export default function Home() {
                 <span style={{fontSize:12,fontWeight:600}}>AS 일지</span>
                 <div className="kpi-bar">
                   {[
-                    { key: null, label: '전체', value: kpiTotal, bg: 'rgba(255,255,255,0.15)', border: 'rgba(255,255,255,0.25)', color: '#fff' },
-                    { key: 'reception', label: '접수', value: kpiReception, bg: 'rgba(36,99,173,0.4)', border: 'rgba(133,183,235,0.4)', color: '#B5D4F4' },
-                    { key: 'repairing', label: '수리중', value: kpiRepairing, bg: 'rgba(186,117,23,0.3)', border: 'rgba(239,159,39,0.4)', color: '#FAC775' },
-                    { key: 'done', label: '완료', value: kpiDone, bg: 'rgba(29,158,117,0.25)', border: 'rgba(93,202,165,0.4)', color: '#5DCAA5' },
-                    { key: 'norepair', label: '불가', value: kpiNoRepair, bg: 'rgba(204,34,34,0.2)', border: 'rgba(240,149,149,0.35)', color: '#F09595' },
+                    { key: null, label: '전체', value: kpiTotal, bg: '#185FA5' },
+                    { key: 'reception', label: '접수', value: kpiReception, bg: '#185FA5' },
+                    { key: 'repairing', label: '수리중', value: kpiRepairing, bg: '#EF9F27', bold: true },
+                    { key: 'done', label: '완료', value: kpiDone, bg: '#185FA5' },
+                    { key: 'norepair', label: '불가', value: kpiNoRepair, bg: '#185FA5' },
                   ].map(k => (
-                    <button key={k.label} className={`kpi-btn${kpiFilter === k.key ? ' active' : ''}`} style={{ background: k.bg, border: `1px solid ${k.border}`, color: k.color }} onClick={() => setKpiFilter(kpiFilter === k.key ? null : k.key)}>
-                      <span className="kpi-btn-label">{k.label}</span>
-                      <span className="kpi-btn-value">{k.value}</span>
+                    <button key={k.label} style={{background:k.bg,color:'#fff',padding:'5px 12px',borderRadius:4,fontSize:11,fontWeight:k.bold?700:600,cursor:'pointer',border:'none',fontFamily:'inherit',outline:kpiFilter===k.key?'2px solid white':'none',outlineOffset:1}} onClick={() => setKpiFilter(kpiFilter === k.key ? null : k.key)}>
+                      {k.label} {k.value}
                     </button>
                   ))}
                   <span style={{color:'rgba(255,255,255,0.2)',margin:'0 6px',fontSize:16,userSelect:'none'}}>|</span>
                   {[
                     { key:'완료', label:'완료', value:payDone, bg:'#1D9E75' },
-                    { key:'대기', label:'대기', value:payWait, bg:'#EF9F27' },
-                    { key:'명세서', label:'명세서', value:payInvoice, bg:'#854F0B' },
-                    { key:'무상', label:'무상', value:payFree, bg:'#5A6070' },
-                    { key:'카드', label:'카드', value:payCard, bg:'#185FA5' },
-                    { key:'방문결제', label:'방문결제', value:payVisit, bg:'#534AB7' },
+                    { key:'대기', label:'대기', value:payWait, bg:'#EF9F27', bold: true },
+                    { key:'명세서', label:'명세서', value:payInvoice, bg:'#1D9E75' },
+                    { key:'무상', label:'무상', value:payFree, bg:'#1D9E75' },
+                    { key:'카드', label:'카드', value:payCard, bg:'#1D9E75' },
+                    { key:'방문결제', label:'방문결제', value:payVisit, bg:'#1D9E75' },
                   ].map(p => (
-                    <button key={p.key} style={{background:p.bg,color:'#fff',padding:'4px 10px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer',border:'none',fontFamily:'inherit',outline:paymentFilter===p.key?'2px solid white':'none',outlineOffset:1}} onClick={() => setPaymentFilter(paymentFilter===p.key?null:p.key)}>
+                    <button key={p.key} style={{background:p.bg,color:'#fff',padding:'5px 12px',borderRadius:4,fontSize:11,fontWeight:p.bold?700:600,cursor:'pointer',border:'none',fontFamily:'inherit',outline:paymentFilter===p.key?'2px solid white':'none',outlineOffset:1}} onClick={() => setPaymentFilter(paymentFilter===p.key?null:p.key)}>
                       {p.label} {p.value}
                     </button>
                   ))}
                   <span style={{color:'rgba(255,255,255,0.2)',margin:'0 6px',fontSize:16,userSelect:'none'}}>|</span>
-                  <button style={{background: deleteMode ? '#1D9E75' : '#CC2222', border:'none', color:'#fff', fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:5, cursor:'pointer', fontFamily:'inherit'}}
+                  <button style={{background: deleteMode ? '#1D9E75' : '#CC2222', border:'none', color:'#fff', fontSize:11, fontWeight:700, padding:'5px 12px', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}
                     onClick={() => setDeleteMode(!deleteMode)}>{deleteMode ? '완료' : '삭제'}</button>
                 </div>
               </div>
