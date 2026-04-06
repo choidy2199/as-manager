@@ -770,7 +770,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       shipping_fee: '', invoice_type: '없음(일반소매)', company_name: '', customer_name: '',
       customer_phone: '', model: '', symptom: '', memo: '',
       repair_result: '', technician: '', status: '접수', repair_cost: '',
-      payment_status: '', payer: '',
+      payment_status: '대기', payer: '',
       release_date: '', release_carrier: '', tracking_number: '', release_memo: '',
     };
   }
