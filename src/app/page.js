@@ -394,10 +394,10 @@ export default function Home() {
                     <div className="search-dropdown">
                       <div className="search-dropdown-header">
                         <span style={{fontSize:12,fontWeight:600,color:'#5A6070'}}>고객 검색 결과 {customers.length}건</span>
-                        <span style={{fontSize:11,color:'#9BA3B2'}}>클릭 → 수리내역</span>
+                        <span style={{fontSize:11,color:'#9BA3B2'}}>클릭 → 필터링</span>
                       </div>
                       {customers.slice(0, 8).map((c, i) => (
-                        <div key={i} className="search-dropdown-item" style={{padding:'12px 16px'}} onClick={() => { setCustomerPopup({ name: c.name, phone: c.phone, company: c.company }); setSearch(''); }}>
+                        <div key={i} className="search-dropdown-item" style={{padding:'12px 16px'}} onClick={() => { setSearch(c.name || c.company || c.phone || ''); }}>
                           <div className="search-dropdown-avatar" style={{background: i === 0 ? '#185FA5' : '#5A6070',width:38,height:38,fontSize:14}}>{(c.name || '?')[0]}</div>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{fontSize:15,fontWeight:600,color:'#1A1D23'}}>{c.name || '-'}{c.company ? <span style={{fontSize:13,color:'#9BA3B2',marginLeft:6}}>{c.company}</span> : null}</div>
