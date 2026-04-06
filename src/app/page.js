@@ -1787,9 +1787,10 @@ function ProductsTable({ products, onReload }) {
     { key: 'brand', label: '브랜드', w: 100 },
     { key: 'model', label: '모델넘버', w: 180 },
     { key: 'price', label: '제품가격', w: 120 },
-    { key: '_manage', label: '관리', w: 80 },
+    { key: 'memo', label: '비고', w: 140 },
+    { key: '_manage', label: '관리', w: 110 },
   ];
-  const DEFAULT_W = { brand: 100, model: 180, price: 120, _manage: 80 };
+  const DEFAULT_W = { brand: 100, model: 180, price: 120, memo: 140, _manage: 110 };
   const getW = (k) => savedWidthsRef.current[k] || DEFAULT_W[k] || 80;
 
   const BRAND_COLORS = {
@@ -1886,7 +1887,14 @@ function ProductsTable({ products, onReload }) {
     }
 
     if (col.key === '_manage') {
-      return <button style={{ fontSize: 11, color: '#CC2222', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }} onClick={e => { e.stopPropagation(); deleteProduct(p); }}>삭제</button>;
+      return (
+        <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+          <span style={{ display: 'inline-flex', padding: '3px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: '#E6F1FB', color: '#0C447C', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            onClick={e => { e.stopPropagation(); startEdit(p.id, 'model', p.model || ''); }}>수정</span>
+          <span style={{ display: 'inline-flex', padding: '3px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: '#FCEBEB', color: '#791F1F', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            onClick={e => { e.stopPropagation(); deleteProduct(p); }}>삭제</span>
+        </div>
+      );
     }
 
     if (isEditing) {
@@ -1925,7 +1933,7 @@ function ProductsTable({ products, onReload }) {
             ))}
           </tr>
         ))}
-        {products.length === 0 && <tr><td colSpan={4} className="empty">등록된 제품이 없습니다</td></tr>}
+        {products.length === 0 && <tr><td colSpan={5} className="empty">등록된 제품이 없습니다</td></tr>}
       </tbody>
     </table>
   );
