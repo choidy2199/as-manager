@@ -1098,7 +1098,6 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       </colgroup>
       <thead>
         <tr className="as-group-header">
-          {deleteMode && <th style={{position:'sticky',top:0,zIndex:21,background:'#EAECF2',width:28,minWidth:28,maxWidth:28,padding:0}} />}
           {COL_GROUPS.map((g, i) => (
             <th key={i} colSpan={g.span} style={{ background: g.bg, color: g.color, fontSize: 12, fontWeight: 700, padding: '8px 0', textAlign: 'center', borderBottom: `2px solid ${g.border}`, borderRight: i < COL_GROUPS.length - 1 ? `2px solid ${g.border}` : 'none', position: 'sticky', top: 0, zIndex: 21 }}>
               {g.label}
@@ -1106,7 +1105,6 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
           ))}
         </tr>
         <tr className="as-col-header">
-          {deleteMode && <th style={{position:'sticky',top:34,zIndex:20,background:'#EAECF2',width:28,minWidth:28,maxWidth:28,padding:0}} />}
           {COLS.map((c, idx) => (
             <th key={c.key} style={{ position: 'sticky', top: 34, zIndex: 20, background: '#EAECF2', fontSize: 12, fontWeight: 600, color: '#5A6070', textAlign: 'center', padding: '8px 10px', boxShadow: '0 1px 0 0 #DDE1EB', borderRight: c.groupEnd && c.groupBorderColor ? `2px solid ${c.groupBorderColor}` : '1px solid #DDE1EB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', userSelect: 'none' }}>
               {c.isMsgCol ? <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{verticalAlign:'middle'}}><path d="M2 2.5C2 1.7 2.7 1 3.5 1h7C11.3 1 12 1.7 12 2.5v5c0 .8-.7 1.5-1.5 1.5H8l-2.5 2.5V9H3.5C2.7 9 2 8.3 2 7.5v-5z" fill="#185FA5"/></svg> : c.label}
@@ -1119,7 +1117,6 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         {/* NEW 행 */}
         {showNewRow && (
           <tr className="as-new-row">
-            {deleteMode && <td style={{width:28,minWidth:28,maxWidth:28,padding:4}} />}
             {COLS.map(c => (
               <td key={c.key} style={{...(c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {})}}>
                 {c.key === '_ship_btn' ? (
@@ -1135,13 +1132,8 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         {/* 데이터 행 */}
         {records.map((r, rowIdx) => (
           <tr key={r.id} className="as-data-row" style={rowIdx % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
-            {deleteMode && (
-              <td style={{textAlign:'center',padding:'4px',width:28,minWidth:28,maxWidth:28}}>
-                <button style={{background:'#FCEBEB',color:'#791F1F',padding:'2px 5px',borderRadius:3,fontSize:9,fontWeight:700,border:'none',cursor:'pointer',lineHeight:1,fontFamily:'inherit'}} onClick={e => { e.stopPropagation(); if (confirm(`이 AS 건을 삭제하시겠습니까?\n고객: ${r.customer_name||'-'} / 모델: ${r.model||'-'}`)) onDelete(r.id); }}>X</button>
-              </td>
-            )}
             {COLS.map(c => {
-                const tdStyle = { ...(c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {}), ...(c.type === 'readonly' ? {cursor:'default'} : {}) };
+                const tdStyle = { ...(c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {}), ...(c.type === 'readonly' ? {cursor:'default'} : {}), ...(deleteMode && c.key === 'record_type' ? {position:'relative'} : {}) };
                 return (
                 <td key={c.key} style={Object.keys(tdStyle).length ? tdStyle : undefined}
                   onClick={() => {
@@ -1152,13 +1144,17 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
                     startEdit(r.id, c.key, c.toDb ? c.toDb(val) : val);
                   }}
                 >
+                  {deleteMode && c.key === 'record_type' && (
+                    <button style={{position:'absolute',left:2,top:'50%',transform:'translateY(-50%)',zIndex:5,background:'#FCEBEB',color:'#791F1F',padding:'1px 4px',borderRadius:3,fontSize:9,fontWeight:700,border:'none',cursor:'pointer',lineHeight:1,fontFamily:'inherit'}}
+                      onClick={e => { e.stopPropagation(); const name = r.customer_name || r.company_name || '미입력'; const model = r.model || '미입력'; const symptom = r.symptom ? ` / 증상: ${r.symptom}` : ''; if (confirm(`정말 삭제하시겠습니까?\n고객: ${name} / 모델: ${model}${symptom}`)) onDelete(r.id); }}>X</button>
+                  )}
                   {renderCell(r, c)}
                 </td>);
             })}
           </tr>
         ))}
         {records.length === 0 && (
-          <tr><td colSpan={COLS.length + (deleteMode?1:0)} className="empty">조건에 맞는 AS 건이 없습니다</td></tr>
+          <tr><td colSpan={COLS.length} className="empty">조건에 맞는 AS 건이 없습니다</td></tr>
         )}
       </tbody>
     </table>
