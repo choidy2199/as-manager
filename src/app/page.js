@@ -1211,6 +1211,28 @@ function CustomerPopup({ customer, onClose }) {
   const [msgInput, setMsgInput] = useState('');
   const [loading, setLoading] = useState(true);
   const chatRef = useRef(null);
+  const [clipboards, setClipboards] = useState([]);
+  const [clipModal, setClipModal] = useState(false);
+
+  const CLIP_COLORS = ['#E6F1FB','#FAEEDA','#E1F5EE','#EEEDFE','#FAECE7','#FBEAF0'];
+  const CLIP_TEXT_COLORS = { '#E6F1FB':'#0C447C','#FAEEDA':'#412402','#E1F5EE':'#085041','#EEEDFE':'#26215C','#FAECE7':'#6B2012','#FBEAF0':'#6B1240' };
+
+  useEffect(() => {
+    supabase.from('settings').select('*').eq('key','sms_clipboard').single().then(({ data }) => {
+      if (data?.value && Array.isArray(data.value)) setClipboards(data.value);
+      else setClipboards([
+        { title: '입고안내', content: '안녕하세요. 대한공구 AS센터입니다.\n보내주신 제품이 입고되었습니다.\n점검 후 안내드리겠습니다.', color: '#E6F1FB' },
+        { title: '수리완료', content: '안녕하세요. 대한공구 AS센터입니다.\n수리가 완료되었습니다.\n발송 예정이오니 확인 부탁드립니다.', color: '#E1F5EE' },
+        { title: '부품대기', content: '안녕하세요. 대한공구 AS센터입니다.\n부품 입고 대기중입니다.\n입고되는대로 안내드리겠습니다.', color: '#FAEEDA' },
+        { title: '출고안내', content: '안녕하세요. 대한공구 AS센터입니다.\n택배 발송 완료되었습니다.\n감사합니다.', color: '#EEEDFE' },
+      ]);
+    });
+  }, []);
+
+  const saveClipboards = async (items) => {
+    setClipboards(items);
+    await supabase.from('settings').upsert({ key: 'sms_clipboard', value: items, updated_at: new Date().toISOString() });
+  };
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
@@ -1266,7 +1288,7 @@ function CustomerPopup({ customer, onClose }) {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+    el.style.height = Math.min(Math.max(el.scrollHeight, 54), 120) + 'px';
   };
 
   const handleSend = async () => {
@@ -1280,7 +1302,7 @@ function CustomerPopup({ customer, onClose }) {
     const { data } = await supabase.from('sms_messages').insert(msg).select();
     if (data) setSmsMessages(prev => [...prev, ...data]);
     setMsgInput('');
-    if (textareaRef.current) { textareaRef.current.style.height = '34px'; }
+    if (textareaRef.current) { textareaRef.current.style.height = '54px'; }
   };
 
   const fmtDateFull = (d) => {
@@ -1363,10 +1385,114 @@ function CustomerPopup({ customer, onClose }) {
                 );
               })}
             </div>
-            <div className="cp-chat-input">
-              <textarea ref={textareaRef} rows={1} value={msgInput} onChange={e => { setMsgInput(e.target.value); autoResizeTextarea(); }} placeholder="문자 입력..." onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} />
-              <button className="btn-primary" onClick={handleSend} style={{padding:'0 14px',fontSize:12,fontWeight:600,whiteSpace:'nowrap'}}>전송</button>
+            <div className="cp-clipboard-area">
+              <div className="cp-clipboard-header">
+                <span style={{fontSize:11,fontWeight:600,color:'#5A6070'}}>클립보드</span>
+                <button className="cp-clipboard-edit-badge" onClick={() => setClipModal(true)}>수정</button>
+              </div>
+              <div className="cp-clipboard-grid">
+                {clipboards.map((c, i) => (
+                  <button key={i} className="cp-clipboard-btn" style={{background: c.color || '#E6F1FB', color: CLIP_TEXT_COLORS[c.color] || '#0C447C'}}
+                    onClick={() => { setMsgInput(c.content); if (textareaRef.current) { textareaRef.current.focus(); setTimeout(autoResizeTextarea, 0); } }}>
+                    {c.title}
+                  </button>
+                ))}
+              </div>
             </div>
+            <div className="cp-chat-hint">*Shift+Enter = 텍스트 줄바꿈됩니다</div>
+            <div className="cp-chat-input">
+              <textarea ref={textareaRef} rows={3} value={msgInput} onChange={e => { setMsgInput(e.target.value); autoResizeTextarea(); }} placeholder="문자 입력..." onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} />
+              <button className="btn-primary cp-send-btn" onClick={handleSend}>전송</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 클립보드 수정 모달 */}
+      {clipModal && <ClipboardEditModal clipboards={clipboards} colors={CLIP_COLORS} textColors={CLIP_TEXT_COLORS} onSave={(items) => { saveClipboards(items); setClipModal(false); }} onClose={() => setClipModal(false)} />}
+    </div>
+  );
+}
+
+function ClipboardEditModal({ clipboards, colors, textColors, onSave, onClose }) {
+  const [items, setItems] = useState(clipboards.map(c => ({ ...c })));
+  const [editIdx, setEditIdx] = useState(null);
+  const [form, setForm] = useState({ title: '', content: '', color: colors[0] });
+
+  const startEdit = (i) => { setEditIdx(i); setForm({ ...items[i] }); };
+  const startNew = () => { setEditIdx(-1); setForm({ title: '', content: '', color: colors[0] }); };
+  const cancelEdit = () => { setEditIdx(null); setForm({ title: '', content: '', color: colors[0] }); };
+
+  const saveItem = () => {
+    if (!form.title.trim()) return;
+    const next = [...items];
+    if (editIdx === -1) next.push({ ...form });
+    else next[editIdx] = { ...form };
+    setItems(next);
+    setEditIdx(null);
+  };
+
+  const deleteItem = (i) => {
+    const next = items.filter((_, idx) => idx !== i);
+    setItems(next);
+    if (editIdx === i) setEditIdx(null);
+  };
+
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  return (
+    <div className="modal-overlay" style={{zIndex:300}} onClick={onClose}>
+      <div className="modal-content" style={{maxWidth:480,maxHeight:'80vh',overflow:'auto'}} onClick={e => e.stopPropagation()}>
+        <div className="modal-header"><h2 style={{fontSize:15}}>클립보드 관리</h2><button onClick={onClose} className="modal-close">✕</button></div>
+        <div style={{padding:16}}>
+          {items.map((c, i) => (
+            <div key={i} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderBottom:'1px solid #EAECF2'}}>
+              <div style={{width:8,height:8,borderRadius:2,background:c.color,flexShrink:0}} />
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:600,color:'#1A1D23'}}>{c.title}</div>
+                <div style={{fontSize:11,color:'#9BA3B2',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{c.content.replace(/\n/g,' ')}</div>
+              </div>
+              <button style={{fontSize:11,color:'#185FA5',background:'none',border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:500}} onClick={() => startEdit(i)}>수정</button>
+              <button style={{fontSize:11,color:'#CC2222',background:'none',border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:500}} onClick={() => deleteItem(i)}>삭제</button>
+            </div>
+          ))}
+          {items.length < 8 && editIdx === null && (
+            <button style={{marginTop:8,fontSize:12,color:'#185FA5',background:'none',border:'1px dashed #B5D4F4',borderRadius:6,padding:'6px 12px',cursor:'pointer',width:'100%',fontFamily:'inherit'}} onClick={startNew}>+ 새 클립보드 추가</button>
+          )}
+
+          {editIdx !== null && (
+            <div style={{marginTop:12,padding:12,background:'#F8F9FB',borderRadius:8,border:'1px solid #EAECF2'}}>
+              <div style={{marginBottom:8}}>
+                <label style={{fontSize:11,fontWeight:600,color:'#5A6070',display:'block',marginBottom:4}}>제목</label>
+                <input className="input" value={form.title} onChange={e => setForm(p => ({...p, title: e.target.value}))} style={{width:'100%',fontSize:12,height:32}} />
+              </div>
+              <div style={{marginBottom:8}}>
+                <label style={{fontSize:11,fontWeight:600,color:'#5A6070',display:'block',marginBottom:4}}>내용</label>
+                <textarea className="input" value={form.content} onChange={e => setForm(p => ({...p, content: e.target.value}))} style={{width:'100%',fontSize:12,minHeight:60,resize:'vertical',fontFamily:'inherit',lineHeight:1.5}} />
+              </div>
+              <div style={{marginBottom:8}}>
+                <label style={{fontSize:11,fontWeight:600,color:'#5A6070',display:'block',marginBottom:4}}>색상</label>
+                <div style={{display:'flex',gap:6}}>
+                  {colors.map(c => (
+                    <div key={c} onClick={() => setForm(p => ({...p, color: c}))}
+                      style={{width:24,height:24,borderRadius:4,background:c,cursor:'pointer',border: form.color === c ? '2px solid #185FA5' : '2px solid transparent'}} />
+                  ))}
+                </div>
+              </div>
+              <div style={{display:'flex',gap:6,justifyContent:'flex-end'}}>
+                <button className="btn-primary" style={{fontSize:11,padding:'4px 12px'}} onClick={saveItem}>저장</button>
+                <button style={{fontSize:11,padding:'4px 12px',background:'#E8EBF0',border:'none',borderRadius:4,cursor:'pointer',fontFamily:'inherit'}} onClick={cancelEdit}>취소</button>
+              </div>
+            </div>
+          )}
+
+          <div style={{marginTop:16,display:'flex',justifyContent:'flex-end',gap:8}}>
+            <button className="btn-primary" style={{fontSize:12,padding:'6px 16px'}} onClick={() => onSave(items)}>확인</button>
+            <button style={{fontSize:12,padding:'6px 16px',background:'#E8EBF0',border:'none',borderRadius:6,cursor:'pointer',fontFamily:'inherit'}} onClick={onClose}>취소</button>
           </div>
         </div>
       </div>
