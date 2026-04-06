@@ -38,6 +38,7 @@ export default function Home() {
   /* ── AS 필터 ── */
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
   const [typeFilter, setTypeFilter] = useState('전체');
   const [statusFilter, setStatusFilter] = useState('전체');
   const [brandFilter, setBrandFilter] = useState('전체');
@@ -376,9 +377,9 @@ export default function Home() {
             <div className="as-filter-row">
               <div className="as-filter-search-wrap" ref={searchWrapRef}>
                 <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                <input className="input as-filter-search" placeholder="이름, 연락처, 모델, 증상 검색..." value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Escape' && setSearch('')} autoComplete="off" />
+                <input className="input as-filter-search" placeholder="이름, 연락처, 모델, 증상 검색..." value={search} onChange={e => setSearch(e.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} onKeyDown={e => e.key === 'Escape' && setSearch('')} autoComplete="off" />
                 {/* 고객 검색 드롭다운 */}
-                {search.length >= 2 && (() => {
+                {searchFocused && search.length >= 2 && (() => {
                   const q = search.toLowerCase();
                   const matched = asRecords.filter(r => [r.customer_name, r.company_name, r.customer_phone].some(f => f?.toLowerCase().includes(q)));
                   const grouped = {};
@@ -397,7 +398,7 @@ export default function Home() {
                         <span style={{fontSize:11,color:'#9BA3B2'}}>클릭 → 필터링</span>
                       </div>
                       {customers.slice(0, 8).map((c, i) => (
-                        <div key={i} className="search-dropdown-item" style={{padding:'12px 16px'}} onClick={() => { setSearch(c.name || c.company || c.phone || ''); }}>
+                        <div key={i} className="search-dropdown-item" style={{padding:'12px 16px'}} onMouseDown={e => e.preventDefault()} onClick={() => { setSearch(c.name || c.company || c.phone || ''); if (document.activeElement) document.activeElement.blur(); }}>
                           <div className="search-dropdown-avatar" style={{background: i === 0 ? '#185FA5' : '#5A6070',width:38,height:38,fontSize:14}}>{(c.name || '?')[0]}</div>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{fontSize:15,fontWeight:600,color:'#1A1D23'}}>{c.name || '-'}{c.company ? <span style={{fontSize:13,color:'#9BA3B2',marginLeft:6}}>{c.company}</span> : null}</div>
@@ -776,13 +777,14 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     };
   }
 
-  // 뱃지 펼침 바깥 클릭 닫기
+  // 뱃지 펼침 바깥 클릭/스크롤 닫기
   useEffect(() => {
     if (!badgeOpen) return;
-    const handler = (e) => { if (!e.target.closest('.badge-expand-panel')) setBadgeOpen(null); };
-    const escHandler = (e) => { if (e.key === 'Escape') setBadgeOpen(null); };
-    const timer = setTimeout(() => { document.addEventListener('click', handler); document.addEventListener('keydown', escHandler); }, 0);
-    return () => { clearTimeout(timer); document.removeEventListener('click', handler); document.removeEventListener('keydown', escHandler); };
+    const handler = (e) => { if (!e.target.closest('.badge-expand-panel')) { setBadgeOpen(null); setBadgePos(null); } };
+    const escHandler = (e) => { if (e.key === 'Escape') { setBadgeOpen(null); setBadgePos(null); } };
+    const scrollHandler = () => { setBadgeOpen(null); setBadgePos(null); };
+    const timer = setTimeout(() => { document.addEventListener('click', handler); document.addEventListener('keydown', escHandler); document.addEventListener('scroll', scrollHandler, true); }, 0);
+    return () => { clearTimeout(timer); document.removeEventListener('click', handler); document.removeEventListener('keydown', escHandler); document.removeEventListener('scroll', scrollHandler, true); };
   }, [badgeOpen]);
 
   // 뱃지 선택 → 즉시 저장
@@ -917,6 +919,8 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   };
   const getBadgeLabel = (col, v) => col.fromDb ? col.fromDb(v) : (col.key === 'invoice_type' ? (v === '없음(일반소매)' ? '일반' : v === '계산서(거래처)' ? '계산서' : v) : v);
 
+  const [badgePos, setBadgePos] = useState(null);
+
   const renderBadgeExpand = (r, col) => {
     const dbVal = r[col.key];
     const displayVal = col.fromDb ? col.fromDb(dbVal) : dbVal;
@@ -926,13 +930,13 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     const MW = { status:52, payment_status:52, record_type:56 };
     const mw = MW[col.key] || 0;
     return (
-      <div style={{position:'relative'}} className="badge-expand-panel" onClick={e => e.stopPropagation()}>
+      <div className="badge-expand-panel" onClick={e => e.stopPropagation()}>
         <span style={{display:'inline-flex',justifyContent:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',background: displayVal ? bg : '#F4F6FA',color: displayVal ? c : '#9BA3B2',cursor:'pointer',border: isOpen ? `2px solid ${c}` : '2px solid transparent',...(mw?{minWidth:mw}:{})}}
-          onClick={() => setBadgeOpen(isOpen ? null : {id:r.id, field:col.key})}>
+          onClick={e => { if (isOpen) { setBadgeOpen(null); setBadgePos(null); } else { const rect = e.currentTarget.getBoundingClientRect(); setBadgePos({top:rect.bottom+2,left:rect.left}); setBadgeOpen({id:r.id, field:col.key}); } }}>
           {displayVal ? getBadgeLabel(col, dbVal) : '—'}
         </span>
-        {isOpen && (
-          <div style={{position:'absolute',top:'100%',left:0,zIndex:20,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,marginTop:2,minWidth:80,maxHeight:200,overflowY:'auto'}}>
+        {isOpen && badgePos && (
+          <div style={{position:'fixed',top:badgePos.top,left:badgePos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,minWidth:80,maxHeight:200,overflowY:'auto'}}>
             {col.opts.map(o => {
               const ov = col.toDb ? col.toDb(o) : o;
               const [obg,oc] = getBadgeColor(col.key, ov);
@@ -1042,6 +1046,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   };
 
   const [newBadgeOpen, setNewBadgeOpen] = useState(null); // field name
+  const [newBadgePos, setNewBadgePos] = useState(null);
   const [memoPopup, setMemoPopup] = useState(null); // {id, field, value, title, isNew}
   const [memoValue, setMemoValue] = useState('');
   const [productPickerOpen, setProductPickerOpen] = useState(false);
@@ -1064,10 +1069,11 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 
   useEffect(() => {
     if (!newBadgeOpen) return;
-    const h = (e) => { if (!e.target.closest('.badge-expand-panel')) setNewBadgeOpen(null); };
-    const esc = (e) => { if (e.key === 'Escape') setNewBadgeOpen(null); };
-    const timer = setTimeout(() => { document.addEventListener('click', h); document.addEventListener('keydown', esc); }, 0);
-    return () => { clearTimeout(timer); document.removeEventListener('click', h); document.removeEventListener('keydown', esc); };
+    const h = (e) => { if (!e.target.closest('.badge-expand-panel')) { setNewBadgeOpen(null); setNewBadgePos(null); } };
+    const esc = (e) => { if (e.key === 'Escape') { setNewBadgeOpen(null); setNewBadgePos(null); } };
+    const scrollH = () => { setNewBadgeOpen(null); setNewBadgePos(null); };
+    const timer = setTimeout(() => { document.addEventListener('click', h); document.addEventListener('keydown', esc); document.addEventListener('scroll', scrollH, true); }, 0);
+    return () => { clearTimeout(timer); document.removeEventListener('click', h); document.removeEventListener('keydown', esc); document.removeEventListener('scroll', scrollH, true); };
   }, [newBadgeOpen]);
 
   const renderNewCell = (col) => {
@@ -1079,18 +1085,18 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       const isOpen = newBadgeOpen === col.key;
       const [bg, c] = getBadgeColor(col.key, dbVal || displayVal);
       return (
-        <div style={{position:'relative'}} className="badge-expand-panel" onClick={e => e.stopPropagation()}>
+        <div className="badge-expand-panel" onClick={e => e.stopPropagation()}>
           <span style={{display:'inline-flex',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:displayVal?bg:'#F4F6FA',color:displayVal?c:'#9BA3B2',cursor:'pointer',border:isOpen?`2px solid ${c}`:'2px solid transparent'}}
-            onClick={() => setNewBadgeOpen(isOpen ? null : col.key)}>
+            onClick={e => { if (isOpen) { setNewBadgeOpen(null); setNewBadgePos(null); } else { const rect = e.currentTarget.getBoundingClientRect(); setNewBadgePos({top:rect.bottom+2,left:rect.left}); setNewBadgeOpen(col.key); } }}>
             {displayVal ? getBadgeLabel(col, dbVal) : '선택'}
           </span>
-          {isOpen && (
-            <div style={{position:'absolute',top:'100%',left:0,zIndex:30,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,marginTop:2,minWidth:80,maxHeight:200,overflowY:'auto'}}>
+          {isOpen && newBadgePos && (
+            <div style={{position:'fixed',top:newBadgePos.top,left:newBadgePos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,minWidth:80,maxHeight:200,overflowY:'auto'}}>
               {col.opts.map(o => {
                 const ov = col.toDb ? col.toDb(o) : o;
                 const [obg,oc] = getBadgeColor(col.key, ov);
                 return <div key={o} style={{padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer',background:obg,color:oc,marginBottom:2,whiteSpace:'nowrap',border:dbVal===ov?`2px solid ${oc}`:'2px solid transparent'}}
-                  onClick={() => { setNewRow(p => { const next = {...p, [col.key]: ov}; if (col.key === 'intake_carrier' && ov === '방문') next.shipping_fee = '0'; if (col.key === 'release_carrier' && ov === '방문') { next.release_date = today(); next.tracking_number = '방문'; } return next; }); setNewBadgeOpen(null); if (col.key === 'record_type' && ov === 'product_sale') { setProductPickerSearch(''); setProductPickerOpen(true); } }}>{getBadgeLabel(col, ov)}</div>;
+                  onClick={() => { setNewRow(p => { const next = {...p, [col.key]: ov}; if (col.key === 'intake_carrier' && ov === '방문') next.shipping_fee = '0'; if (col.key === 'release_carrier' && ov === '방문') { next.release_date = today(); next.tracking_number = '방문'; } return next; }); setNewBadgeOpen(null); setNewBadgePos(null); if (col.key === 'record_type' && ov === 'product_sale') { setProductPickerSearch(''); setProductPickerOpen(true); } }}>{getBadgeLabel(col, ov)}</div>;
               })}
             </div>
           )}
