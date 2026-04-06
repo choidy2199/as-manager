@@ -13,7 +13,7 @@ const INVOICE_TYPES = ["없음(일반소매)","계산서(거래처)","월말"];
 const PAYMENT_STATUS = ["완료","대기","명세서","무상","카드","방문결제"];
 
 const fmt = (n) => n?.toLocaleString('ko-KR') ?? '0';
-const today = () => new Date().toISOString().split('T')[0];
+const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
 const fmtDate = (d) => {
   if (!d) return '—';
   const dt = new Date(d + 'T00:00:00');
@@ -59,7 +59,7 @@ export default function Home() {
     if (typeof window === 'undefined') return today();
     const mode = localStorage.getItem('as_date_filter_mode') || 'month';
     if (mode === 'all') return '';
-    if (mode === 'custom') return localStorage.getItem('as_date_to') || today();
+    if (mode === 'custom') { const saved = localStorage.getItem('as_date_to'); return (saved && saved >= today()) ? saved : today(); }
     return today();
   });
   const [dateAll, setDateAll] = useState(() => {
