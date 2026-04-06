@@ -2029,19 +2029,19 @@ function ProductsTable({ products, onReload, setProducts }) {
     if (error) { alert('삭제 실패: ' + error.message); onReload(); }
   };
 
-  const moveProduct = async (idx, dir) => {
-    const swapIdx = idx + dir;
-    if (swapIdx < 0 || swapIdx >= products.length) return;
-    const a = products[idx], b = products[swapIdx];
+  const moveProduct = async (product, dir) => {
+    const sortedAll = [...products].sort((x, y) => (x.sort_order || 0) - (y.sort_order || 0));
+    const curIdx = sortedAll.findIndex(p => p.id === product.id);
+    const swapIdx = curIdx + dir;
+    if (swapIdx < 0 || swapIdx >= sortedAll.length) return;
+    const a = sortedAll[curIdx], b = sortedAll[swapIdx];
     const aOrder = a.sort_order, bOrder = b.sort_order;
     // 로컬 state 즉시 갱신
-    setProducts(prev => {
-      const next = [...prev];
-      next[idx] = { ...a, sort_order: bOrder };
-      next[swapIdx] = { ...b, sort_order: aOrder };
-      next.sort((x, y) => (x.sort_order || 0) - (y.sort_order || 0));
-      return next;
-    });
+    setProducts(prev => prev.map(p => {
+      if (p.id === a.id) return { ...p, sort_order: bOrder };
+      if (p.id === b.id) return { ...p, sort_order: aOrder };
+      return p;
+    }).sort((x, y) => (x.sort_order || 0) - (y.sort_order || 0)));
     // Supabase 저장
     await Promise.all([
       supabase.from('products').update({ sort_order: bOrder }).eq('id', a.id),
@@ -2102,9 +2102,9 @@ function ProductsTable({ products, onReload, setProducts }) {
       return (
         <div style={{ display: 'flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
           <button style={{ background: 'none', border: 'none', fontSize: 12, color: isFirst ? '#DDE1EB' : '#5A6070', cursor: isFirst ? 'default' : 'pointer', padding: '2px 4px', fontFamily: 'inherit' }}
-            onClick={e => { e.stopPropagation(); if (!isFirst) moveProduct(rowIdx, -1); }}>▲</button>
+            onClick={e => { e.stopPropagation(); if (!isFirst) moveProduct(p, -1); }}>▲</button>
           <button style={{ background: 'none', border: 'none', fontSize: 12, color: isLast ? '#DDE1EB' : '#5A6070', cursor: isLast ? 'default' : 'pointer', padding: '2px 4px', fontFamily: 'inherit' }}
-            onClick={e => { e.stopPropagation(); if (!isLast) moveProduct(rowIdx, 1); }}>▼</button>
+            onClick={e => { e.stopPropagation(); if (!isLast) moveProduct(p, 1); }}>▼</button>
           <span style={{ display: 'inline-flex', padding: '3px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: '#E6F1FB', color: '#0C447C', cursor: 'pointer', whiteSpace: 'nowrap' }}
             onClick={e => { e.stopPropagation(); startEdit(p.id, 'model', p.model || ''); }}>수정</span>
           <span style={{ display: 'inline-flex', padding: '3px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: '#FCEBEB', color: '#791F1F', cursor: 'pointer', whiteSpace: 'nowrap' }}
