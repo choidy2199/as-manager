@@ -338,15 +338,15 @@ export default function Home() {
               </div>
               <div className="as-filter-pair" style={{marginLeft:'auto'}}>
                 <span className="as-filter-label">기간</span>
-                <div style={{display:'flex',alignItems:'center',border:'0.5px solid #DDE1EB',borderRadius:6,padding:'2px 4px',background:'#fff'}}>
-                  <input type="date" value={dateAll ? '' : dateFrom} onChange={e => { setDateAll(false); setDateFrom(e.target.value); }} style={{fontSize:12,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
+                <div style={{display:'flex',alignItems:'center',height:32,border:'0.5px solid #DDE1EB',borderRadius:6,padding:'0 6px',background:'#fff'}}>
+                  <input type="date" value={dateAll ? '' : dateFrom} onChange={e => { setDateAll(false); setDateFrom(e.target.value); }} style={{fontSize:12,height:28,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
                   <span style={{color:'#9BA3B2',padding:'0 4px',fontSize:12}}>~</span>
-                  <input type="date" value={dateAll ? '' : dateTo} onChange={e => { setDateAll(false); setDateTo(e.target.value); }} style={{fontSize:12,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
+                  <input type="date" value={dateAll ? '' : dateTo} onChange={e => { setDateAll(false); setDateTo(e.target.value); }} style={{fontSize:12,height:28,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
                 </div>
                 <div style={{display:'flex',gap:4,marginLeft:4}}>
-                  <button onClick={() => { setDateAll(false); setDateFrom(today()); setDateTo(today()); }} style={{padding:'5px 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#185FA5',color:'#fff'}}>오늘</button>
-                  <button onClick={() => { setDateAll(false); const d=new Date(); setDateFrom(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'); setDateTo(today()); }} style={{padding:'5px 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#E6F1FB',color:'#0C447C'}}>이번 달</button>
-                  <button onClick={() => { setDateAll(true); }} style={{padding:'5px 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#F4F6FA',color:'#5A6070'}}>전체</button>
+                  <button onClick={() => { setDateAll(false); setDateFrom(today()); setDateTo(today()); }} style={{height:32,padding:'0 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#185FA5',color:'#fff'}}>오늘</button>
+                  <button onClick={() => { setDateAll(false); const d=new Date(); setDateFrom(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'); setDateTo(today()); }} style={{height:32,padding:'0 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#E6F1FB',color:'#0C447C'}}>이번 달</button>
+                  <button onClick={() => { setDateAll(true); }} style={{height:32,padding:'0 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#F4F6FA',color:'#5A6070'}}>전체</button>
                 </div>
               </div>
             </div>
