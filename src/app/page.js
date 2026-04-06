@@ -1638,6 +1638,24 @@ function CustomerPopup({ customer, onClose }) {
 
   const textareaRef = useRef(null);
   const modalRef = useRef(null);
+  const [dragPos, setDragPos] = useState(null);
+  const dragRef = useRef(null);
+
+  const onHeaderMouseDown = (e) => {
+    if (e.target.closest('button') || e.target.closest('.cp-stat')) return;
+    const modal = modalRef.current; if (!modal) return;
+    const rect = modal.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left, offsetY = e.clientY - rect.top;
+    dragRef.current = { offsetX, offsetY };
+    document.body.style.cursor = 'grabbing'; document.body.style.userSelect = 'none';
+    const onMove = (ev) => {
+      const x = Math.max(0, Math.min(ev.clientX - offsetX, window.innerWidth - rect.width));
+      const y = Math.max(0, Math.min(ev.clientY - offsetY, window.innerHeight - rect.height));
+      setDragPos({ x, y });
+    };
+    const onUp = () => { dragRef.current = null; document.body.style.cursor = ''; document.body.style.userSelect = ''; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+  };
 
   const autoResizeTextarea = () => {
     const el = textareaRef.current;
@@ -1697,10 +1715,10 @@ function CustomerPopup({ customer, onClose }) {
 
   return (
     <>
-    <div className="cp-overlay">
-      <div className="cp-modal" ref={modalRef} onClick={e => e.stopPropagation()}>
+    <div className="cp-overlay" style={dragPos ? {pointerEvents:'none'} : undefined}>
+      <div className="cp-modal" ref={modalRef} onClick={e => e.stopPropagation()} style={dragPos ? {position:'fixed',top:dragPos.y,left:dragPos.x,margin:0,pointerEvents:'auto'} : undefined}>
         {/* 헤더 */}
-        <div className="cp-header">
+        <div className="cp-header" style={{cursor:'grab'}} onMouseDown={onHeaderMouseDown}>
           <div style={{display:'flex',alignItems:'center',gap:12,flex:1}}>
             <div className="cp-avatar">{(name || '?')[0]}</div>
             <div>
@@ -2506,6 +2524,25 @@ function SMSPopup({ onClose, onUnreadChange }) {
   const chatRef = useRef(null);
   const textareaRef = useRef(null);
   const popupRef = useRef(null);
+  const [smsDragPos, setSmsDragPos] = useState(null);
+  const smsDragRef = useRef(null);
+
+  const onSmsDragDown = (e) => {
+    if (e.target.closest('button')) return;
+    const popup = popupRef.current; if (!popup) return;
+    const rect = popup.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left, offsetY = e.clientY - rect.top;
+    smsDragRef.current = { offsetX, offsetY };
+    document.body.style.cursor = 'grabbing'; document.body.style.userSelect = 'none';
+    const onMove = (ev) => {
+      const x = Math.max(0, Math.min(ev.clientX - offsetX, window.innerWidth - rect.width));
+      const y = Math.max(0, Math.min(ev.clientY - offsetY, window.innerHeight - rect.height));
+      setSmsDragPos({ x, y });
+    };
+    const onUp = () => { smsDragRef.current = null; document.body.style.cursor = ''; document.body.style.userSelect = ''; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+  };
+
   const [clipboards, setClipboards] = useState([]);
   const [clipModal, setClipModal] = useState(false);
   const [selectedClipTitle, setSelectedClipTitle] = useState(null);
@@ -2643,11 +2680,11 @@ function SMSPopup({ onClose, onUnreadChange }) {
 
   return (
     <>
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200}}>
-      <div ref={popupRef} style={{width:700,height:'80vh',minWidth:600,minHeight:500,maxWidth:'95vw',maxHeight:'95vh',background:'#fff',borderRadius:12,overflow:'hidden',display:'flex',boxShadow:'0 8px 32px rgba(0,0,0,0.18)',resize:'both'}} onClick={e => e.stopPropagation()}>
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,...(smsDragPos?{pointerEvents:'none'}:{})}}>
+      <div ref={popupRef} style={{width:700,height:'80vh',minWidth:600,minHeight:500,maxWidth:'95vw',maxHeight:'95vh',background:'#fff',borderRadius:12,overflow:'hidden',display:'flex',boxShadow:'0 8px 32px rgba(0,0,0,0.18)',resize:'both',...(smsDragPos?{position:'fixed',top:smsDragPos.y,left:smsDragPos.x,margin:0,pointerEvents:'auto'}:{})}} onClick={e => e.stopPropagation()}>
         {/* 좌측: 고객 목록 */}
         <div style={{width:280,flexShrink:0,display:'flex',flexDirection:'column',borderRight:'1px solid #EAECF2'}}>
-          <div style={{background:'#185FA5',padding:'14px 16px',display:'flex',alignItems:'flex-start',justifyContent:'space-between'}}>
+          <div style={{background:'#185FA5',padding:'14px 16px',display:'flex',alignItems:'flex-start',justifyContent:'space-between',cursor:'grab'}} onMouseDown={onSmsDragDown}>
             <div>
               <div style={{fontSize:16,fontWeight:500,color:'#fff'}}>문자함</div>
               <div style={{fontSize:12,color:'rgba(255,255,255,0.6)'}}>{customers.reduce((s,c) => s + c.unread, 0)}건 새 문자</div>
