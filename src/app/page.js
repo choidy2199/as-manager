@@ -582,8 +582,6 @@ export default function Home() {
 function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip, deleteMode }) {
   const [editCell, setEditCell] = useState(null); // {id, field} — 텍스트/숫자/날짜용
   const [editValue, setEditValue] = useState('');
-  const [editCompany, setEditCompany] = useState({ company: '', customer: '' }); // 거래처/성함 전용
-  const companyCommitRef = useRef(false); // 거래처 커밋 중복 방지
   const [badgeOpen, setBadgeOpen] = useState(null); // {id, field} — 뱃지 펼침용
   const [newRow, setNewRow] = useState(emptyRow());
   // showNewRow 열릴 때마다 오늘 날짜로 리셋
@@ -673,41 +671,26 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 
   const startEdit = (id, field, value) => {
     setEditCell({ id, field });
-    if (field === 'company_name') {
-      const row = records.find(r => r.id === id);
-      setEditCompany({ company: row?.company_name || '', customer: row?.customer_name || '' });
-    } else {
-      setEditValue(value ?? '');
-    }
+    setEditValue(value ?? '');
   };
 
   const commitEdit = async () => {
     if (!editCell) return;
     const { id, field } = editCell;
+    setEditCell(null);
 
+    // 거래처/성함: "거래처 / 성함" 형태 → 분리 저장
     if (field === 'company_name') {
-      if (companyCommitRef.current) return; // 중복 방지
-      companyCommitRef.current = true;
+      const parts = editValue.split('/').map(s => s.trim());
+      const nextCompany = parts[0] || '';
+      const nextCustomer = parts[1] || '';
       const row = records.find(r => r.id === id);
       const prevCompany = row?.company_name || '';
       const prevCustomer = row?.customer_name || '';
-      const nextCompany = editCompany.company;
-      const nextCustomer = editCompany.customer;
-      setEditCell(null);
-      try {
-        let changed = false;
-        if (nextCompany !== prevCompany) {
-          await onSaveField(id, 'company_name', nextCompany || null);
-          changed = true;
-        }
-        if (nextCustomer !== prevCustomer) {
-          await onSaveField(id, 'customer_name', nextCustomer || null);
-          changed = true;
-        }
-        if (changed) onReload();
-      } finally {
-        companyCommitRef.current = false;
-      }
+      let changed = false;
+      if (nextCompany !== prevCompany) { await onSaveField(id, 'company_name', nextCompany || null); changed = true; }
+      if (nextCustomer !== prevCustomer) { await onSaveField(id, 'customer_name', nextCustomer || null); changed = true; }
+      if (changed) onReload();
       return;
     }
 
@@ -715,12 +698,10 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     if (field === 'repair_cost') val = parseInt(String(val).replace(/,/g, '')) || 0;
     const finalVal = val || null;
 
-    // 이전값과 비교 — 변경 없으면 Supabase 호출 안 함
     const row = records.find(r => r.id === id);
     const prevVal = row ? row[field] : undefined;
     const prev = (prevVal === undefined || prevVal === null) ? null : prevVal;
     const next = (finalVal === undefined || finalVal === null || finalVal === '') ? null : finalVal;
-    setEditCell(null);
 
     if (String(prev ?? '') !== String(next ?? '')) {
       await onSaveField(id, field, next);
@@ -887,27 +868,14 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       if (r.intake_carrier === '방문') return <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,background:'#F4F6FA',color:'#5A6070',whiteSpace:'nowrap'}}>방문</span>;
       return val || empty;
     }
-    // 거래처/성함 — 인라인 편집
+    // 거래처/성함 — 인라인 편집 (단일 input, "거래처 / 성함" 형태)
     if (col.key === 'company_name') {
       if (isEditing) {
-        const blurHandler = () => {
-          setTimeout(() => {
-            const active = document.activeElement;
-            if (active && active.closest('.company-edit-group')) return;
-            commitEdit();
-          }, 50);
-        };
         return (
-          <div className="company-edit-group" style={{display:'flex',flexDirection:'column',gap:2}} onClick={e => e.stopPropagation()}>
-            <input className="as-cell-input" defaultValue={r.company_name || ''} autoFocus placeholder="거래처"
-              onChange={e => setEditCompany(p => ({...p, company: e.target.value}))}
-              onBlur={blurHandler}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }}} />
-            <input className="as-cell-input" defaultValue={r.customer_name || ''} placeholder="성함"
-              onChange={e => setEditCompany(p => ({...p, customer: e.target.value}))}
-              onBlur={blurHandler}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }}} />
-          </div>
+          <input className="as-cell-input" value={editValue} autoFocus placeholder="거래처 / 성함"
+            onChange={e => setEditValue(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }}} />
         );
       }
       const p = [r.company_name, r.customer_name].filter(Boolean);
@@ -1061,7 +1029,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
                 <td key={c.key} style={Object.keys(tdStyle).length ? tdStyle : undefined}
                   onClick={() => {
                     if (c.isLink || c.type === 'action' || c.type === 'select' || c.type === 'readonly' || c.type === 'memo') return;
-                    const val = c.key === 'company_name' ? (r.company_name || '') :
+                    const val = c.key === 'company_name' ? [r.company_name, r.customer_name].filter(Boolean).join(' / ') :
                       c.fromDb ? (c.fromDb(r[c.key]) || '') :
                       (c.key === 'repair_cost' ? (r[c.key]?.toString() || '') : (r[c.key] || ''));
                     startEdit(r.id, c.key, c.toDb ? c.toDb(val) : val);
