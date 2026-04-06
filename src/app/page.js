@@ -717,7 +717,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'symptom', label:'증상', w:180, type:'text' },
     { key:'memo', label:'비고', w:100, type:'memo', groupEnd: true, groupBorderColor: '#B5D4F4', groupBorderColorBody: '#E6F1FB' },
     // 초록 그룹
-    { key:'repair_result', label:'처리결과', w:160, type:'memo' },
+    { key:'repair_result', label:'처리결과', w:160, type:'text' },
     { key:'technician', label:'처리자', w:80, type:'text' },
     { key:'status', label:'AS상태', w:80, type:'select', opts: STATUS_LIST },
     { key:'repair_cost', label:'AS비용', w:90, type:'number', groupEnd: true, groupBorderColor: '#9FE1CB', groupBorderColorBody: '#E1F5EE' },
@@ -829,17 +829,31 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     }
     // AS비용
     if (col.key === 'repair_cost') return val ? <span style={{color:'#185FA5',fontWeight:700}}>{fmt(val)}</span> : empty;
+    // 운임 — 방문이면 뱃지
+    if (col.key === 'shipping_fee') {
+      if (r.intake_carrier === '방문') return <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,background:'#F4F6FA',color:'#5A6070',whiteSpace:'nowrap'}}>방문</span>;
+      return val || empty;
+    }
     // 거래처/성함 — 인라인 편집
     if (col.key === 'company_name') {
       if (isEditing) {
+        const blurHandler = (e) => {
+          // 같은 편집 영역 내 포커스 이동이면 commitEdit 안 함
+          setTimeout(() => {
+            const active = document.activeElement;
+            if (active && active.closest('.company-edit-group')) return;
+            commitEdit();
+          }, 0);
+        };
         return (
-          <div style={{display:'flex',flexDirection:'column',gap:2}} onClick={e => e.stopPropagation()}>
+          <div className="company-edit-group" style={{display:'flex',flexDirection:'column',gap:2}} onClick={e => e.stopPropagation()}>
             <input className="as-cell-input" value={editCompany.company} autoFocus placeholder="거래처"
               onChange={e => setEditCompany(p => ({...p, company: e.target.value}))}
+              onBlur={blurHandler}
               onKeyDown={e => e.key === 'Enter' && commitEdit()} />
             <input className="as-cell-input" value={editCompany.customer} placeholder="성함"
               onChange={e => setEditCompany(p => ({...p, customer: e.target.value}))}
-              onBlur={commitEdit}
+              onBlur={blurHandler}
               onKeyDown={e => e.key === 'Enter' && commitEdit()} />
           </div>
         );
@@ -850,6 +864,12 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     }
     // 연락처
     if (col.key === 'customer_phone') return val ? <span style={{fontSize:12,color:'#5A6070'}}>{val}</span> : empty;
+    // 처리결과 — 쉼표 기준 뱃지 분리
+    if (col.key === 'repair_result') {
+      if (!val) return empty;
+      const parts = String(val).split(',').map(s => s.trim()).filter(Boolean);
+      return <span style={{display:'inline-flex',gap:4,flexWrap:'wrap'}}>{parts.map((p, i) => <span key={i} style={{display:'inline-flex',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:600,background:'#E1F5EE',color:'#085041',whiteSpace:'nowrap'}}>{p}</span>)}</span>;
+    }
     return val || empty;
   };
 
