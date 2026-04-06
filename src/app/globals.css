@@ -319,7 +319,7 @@ select.as-cell-input { padding-right: 2px; height: 32px; font-size: 13px; }
 
 /* ── Customer Popup ── */
 .cp-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 200; }
-.cp-modal { width: 920px; height: 75vh; min-width: 600px; min-height: 400px; max-width: 95vw; max-height: 95vh; background: #fff; border-radius: 10px; overflow: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.18); display: flex; flex-direction: column; resize: both; }
+.cp-modal { width: 920px; height: 680px; min-width: 700px; min-height: 500px; max-width: 95vw; max-height: 95vh; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.18); display: flex; flex-direction: column; resize: both; }
 .cp-header { background: #185FA5; padding: 14px 18px; display: flex; align-items: center; gap: 12px; position: relative; }
 .cp-avatar { width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; font-weight: 600; flex-shrink: 0; }
 .cp-stat { text-align: center; }
@@ -349,10 +349,10 @@ select.as-cell-input { padding-right: 2px; height: 32px; font-size: 13px; }
 .cp-bubble-time { font-size: 9px; color: #9BA3B2; margin-top: 2px; }
 .cp-bubble-out .cp-bubble-time { text-align: right; }
 .cp-chat-input { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid #EAECF2; align-items: flex-end; }
-.cp-chat-input textarea { flex: 1; min-height: 54px; max-height: 120px; resize: none; overflow-y: auto; font-size: 12px; line-height: 1.5; padding: 7px 10px; border: 1px solid #DDE1EB; border-radius: 6px; font-family: inherit; box-sizing: border-box; }
-.cp-chat-input .cp-send-btn { height: 54px; padding: 0 14px; font-size: 12px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.cp-chat-input textarea { flex: 1; min-height: 54px; resize: none; overflow-y: auto; font-size: 15px; line-height: 1.5; padding: 7px 10px; border: 1px solid #DDE1EB; border-radius: 6px; font-family: inherit; box-sizing: border-box; }
+.cp-chat-input .cp-send-btn { align-self: stretch; padding: 0 14px; font-size: 12px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
 .cp-chat-hint { padding: 0 12px 4px; font-size: 10px; color: #CC2222; }
-.cp-clipboard-area { padding: 6px 12px; border-top: 1px solid #EAECF2; }
+.cp-clipboard-area { padding: 10px 16px; border-top: 0.5px solid #DDE1EB; background: #F4F6FA; flex-shrink: 0; }
 .cp-clipboard-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
 .cp-clipboard-btn { padding: 6px 4px; border-radius: 4px; border: none; font-size: 11px; font-weight: 500; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity 0.15s; font-family: inherit; }
 .cp-clipboard-btn:hover { opacity: 0.8; }

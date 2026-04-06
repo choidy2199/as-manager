@@ -1283,13 +1283,33 @@ function CustomerPopup({ customer, onClose }) {
   };
 
   const textareaRef = useRef(null);
+  const modalRef = useRef(null);
 
   const autoResizeTextarea = () => {
     const el = textareaRef.current;
     if (!el) return;
+    const modal = modalRef.current;
+    const maxH = modal ? Math.floor(modal.offsetHeight * 0.5) : 300;
     el.style.height = 'auto';
-    el.style.height = Math.min(Math.max(el.scrollHeight, 54), 120) + 'px';
+    el.style.height = Math.min(Math.max(el.scrollHeight, 54), maxH) + 'px';
   };
+
+  // resize 크기 localStorage 저장
+  useEffect(() => {
+    const modal = modalRef.current;
+    if (!modal) return;
+    const saved = (() => { try { return JSON.parse(localStorage.getItem('cp_popup_size')); } catch { return null; } })();
+    if (saved?.width) modal.style.width = saved.width + 'px';
+    if (saved?.height) modal.style.height = saved.height + 'px';
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const { width, height } = e.contentRect;
+        localStorage.setItem('cp_popup_size', JSON.stringify({ width: Math.round(width), height: Math.round(height) }));
+      }
+    });
+    ro.observe(modal);
+    return () => ro.disconnect();
+  }, []);
 
   const handleSend = async () => {
     if (!msgInput.trim() || !phone) return;
@@ -1322,7 +1342,7 @@ function CustomerPopup({ customer, onClose }) {
 
   return (
     <div className="cp-overlay" onClick={onClose}>
-      <div className="cp-modal" onClick={e => e.stopPropagation()}>
+      <div className="cp-modal" ref={modalRef} onClick={e => e.stopPropagation()}>
         {/* 헤더 */}
         <div className="cp-header">
           <div style={{display:'flex',alignItems:'center',gap:12,flex:1}}>
@@ -1367,6 +1387,21 @@ function CustomerPopup({ customer, onClose }) {
                 </div>
               ))}
             </div>
+            {/* 클립보드 — 좌측 하단 */}
+            <div className="cp-clipboard-area">
+              <div className="cp-clipboard-header">
+                <span style={{fontSize:11,fontWeight:600,color:'#5A6070'}}>클립보드</span>
+                <button className="cp-clipboard-edit-badge" onClick={() => setClipModal(true)}>수정</button>
+              </div>
+              <div className="cp-clipboard-grid">
+                {clipboards.map((c, i) => (
+                  <button key={i} className="cp-clipboard-btn" style={{background: c.color || '#E6F1FB', color: CLIP_TEXT_COLORS[c.color] || '#0C447C'}}
+                    onClick={() => { setMsgInput(c.content); if (textareaRef.current) { textareaRef.current.focus(); setTimeout(autoResizeTextarea, 0); } }}>
+                    {c.title}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* 우측: 문자 내역 */}
@@ -1385,24 +1420,12 @@ function CustomerPopup({ customer, onClose }) {
                 );
               })}
             </div>
-            <div className="cp-clipboard-area">
-              <div className="cp-clipboard-header">
-                <span style={{fontSize:11,fontWeight:600,color:'#5A6070'}}>클립보드</span>
-                <button className="cp-clipboard-edit-badge" onClick={() => setClipModal(true)}>수정</button>
+            <div style={{flexShrink:0}}>
+              <div className="cp-chat-hint">*Shift+Enter = 텍스트 줄바꿈됩니다</div>
+              <div className="cp-chat-input">
+                <textarea ref={textareaRef} rows={3} value={msgInput} onChange={e => { setMsgInput(e.target.value); autoResizeTextarea(); }} placeholder="문자 입력..." onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} />
+                <button className="btn-primary cp-send-btn" onClick={handleSend}>전송</button>
               </div>
-              <div className="cp-clipboard-grid">
-                {clipboards.map((c, i) => (
-                  <button key={i} className="cp-clipboard-btn" style={{background: c.color || '#E6F1FB', color: CLIP_TEXT_COLORS[c.color] || '#0C447C'}}
-                    onClick={() => { setMsgInput(c.content); if (textareaRef.current) { textareaRef.current.focus(); setTimeout(autoResizeTextarea, 0); } }}>
-                    {c.title}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="cp-chat-hint">*Shift+Enter = 텍스트 줄바꿈됩니다</div>
-            <div className="cp-chat-input">
-              <textarea ref={textareaRef} rows={3} value={msgInput} onChange={e => { setMsgInput(e.target.value); autoResizeTextarea(); }} placeholder="문자 입력..." onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} />
-              <button className="btn-primary cp-send-btn" onClick={handleSend}>전송</button>
             </div>
           </div>
         </div>
