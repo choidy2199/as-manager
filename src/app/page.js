@@ -810,7 +810,8 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   const renderNewCell = (col) => {
     const val = col.key === 'company_name' ? newRow.company_name : newRow[col.key] ?? '';
     if (col.type === 'select') {
-      const dbVal = col.toDb ? col.toDb(val) : val;
+      // val이 이미 DB값일 수 있으므로(emptyRow/선택 시 DB값 저장), fromDb로 변환 가능하면 그대로 사용
+      const dbVal = col.toDb && col.fromDb ? (col.fromDb(val) !== val ? val : col.toDb(val)) : (col.toDb ? col.toDb(val) : val);
       const displayVal = col.fromDb ? col.fromDb(dbVal) : dbVal;
       const isOpen = newBadgeOpen === col.key;
       const [bg, c] = getBadgeColor(col.key, dbVal || displayVal);
@@ -834,6 +835,10 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       );
     }
     if (col.type === 'date') {
+      if (col.key === 'receipt_date') {
+        const d = new Date(); const m = d.getMonth() + 1; const dd = d.getDate();
+        return <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,background:'#F4F6FA',color:'#5A6070',whiteSpace:'nowrap'}}>{m}월 {dd}일</span>;
+      }
       return <input type="date" className="as-cell-input" value={val} onChange={e => setNewRow(p => ({...p,[col.key]:e.target.value}))} />;
     }
     return (
