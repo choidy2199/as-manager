@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 /* ── 상수 ── */
 const MODELS = ["DC660","DC661","DC662","DC886","DC990X1","DC990K","DC990S","DC991","DC992","DC993","DC995","DC998","KOL-30AD","KOL-A20","DA25","DAC990X1","DW30AD","FVC-20C","기타"];
 const BRANDS = ["콜라보","마끼다","디월트","프레레","기타"];
-const STATUS_LIST = ["접수","진단중","부품대기","수리중","완료","수리X","폐기"];
+const STATUS_LIST = ["접수","부품대기","수리중","완료","수리X","폐기"];
 const RECORD_TYPES = ["AS 수리","제품 판매","부품 판매"];
 const CARRIERS_IN = ["롯데택배","CJ대한통운","한진택배","경동택배","로젠택배","우체국","대신화물","대신택배","방문","용차","퀵"];
 const CARRIERS_OUT = [...CARRIERS_IN, "매장"];
