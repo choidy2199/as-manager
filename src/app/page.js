@@ -32,7 +32,7 @@ export default function Home() {
   const [shipRecords, setShipRecords] = useState([]);
   const [parts, setParts] = useState([]);
   const [technicians, setTechnicians] = useState([]);
-  const [confirmMap, setConfirmMap] = useState({}); // {as_record_id: true} 견적 안내 발송 여부
+  const [confirmMap, setConfirmMap] = useState({}); // {phone: true} 견적 안내 발송 여부
   const [loading, setLoading] = useState(true);
 
   /* ── AS 필터 ── */
@@ -146,12 +146,12 @@ export default function Home() {
     ]);
     if (asRes.data) {
       setAsRecords(asRes.data);
-      // 견적 안내 발송 여부 일괄 조회
-      const ids = asRes.data.map(r => r.id);
-      if (ids.length > 0) {
-        const { data: smsConf } = await supabase.from('sms_messages').select('as_record_id').eq('direction', 'outgoing').eq('message_type', '견적 안내').in('as_record_id', ids);
+      // 견적 안내 발송 여부 일괄 조회 (phone 기준, message_type에 '견적' 포함)
+      const phones = [...new Set(asRes.data.map(r => r.customer_phone).filter(Boolean))];
+      if (phones.length > 0) {
+        const { data: smsConf } = await supabase.from('sms_messages').select('phone').eq('direction', 'outgoing').ilike('message_type', '%견적%').in('phone', phones);
         const map = {};
-        if (smsConf) smsConf.forEach(s => { map[s.as_record_id] = true; });
+        if (smsConf) smsConf.forEach(s => { map[s.phone] = true; });
         setConfirmMap(map);
       } else { setConfirmMap({}); }
     }
@@ -695,11 +695,12 @@ export default function Home() {
       )}
 
       {/* ═══ 고객 이력 팝업 ═══ */}
-      {smsPopup && <SMSPopup onClose={() => setSmsPopup(false)} onUnreadChange={setUnreadCount} />}
+      {smsPopup && <SMSPopup onClose={() => setSmsPopup(false)} onUnreadChange={setUnreadCount} onConfirmSent={(phone) => setConfirmMap(prev => ({...prev, [phone]: true}))} />}
       {customerPopup && (
         <CustomerPopup
           customer={customerPopup}
           onClose={() => setCustomerPopup(null)}
+          onConfirmSent={(phone) => setConfirmMap(prev => ({...prev, [phone]: true}))}
         />
       )}
     </>
@@ -994,7 +995,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     }
     // 확인 컬럼 — 견적 안내 발송 여부
     if (col.key === '_confirm') {
-      if (confirmMap && confirmMap[r.id]) return <span style={{background:'#FCEBEB',color:'#791F1F',padding:'2px 6px',borderRadius:3,fontSize:9,fontWeight:700,whiteSpace:'nowrap'}}>발송완료</span>;
+      if (confirmMap && r.customer_phone && confirmMap[r.customer_phone]) return <span style={{background:'#FCEBEB',color:'#791F1F',padding:'2px 6px',borderRadius:3,fontSize:9,fontWeight:700,whiteSpace:'nowrap'}}>발송완료</span>;
       return empty;
     }
     // 입고일
@@ -1557,7 +1558,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
 
 
 /* ═══ CUSTOMER POPUP ═══ */
-function CustomerPopup({ customer, onClose }) {
+function CustomerPopup({ customer, onClose, onConfirmSent }) {
   const { name, phone, company } = customer;
   const [records, setRecords] = useState([]);
   const [smsMessages, setSmsMessages] = useState([]);
@@ -1693,6 +1694,8 @@ function CustomerPopup({ customer, onClose }) {
     const msg = { phone, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString(), ...(selectedClipTitle ? { message_type: selectedClipTitle } : {}) };
     const { data } = await supabase.from('sms_messages').insert(msg).select();
     if (data) setSmsMessages(prev => [...prev, ...data]);
+    // 견적 클립보드 발송 시 confirmMap 즉시 업데이트
+    if (selectedClipTitle && selectedClipTitle.includes('견적') && onConfirmSent) onConfirmSent(phone);
     setMsgInput('');
     setSelectedClipTitle(null);
     if (textareaRef.current) { textareaRef.current.style.height = '54px'; }
@@ -2515,7 +2518,7 @@ function SettingsTab({ asRecords, monthFilter }) {
 
 
 /* ═══ SMS POPUP ═══ */
-function SMSPopup({ onClose, onUnreadChange }) {
+function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
   const [customers, setCustomers] = useState([]);
   const [selected, setSelected] = useState(null); // phone
   const [messages, setMessages] = useState([]);
@@ -2648,6 +2651,7 @@ function SMSPopup({ onClose, onUnreadChange }) {
     const msg = { phone: selected, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString(), read: true, ...(selectedClipTitle ? { message_type: selectedClipTitle } : {}) };
     const { data } = await supabase.from('sms_messages').insert(msg).select();
     if (data) setMessages(prev => [...prev, ...data]);
+    if (selectedClipTitle && selectedClipTitle.includes('견적') && onConfirmSent) onConfirmSent(selected);
     setMsgInput('');
     setSelectedClipTitle(null);
     if (textareaRef.current) textareaRef.current.style.height = '72px';
