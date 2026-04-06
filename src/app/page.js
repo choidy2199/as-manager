@@ -32,6 +32,7 @@ export default function Home() {
   const [shipRecords, setShipRecords] = useState([]);
   const [parts, setParts] = useState([]);
   const [technicians, setTechnicians] = useState([]);
+  const [confirmMap, setConfirmMap] = useState({}); // {as_record_id: true} 견적 안내 발송 여부
   const [loading, setLoading] = useState(true);
 
   /* ── AS 필터 ── */
@@ -142,7 +143,17 @@ export default function Home() {
       supabase.from('products').select('*').order('sort_order', { ascending: true }),
       supabase.from('technicians').select('*').order('created_at'),
     ]);
-    if (asRes.data) setAsRecords(asRes.data);
+    if (asRes.data) {
+      setAsRecords(asRes.data);
+      // 견적 안내 발송 여부 일괄 조회
+      const ids = asRes.data.map(r => r.id);
+      if (ids.length > 0) {
+        const { data: smsConf } = await supabase.from('sms_messages').select('as_record_id').eq('direction', 'outgoing').eq('message_type', '견적 안내').in('as_record_id', ids);
+        const map = {};
+        if (smsConf) smsConf.forEach(s => { map[s.as_record_id] = true; });
+        setConfirmMap(map);
+      } else { setConfirmMap({}); }
+    }
     if (shipRes.data) setShipRecords(shipRes.data);
     if (partsRes.data) setParts(partsRes.data);
     if (productsRes.data) setProducts(productsRes.data);
@@ -473,6 +484,7 @@ export default function Home() {
                   technicians={technicians}
                   products={products}
                   sendAutoSMS={sendAutoSMS}
+                  confirmMap={confirmMap}
                   onOpenCustomer={(name, phone, company) => setCustomerPopup({ name, phone, company })}
                   onAddShip={async (r) => {
                     await addShip({ shipDate: today(), carrier: null, trackingNo: null, senderName: '선불', receiverName: r.customer_name || r.company_name || '', receiverPhone: r.customer_phone, receiverAddress: null, contents: r.model || null, memo: null, asRecordId: r.id });
@@ -668,7 +680,7 @@ export default function Home() {
 /* ═══════════════════════════════════════════════
    AS 테이블 — 인라인 편집
    ═══════════════════════════════════════════════ */
-function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip, deleteMode, technicians, products, sendAutoSMS }) {
+function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip, deleteMode, technicians, products, sendAutoSMS, confirmMap }) {
   const [editCell, setEditCell] = useState(null); // {id, field} — 텍스트/숫자/날짜용
   const [editValue, setEditValue] = useState('');
   const [badgeOpen, setBadgeOpen] = useState(null); // {id, field} — 뱃지 펼침용
@@ -818,13 +830,13 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 
   const DEFAULT_WIDTHS = {
     record_type:70, receipt_date:120, brand:70, intake_carrier:70, shipping_fee:80,
-    invoice_type:70, company_name:160, _msg:30, customer_phone:120, model:100, symptom:180, memo:100,
+    invoice_type:70, company_name:160, _msg:30, _confirm:50, customer_phone:120, model:100, symptom:180, memo:100,
     repair_result:160, technician:80, status:80, repair_cost:90,
     payment_status:70, payer:80,
     release_date:120, release_carrier:80, tracking_number:130, _ship_btn:55,
   };
   const COL_GROUPS = [
-    { label: '입고', bg: '#E6F1FB', color: '#0C447C', border: '#85B7EB', span: 12 },
+    { label: '입고', bg: '#E6F1FB', color: '#0C447C', border: '#85B7EB', span: 13 },
     { label: 'AS 처리', bg: '#E1F5EE', color: '#085041', border: '#5DCAA5', span: 4 },
     { label: '입금', bg: '#FAEEDA', color: '#412402', border: '#EF9F27', span: 2 },
     { label: '출고', bg: '#EEEDFE', color: '#26215C', border: '#AFA9EC', span: 4 },
@@ -840,6 +852,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'invoice_type', label:'계산서', w:75, type:'select', opts: INVOICE_TYPES },
     { key:'company_name', label:'거래처/성함', w:150, type:'text', combined: true },
     { key:'_msg', label:'msg', w:30, type:'action', isMsgCol: true },
+    { key:'_confirm', label:'확인', w:50, type:'action' },
     { key:'customer_phone', label:'연락처', w:115, type:'text' },
     { key:'model', label:'모델명', w:100, type:'select', opts: MODELS },
     { key:'symptom', label:'증상', w:180, type:'text' },
@@ -948,6 +961,11 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     // 문자 아이콘 컬럼
     if (col.key === '_msg') {
       return <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{cursor:'pointer',opacity:0.7,display:'block',margin:'0 auto'}} onClick={e => { e.stopPropagation(); onOpenCustomer && onOpenCustomer(r.customer_name, r.customer_phone, r.company_name); }} onMouseOver={e => e.currentTarget.style.opacity='1'} onMouseOut={e => e.currentTarget.style.opacity='0.7'}><path d="M2 2.5C2 1.7 2.7 1 3.5 1h7C11.3 1 12 1.7 12 2.5v5c0 .8-.7 1.5-1.5 1.5H8l-2.5 2.5V9H3.5C2.7 9 2 8.3 2 7.5v-5z" fill="#185FA5"/></svg>;
+    }
+    // 확인 컬럼 — 견적 안내 발송 여부
+    if (col.key === '_confirm') {
+      if (confirmMap && confirmMap[r.id]) return <span style={{background:'#FCEBEB',color:'#791F1F',padding:'2px 6px',borderRadius:3,fontSize:9,fontWeight:700,whiteSpace:'nowrap'}}>발송완료</span>;
+      return empty;
     }
     // 입고일
     if (col.type === 'date') return val ? B('#E8EBF0','#3A3F4B',fmtDate(val)) : empty;
@@ -1521,6 +1539,7 @@ function CustomerPopup({ customer, onClose }) {
   const chatRef = useRef(null);
   const [clipboards, setClipboards] = useState([]);
   const [clipModal, setClipModal] = useState(false);
+  const [selectedClipTitle, setSelectedClipTitle] = useState(null);
 
   const CLIP_COLORS = ['#E6F1FB','#FAEEDA','#E1F5EE','#EEEDFE','#FAECE7','#FBEAF0'];
   const CLIP_TEXT_COLORS = { '#E6F1FB':'#0C447C','#FAEEDA':'#412402','#E1F5EE':'#085041','#EEEDFE':'#26215C','#FAECE7':'#6B2012','#FBEAF0':'#6B1240' };
@@ -1626,10 +1645,11 @@ function CustomerPopup({ customer, onClose }) {
       const result = await res.json();
       if (result.error) { alert('문자 발송 실패: ' + result.error); return; }
     } catch (e) { alert('문자 발송 실패: ' + e.message); return; }
-    const msg = { phone, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString() };
+    const msg = { phone, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString(), ...(selectedClipTitle ? { message_type: selectedClipTitle } : {}) };
     const { data } = await supabase.from('sms_messages').insert(msg).select();
     if (data) setSmsMessages(prev => [...prev, ...data]);
     setMsgInput('');
+    setSelectedClipTitle(null);
     if (textareaRef.current) { textareaRef.current.style.height = '54px'; }
   };
 
@@ -1705,7 +1725,7 @@ function CustomerPopup({ customer, onClose }) {
               <div className="cp-clipboard-grid">
                 {clipboards.map((c, i) => (
                   <button key={i} className="cp-clipboard-btn" style={{background: c.color || '#E6F1FB', color: CLIP_TEXT_COLORS[c.color] || '#0C447C'}}
-                    onClick={() => { setMsgInput(c.content); if (textareaRef.current) { textareaRef.current.focus(); setTimeout(autoResizeTextarea, 0); } }}>
+                    onClick={() => { setMsgInput(c.content); setSelectedClipTitle(c.title); if (textareaRef.current) { textareaRef.current.focus(); setTimeout(autoResizeTextarea, 0); } }}>
                     {c.title}
                   </button>
                 ))}
@@ -2445,6 +2465,7 @@ function SMSPopup({ onClose, onUnreadChange }) {
   const popupRef = useRef(null);
   const [clipboards, setClipboards] = useState([]);
   const [clipModal, setClipModal] = useState(false);
+  const [selectedClipTitle, setSelectedClipTitle] = useState(null);
 
   const CLIP_COLORS = ['#E6F1FB','#FAEEDA','#E1F5EE','#EEEDFE','#FAECE7','#FBEAF0'];
   const CLIP_TEXT_COLORS = { '#E6F1FB':'#0C447C','#FAEEDA':'#412402','#E1F5EE':'#085041','#EEEDFE':'#26215C','#FAECE7':'#6B2012','#FBEAF0':'#6B1240' };
@@ -2544,10 +2565,11 @@ function SMSPopup({ onClose, onUnreadChange }) {
       const result = await res.json();
       if (result.error) { alert('발송 실패: ' + result.error); return; }
     } catch (e) { alert('발송 실패: ' + e.message); return; }
-    const msg = { phone: selected, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString(), read: true };
+    const msg = { phone: selected, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString(), read: true, ...(selectedClipTitle ? { message_type: selectedClipTitle } : {}) };
     const { data } = await supabase.from('sms_messages').insert(msg).select();
     if (data) setMessages(prev => [...prev, ...data]);
     setMsgInput('');
+    setSelectedClipTitle(null);
     if (textareaRef.current) textareaRef.current.style.height = '72px';
     setCustomers(prev => prev.map(c => c.phone === selected ? { ...c, latest: new Date().toISOString(), latestText: msgInput.trim() } : c));
   };
@@ -2642,7 +2664,7 @@ function SMSPopup({ onClose, onUnreadChange }) {
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:6}}>
                   {clipboards.map((c, i) => (
                     <button key={i} className="cp-clipboard-btn" style={{background: c.color || '#E6F1FB', color: CLIP_TEXT_COLORS[c.color] || '#0C447C'}}
-                      onClick={() => { setMsgInput(c.content); if (textareaRef.current) { textareaRef.current.focus(); setTimeout(autoResizeTextarea, 0); } }}>
+                      onClick={() => { setMsgInput(c.content); setSelectedClipTitle(c.title); if (textareaRef.current) { textareaRef.current.focus(); setTimeout(autoResizeTextarea, 0); } }}>
                       {c.title}
                     </button>
                   ))}
