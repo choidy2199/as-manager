@@ -1937,6 +1937,57 @@ function SMSPopup({ onClose, onUnreadChange }) {
   const [msgInput, setMsgInput] = useState('');
   const [searchQ, setSearchQ] = useState('');
   const chatRef = useRef(null);
+  const textareaRef = useRef(null);
+  const popupRef = useRef(null);
+  const [clipboards, setClipboards] = useState([]);
+  const [clipModal, setClipModal] = useState(false);
+
+  const CLIP_COLORS = ['#E6F1FB','#FAEEDA','#E1F5EE','#EEEDFE','#FAECE7','#FBEAF0'];
+  const CLIP_TEXT_COLORS = { '#E6F1FB':'#0C447C','#FAEEDA':'#412402','#E1F5EE':'#085041','#EEEDFE':'#26215C','#FAECE7':'#6B2012','#FBEAF0':'#6B1240' };
+
+  // 클립보드 데이터 로드 (고객이력과 동일한 sms_clipboard)
+  useEffect(() => {
+    supabase.from('settings').select('*').eq('key','sms_clipboard').single().then(({ data }) => {
+      if (data?.value && Array.isArray(data.value)) setClipboards(data.value);
+      else setClipboards([
+        { title: '입고안내', content: '안녕하세요. 대한공구 AS센터입니다.\n보내주신 제품이 입고되었습니다.\n점검 후 안내드리겠습니다.', color: '#E6F1FB' },
+        { title: '수리완료', content: '안녕하세요. 대한공구 AS센터입니다.\n수리가 완료되었습니다.\n발송 예정이오니 확인 부탁드립니다.', color: '#E1F5EE' },
+        { title: '부품대기', content: '안녕하세요. 대한공구 AS센터입니다.\n부품 입고 대기중입니다.\n입고되는대로 안내드리겠습니다.', color: '#FAEEDA' },
+        { title: '출고안내', content: '안녕하세요. 대한공구 AS센터입니다.\n택배 발송 완료되었습니다.\n감사합니다.', color: '#EEEDFE' },
+      ]);
+    });
+  }, []);
+
+  const saveClipboards = async (items) => {
+    setClipboards(items);
+    await supabase.from('settings').upsert({ key: 'sms_clipboard', value: items, updated_at: new Date().toISOString() });
+  };
+
+  const autoResizeTextarea = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const popup = popupRef.current;
+    const maxH = popup ? Math.floor(popup.offsetHeight * 0.5) : 300;
+    el.style.height = 'auto';
+    el.style.height = Math.min(Math.max(el.scrollHeight, 72), maxH) + 'px';
+  };
+
+  // 팝업 크기 localStorage 저장/복원
+  useEffect(() => {
+    const popup = popupRef.current;
+    if (!popup) return;
+    const saved = (() => { try { return JSON.parse(localStorage.getItem('sms_popup_size')); } catch { return null; } })();
+    if (saved?.width) popup.style.width = saved.width + 'px';
+    if (saved?.height) popup.style.height = saved.height + 'px';
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const { width, height } = e.contentRect;
+        localStorage.setItem('sms_popup_size', JSON.stringify({ width: Math.round(width), height: Math.round(height) }));
+      }
+    });
+    ro.observe(popup);
+    return () => ro.disconnect();
+  }, []);
 
   // 고객 목록 로드
   useEffect(() => {
@@ -1993,6 +2044,7 @@ function SMSPopup({ onClose, onUnreadChange }) {
     const { data } = await supabase.from('sms_messages').insert(msg).select();
     if (data) setMessages(prev => [...prev, ...data]);
     setMsgInput('');
+    if (textareaRef.current) textareaRef.current.style.height = '72px';
     setCustomers(prev => prev.map(c => c.phone === selected ? { ...c, latest: new Date().toISOString(), latestText: msgInput.trim() } : c));
   };
 
@@ -2021,8 +2073,9 @@ function SMSPopup({ onClose, onUnreadChange }) {
   const COLORS = ['#185FA5','#1D9E75','#EF9F27','#534AB7','#CC2222','#5A6070'];
 
   return (
+    <>
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200}} onClick={onClose}>
-      <div style={{width:700,height:'80vh',background:'#fff',borderRadius:12,overflow:'hidden',display:'flex',boxShadow:'0 8px 32px rgba(0,0,0,0.18)'}} onClick={e => e.stopPropagation()}>
+      <div ref={popupRef} style={{width:700,height:'80vh',minWidth:600,minHeight:500,maxWidth:'95vw',maxHeight:'95vh',background:'#fff',borderRadius:12,overflow:'hidden',display:'flex',boxShadow:'0 8px 32px rgba(0,0,0,0.18)',resize:'both'}} onClick={e => e.stopPropagation()}>
         {/* 좌측: 고객 목록 */}
         <div style={{width:280,flexShrink:0,display:'flex',flexDirection:'column',borderRight:'1px solid #EAECF2'}}>
           <div style={{background:'#185FA5',padding:'14px 16px'}}>
@@ -2073,16 +2126,35 @@ function SMSPopup({ onClose, onUnreadChange }) {
                 })}
                 {messages.length === 0 && <div style={{textAlign:'center',color:'#9BA3B2',fontSize:13,padding:'40px 0'}}>문자 내역이 없습니다</div>}
               </div>
-              <div style={{borderTop:'0.5px solid #DDE1EB',padding:'10px 12px',background:'#fff',display:'flex',gap:8,alignItems:'center'}}>
-                <input value={msgInput} onChange={e => setMsgInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder="메시지 입력..." style={{flex:1,padding:'10px 14px',borderRadius:20,border:'1px solid #DDE1EB',fontSize:14,fontFamily:'inherit',outline:'none'}} />
-                <button onClick={handleSend} style={{width:38,height:38,borderRadius:'50%',background:'#185FA5',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14 2L7 9M14 2L9.5 14L7 9M14 2L2 6.5L7 9" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </button>
+              {/* 클립보드 */}
+              <div style={{borderTop:'0.5px solid #DDE1EB',padding:'10px 16px',background:'#F4F6FA',flexShrink:0}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                  <span style={{fontSize:12,fontWeight:600,color:'#5A6070'}}>클립보드</span>
+                  <button onClick={() => setClipModal(true)} style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,background:'#E6F1FB',color:'#0C447C',cursor:'pointer',border:'none',fontFamily:'inherit'}}>수정</button>
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:6}}>
+                  {clipboards.map((c, i) => (
+                    <button key={i} className="cp-clipboard-btn" style={{background: c.color || '#E6F1FB', color: CLIP_TEXT_COLORS[c.color] || '#0C447C'}}
+                      onClick={() => { setMsgInput(c.content); if (textareaRef.current) { textareaRef.current.focus(); setTimeout(autoResizeTextarea, 0); } }}>
+                      {c.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* 입력 영역 */}
+              <div style={{flexShrink:0}}>
+                <div style={{padding:'0 12px 2px',fontSize:11,color:'#CC2222'}}>*Shift+Enter = 텍스트 줄바꿈됩니다</div>
+                <div className="cp-chat-input">
+                  <textarea ref={textareaRef} rows={3} value={msgInput} onChange={e => { setMsgInput(e.target.value); autoResizeTextarea(); }} placeholder="메시지 입력..." onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} />
+                  <button className="btn-primary cp-send-btn" onClick={handleSend}>전송</button>
+                </div>
               </div>
             </>
           )}
         </div>
       </div>
     </div>
+    {clipModal && <ClipboardEditModal clipboards={clipboards} colors={CLIP_COLORS} textColors={CLIP_TEXT_COLORS} onSave={(items) => { saveClipboards(items); setClipModal(false); }} onClose={() => setClipModal(false)} />}
+    </>
   );
 }
