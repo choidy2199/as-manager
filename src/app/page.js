@@ -923,9 +923,11 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     const isOpen = badgeOpen?.id === r.id && badgeOpen?.field === col.key;
     const [bg, c] = getBadgeColor(col.key, dbVal || displayVal);
     const empty = <span className="empty-dot">●</span>;
+    const MW = { status:52, payment_status:52, record_type:56 };
+    const mw = MW[col.key] || 0;
     return (
       <div style={{position:'relative'}} className="badge-expand-panel" onClick={e => e.stopPropagation()}>
-        <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background: displayVal ? bg : '#F4F6FA',color: displayVal ? c : '#9BA3B2',cursor:'pointer',border: isOpen ? `2px solid ${c}` : '2px solid transparent'}}
+        <span style={{display:'inline-flex',justifyContent:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',background: displayVal ? bg : '#F4F6FA',color: displayVal ? c : '#9BA3B2',cursor:'pointer',border: isOpen ? `2px solid ${c}` : '2px solid transparent',...(mw?{minWidth:mw}:{})}}
           onClick={() => setBadgeOpen(isOpen ? null : {id:r.id, field:col.key})}>
           {displayVal ? getBadgeLabel(col, dbVal) : '—'}
         </span>
@@ -935,7 +937,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
               const ov = col.toDb ? col.toDb(o) : o;
               const [obg,oc] = getBadgeColor(col.key, ov);
               const selected = (dbVal === ov) || (displayVal === o);
-              return <div key={o} style={{display:'flex',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer',background:obg,color:oc,marginBottom:2,border: selected ? `2px solid ${oc}` : '2px solid transparent',whiteSpace:'nowrap'}}
+              return <div key={o} style={{display:'flex',justifyContent:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer',background:obg,color:oc,marginBottom:2,border: selected ? `2px solid ${oc}` : '2px solid transparent',whiteSpace:'nowrap',...(mw?{minWidth:mw}:{})}}
                 onClick={() => saveBadge(r.id, col.key, ov)}>{getBadgeLabel(col, ov)}</div>;
             })}
           </div>
@@ -995,7 +997,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     }
     // 확인 컬럼 — 견적 안내 발송 여부
     if (col.key === '_confirm') {
-      if (confirmMap && r.customer_phone && confirmMap[r.customer_phone]) return <span style={{background:'#FCEBEB',color:'#791F1F',padding:'2px 6px',borderRadius:3,fontSize:9,fontWeight:700,whiteSpace:'nowrap'}}>발송완료</span>;
+      if (confirmMap && r.customer_phone && confirmMap[r.customer_phone]) return <span style={{display:'inline-flex',justifyContent:'center',minWidth:44,background:'#FCEBEB',color:'#791F1F',padding:'3px 6px',borderRadius:3,fontSize:9,fontWeight:700,whiteSpace:'nowrap'}}>발송완료</span>;
       return empty;
     }
     // 입고일
