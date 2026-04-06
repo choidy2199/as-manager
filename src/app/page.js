@@ -537,7 +537,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="as-table-wrapper" style={{flex:1,overflow:'auto'}}>
-                  <ProductsTable products={filteredProducts} onReload={() => loadData()} />
+                  <ProductsTable products={filteredProducts} onReload={() => loadData()} setProducts={setProducts} />
                 </div>
               </div>
             </div>
@@ -1785,7 +1785,7 @@ function PartsTable({ parts, onEdit }) {
 
 
 /* ═══ PRODUCTS TABLE — 제품가격 인라인 편집 ═══ */
-function ProductsTable({ products, onReload }) {
+function ProductsTable({ products, onReload, setProducts }) {
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [badgeOpen, setBadgeOpen] = useState(null);
@@ -1824,9 +1824,9 @@ function ProductsTable({ products, onReload }) {
 
   const saveBrand = async (id, brand) => {
     setBadgeOpen(null);
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, brand } : p));
     const { error } = await supabase.from('products').update({ brand, updated_at: new Date().toISOString() }).eq('id', id);
-    if (error) alert('저장 실패: ' + error.message);
-    onReload();
+    if (error) { alert('저장 실패: ' + error.message); onReload(); }
   };
 
   const startEdit = (id, field, value) => {
@@ -1839,17 +1839,18 @@ function ProductsTable({ products, onReload }) {
     const { id, field } = editCell;
     let val = editValue;
     if (field === 'price') val = parseInt(String(val).replace(/,/g, '')) || 0;
+    const saveVal = field === 'price' ? val : (val || null);
     setEditCell(null);
-    const { error } = await supabase.from('products').update({ [field]: val || null, updated_at: new Date().toISOString() }).eq('id', id);
-    if (error) alert('저장 실패: ' + error.message);
-    onReload();
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, [field]: saveVal } : p));
+    const { error } = await supabase.from('products').update({ [field]: saveVal, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) { alert('저장 실패: ' + error.message); onReload(); }
   };
 
   const deleteProduct = async (p) => {
     if (!confirm(`이 제품을 삭제하시겠습니까?\n${p.brand || ''} ${p.model || ''}`)) return;
+    setProducts(prev => prev.filter(x => x.id !== p.id));
     const { error } = await supabase.from('products').delete().eq('id', p.id);
-    if (error) alert('삭제 실패: ' + error.message);
-    onReload();
+    if (error) { alert('삭제 실패: ' + error.message); onReload(); }
   };
 
   const startResize = (colIdx, colKey, e) => {
@@ -1911,7 +1912,7 @@ function ProductsTable({ products, onReload }) {
     }
 
     if (isEditing) {
-      return <input className="as-cell-input" defaultValue={col.key === 'price' ? (val?.toLocaleString('ko-KR') || '') : (val || '')} autoFocus
+      return <input className="as-cell-input" value={editValue} autoFocus
         onChange={e => setEditValue(e.target.value)}
         onBlur={commitEdit}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(); } }} />;
