@@ -41,9 +41,29 @@ export default function Home() {
   const [statusFilter, setStatusFilter] = useState('전체');
   const [brandFilter, setBrandFilter] = useState('전체');
   const [monthFilter] = useState(new Date().toISOString().slice(0,7)); // 택배발송/설정용 유지
-  const [dateFrom, setDateFrom] = useState(today());
-  const [dateTo, setDateTo] = useState(today());
-  const [dateAll, setDateAll] = useState(false);
+  const [dateFilterMode, setDateFilterMode] = useState(() => {
+    if (typeof window === 'undefined') return 'month';
+    return localStorage.getItem('as_date_filter_mode') || 'month';
+  });
+  const [dateFrom, setDateFrom] = useState(() => {
+    if (typeof window === 'undefined') return today();
+    const mode = localStorage.getItem('as_date_filter_mode') || 'month';
+    if (mode === 'today') return today();
+    if (mode === 'all') return '';
+    if (mode === 'custom') return localStorage.getItem('as_date_from') || today();
+    const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-01';
+  });
+  const [dateTo, setDateTo] = useState(() => {
+    if (typeof window === 'undefined') return today();
+    const mode = localStorage.getItem('as_date_filter_mode') || 'month';
+    if (mode === 'all') return '';
+    if (mode === 'custom') return localStorage.getItem('as_date_to') || today();
+    return today();
+  });
+  const [dateAll, setDateAll] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return (localStorage.getItem('as_date_filter_mode') || 'month') === 'all';
+  });
 
   /* ── 새 접수 입력 행 표시 ── */
   const [showNewRow, setShowNewRow] = useState(false);
@@ -339,15 +359,16 @@ export default function Home() {
               <div className="as-filter-pair" style={{marginLeft:'auto'}}>
                 <span className="as-filter-label">기간</span>
                 <div style={{display:'flex',alignItems:'center',height:32,border:'0.5px solid #DDE1EB',borderRadius:6,padding:'0 6px',background:'#fff'}}>
-                  <input type="date" value={dateAll ? '' : dateFrom} onChange={e => { setDateAll(false); setDateFrom(e.target.value); }} style={{fontSize:12,height:28,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
+                  <input type="date" value={dateAll ? '' : dateFrom} onChange={e => { setDateAll(false); setDateFrom(e.target.value); setDateFilterMode('custom'); localStorage.setItem('as_date_filter_mode','custom'); localStorage.setItem('as_date_from',e.target.value); localStorage.setItem('as_date_to',dateTo); }} style={{fontSize:12,height:28,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
                   <span style={{color:'#9BA3B2',padding:'0 4px',fontSize:12}}>~</span>
-                  <input type="date" value={dateAll ? '' : dateTo} onChange={e => { setDateAll(false); setDateTo(e.target.value); }} style={{fontSize:12,height:28,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
+                  <input type="date" value={dateAll ? '' : dateTo} onChange={e => { setDateAll(false); setDateTo(e.target.value); setDateFilterMode('custom'); localStorage.setItem('as_date_filter_mode','custom'); localStorage.setItem('as_date_from',dateFrom); localStorage.setItem('as_date_to',e.target.value); }} style={{fontSize:12,height:28,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
                 </div>
+                {(() => { const active = {height:32,padding:'0 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#185FA5',color:'#fff'}; const inactive = {...active,background:'#E6F1FB',color:'#0C447C'}; return (
                 <div style={{display:'flex',gap:4,marginLeft:4}}>
-                  <button onClick={() => { setDateAll(false); setDateFrom(today()); setDateTo(today()); }} style={{height:32,padding:'0 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#185FA5',color:'#fff'}}>오늘</button>
-                  <button onClick={() => { setDateAll(false); const d=new Date(); setDateFrom(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'); setDateTo(today()); }} style={{height:32,padding:'0 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#E6F1FB',color:'#0C447C'}}>이번 달</button>
-                  <button onClick={() => { setDateAll(true); }} style={{height:32,padding:'0 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#F4F6FA',color:'#5A6070'}}>전체</button>
-                </div>
+                  <button onClick={() => { setDateAll(false); setDateFrom(today()); setDateTo(today()); setDateFilterMode('today'); localStorage.setItem('as_date_filter_mode','today'); }} style={dateFilterMode==='today'?active:inactive}>오늘</button>
+                  <button onClick={() => { setDateAll(false); const d=new Date(); setDateFrom(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'); setDateTo(today()); setDateFilterMode('month'); localStorage.setItem('as_date_filter_mode','month'); }} style={dateFilterMode==='month'?active:inactive}>이번 달</button>
+                  <button onClick={() => { setDateAll(true); setDateFilterMode('all'); localStorage.setItem('as_date_filter_mode','all'); }} style={dateFilterMode==='all'?active:inactive}>전체</button>
+                </div>); })()}
               </div>
             </div>
 
