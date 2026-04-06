@@ -403,6 +403,7 @@ export default function Home() {
                   onHideNewRow={() => setShowNewRow(false)}
                   deleteMode={deleteMode}
                   technicians={technicians}
+                  products={products}
                   onOpenCustomer={(name, phone, company) => setCustomerPopup({ name, phone, company })}
                   onAddShip={async (r) => {
                     await addShip({ shipDate: today(), carrier: null, trackingNo: null, senderName: '선불', receiverName: r.customer_name || r.company_name || '', receiverPhone: r.customer_phone, receiverAddress: null, contents: r.model || null, memo: null, asRecordId: r.id });
@@ -596,7 +597,7 @@ export default function Home() {
 /* ═══════════════════════════════════════════════
    AS 테이블 — 인라인 편집
    ═══════════════════════════════════════════════ */
-function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip, deleteMode, technicians }) {
+function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip, deleteMode, technicians, products }) {
   const [editCell, setEditCell] = useState(null); // {id, field} — 텍스트/숫자/날짜용
   const [editValue, setEditValue] = useState('');
   const [badgeOpen, setBadgeOpen] = useState(null); // {id, field} — 뱃지 펼침용
@@ -916,6 +917,8 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   const [newBadgeOpen, setNewBadgeOpen] = useState(null); // field name
   const [memoPopup, setMemoPopup] = useState(null); // {id, field, value, title, isNew}
   const [memoValue, setMemoValue] = useState('');
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
+  const [productPickerSearch, setProductPickerSearch] = useState('');
 
   const openMemoPopup = (id, field, currentVal, title, isNew = false) => {
     setMemoPopup({ id, field, title, isNew });
@@ -960,7 +963,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
                 const ov = col.toDb ? col.toDb(o) : o;
                 const [obg,oc] = getBadgeColor(col.key, ov);
                 return <div key={o} style={{padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer',background:obg,color:oc,marginBottom:2,whiteSpace:'nowrap',border:dbVal===ov?`2px solid ${oc}`:'2px solid transparent'}}
-                  onClick={() => { setNewRow(p => { const next = {...p, [col.key]: ov}; if (col.key === 'intake_carrier' && ov === '방문') next.shipping_fee = '0'; if (col.key === 'release_carrier' && ov === '방문') { next.release_date = today(); next.tracking_number = '방문'; } return next; }); setNewBadgeOpen(null); }}>{getBadgeLabel(col, ov)}</div>;
+                  onClick={() => { setNewRow(p => { const next = {...p, [col.key]: ov}; if (col.key === 'intake_carrier' && ov === '방문') next.shipping_fee = '0'; if (col.key === 'release_carrier' && ov === '방문') { next.release_date = today(); next.tracking_number = '방문'; } return next; }); setNewBadgeOpen(null); if (col.key === 'record_type' && ov === 'product_sale') { setProductPickerSearch(''); setProductPickerOpen(true); } }}>{getBadgeLabel(col, ov)}</div>;
               })}
             </div>
           )}
@@ -1083,6 +1086,52 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
           <div style={{display:'flex',justifyContent:'flex-end',gap:8,padding:'12px 16px',borderTop:'1px solid #DDE1EB'}}>
             <button onClick={() => setMemoPopup(null)} style={{background:'#fff',color:'#5A6070',border:'0.5px solid #DDE1EB',borderRadius:6,padding:'6px 16px',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>취소</button>
             <button onClick={saveMemoPopup} style={{background:'#185FA5',color:'#fff',border:'none',borderRadius:6,padding:'6px 16px',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>저장</button>
+          </div>
+        </div>
+      </div>
+    )}
+    {/* 제품 선택 팝업 */}
+    {productPickerOpen && (
+      <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}>
+        <div style={{background:'#fff',borderRadius:12,width:500,maxHeight:'80vh',overflow:'hidden',boxShadow:'0 20px 60px rgba(0,0,0,0.15)',display:'flex',flexDirection:'column'}}>
+          <div style={{background:'#1A1D23',padding:'14px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+            <span style={{fontSize:15,fontWeight:600,color:'#fff'}}>제품 선택</span>
+            <button onClick={() => setProductPickerOpen(false)} style={{width:32,height:32,borderRadius:'50%',background:'rgba(255,255,255,0.2)',color:'#fff',border:'none',fontSize:18,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+          </div>
+          <div style={{padding:'8px 12px',borderBottom:'1px solid #EAECF2',flexShrink:0}}>
+            <input className="input" style={{width:'100%',height:36,fontSize:13,padding:'8px 12px',borderRadius:6}} placeholder="브랜드, 모델넘버 검색..." value={productPickerSearch} onChange={e => setProductPickerSearch(e.target.value)} autoComplete="off" autoFocus />
+          </div>
+          <div style={{flex:1,overflowY:'auto'}}>
+            <table style={{width:'100%',borderCollapse:'collapse'}}>
+              <thead><tr style={{background:'#EAECF2'}}>
+                <th style={{padding:'8px 10px',fontSize:12,fontWeight:600,color:'#5A6070',textAlign:'center'}}>브랜드</th>
+                <th style={{padding:'8px 10px',fontSize:12,fontWeight:600,color:'#5A6070',textAlign:'left'}}>모델넘버</th>
+                <th style={{padding:'8px 10px',fontSize:12,fontWeight:600,color:'#5A6070',textAlign:'right'}}>제품가격</th>
+              </tr></thead>
+              <tbody>
+                {(() => {
+                  const q = productPickerSearch.toLowerCase();
+                  const filtered = (products || []).filter(p => !q || [p.brand, p.model].some(f => f?.toLowerCase().includes(q)));
+                  if (filtered.length === 0) return <tr><td colSpan={3} style={{padding:'40px 0',textAlign:'center',fontSize:13,color:'#9BA3B2'}}>등록된 제품이 없습니다.<br/>제품/부속가격 탭에서 먼저 등록해주세요.</td></tr>;
+                  const BC = {'콜라보':['#EEEDFE','#3C3489'],'마끼다':['#FAEEDA','#412402'],'디월트':['#E1F5EE','#085041'],'프레레':['#E6F1FB','#0C447C'],'기타':['#F4F6FA','#5A6070']};
+                  return filtered.map(p => {
+                    const [bg,c] = BC[p.brand] || ['#F4F6FA','#5A6070'];
+                    return (
+                      <tr key={p.id} style={{cursor:'pointer',borderBottom:'1px solid #F0F2F7'}}
+                        onMouseOver={e => e.currentTarget.style.background='#F4F6FA'} onMouseOut={e => e.currentTarget.style.background='transparent'}
+                        onClick={() => {
+                          setNewRow(prev => ({...prev, brand: '콜라보', model: p.model || '', status: '완료', repair_cost: p.price || 0 }));
+                          setProductPickerOpen(false);
+                        }}>
+                        <td style={{padding:'10px',textAlign:'center'}}><span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,background:bg,color:c}}>{p.brand || '-'}</span></td>
+                        <td style={{padding:'10px',fontSize:13,color:'#1A1D23'}}>{p.model || <span className="empty-dot">●</span>}</td>
+                        <td style={{padding:'10px',textAlign:'right',fontSize:13,fontWeight:700,color:'#185FA5'}}>{p.price?.toLocaleString('ko-KR') || '0'}</td>
+                      </tr>
+                    );
+                  });
+                })()}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
