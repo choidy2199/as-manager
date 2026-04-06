@@ -647,15 +647,13 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   };
 
   const handleNewRowSave = async () => {
-    if (!newRow.receipt_date) return;
     const row = { ...newRow };
     row.repair_cost = parseInt(String(row.repair_cost).replace(/,/g,'')) || 0;
     Object.keys(row).forEach(k => { if (row[k] === '') row[k] = null; });
+    // 필수값 강제 설정
     row.receipt_date = row.receipt_date || today();
     row.record_type = row.record_type || 'as_repair';
     row.status = row.status || '접수';
-    // Supabase 테이블에 없는 필드 제거
-    delete row.release_memo;
     await onAddNew(row);
     setNewRow(emptyRow());
     if (onHideNewRow) onHideNewRow();
