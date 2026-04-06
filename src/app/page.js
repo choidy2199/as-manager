@@ -235,8 +235,10 @@ export default function Home() {
   };
 
   const deleteAS = async (id) => {
-    await supabase.from('as_records').delete().eq('id', id);
+    console.log('deleteAS called:', id);
     setAsRecords(prev => prev.filter(r => r.id !== id));
+    const { error } = await supabase.from('as_records').delete().eq('id', id);
+    if (error) { console.error('삭제 실패:', error); alert('삭제 실패: ' + error.message); }
     loadData();
   };
 
@@ -1172,7 +1174,8 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
                 >
                   {deleteMode && c.key === 'record_type' && (
                     <button style={{position:'absolute',left:2,top:'50%',transform:'translateY(-50%)',zIndex:5,background:'#CC2222',color:'#FFFFFF',padding:'1px 4px',borderRadius:3,fontSize:9,fontWeight:700,border:'none',cursor:'pointer',lineHeight:1,fontFamily:'inherit'}}
-                      onClick={e => { e.stopPropagation(); const name = r.customer_name || r.company_name || '미입력'; const model = r.model || '미입력'; const symptom = r.symptom ? ` / 증상: ${r.symptom}` : ''; if (confirm(`정말 삭제하시겠습니까?\n고객: ${name} / 모델: ${model}${symptom}`)) onDelete(r.id); }}>X</button>
+                      onMouseDown={e => { e.stopPropagation(); e.preventDefault(); }}
+                      onClick={e => { e.stopPropagation(); e.preventDefault(); e.nativeEvent?.stopImmediatePropagation?.(); const name = r.customer_name || r.company_name || '미입력'; const model = r.model || '미입력'; const symptom = r.symptom ? ` / 증상: ${r.symptom}` : ''; if (confirm(`정말 삭제하시겠습니까?\n고객: ${name} / 모델: ${model}${symptom}`)) { onDelete(r.id); } }}>X</button>
                   )}
                   {renderCell(r, c)}
                 </td>);
