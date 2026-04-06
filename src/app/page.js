@@ -1260,6 +1260,15 @@ function CustomerPopup({ customer, onClose }) {
     return (now - releaseDate) / (1000 * 60 * 60 * 24 * 30) <= months;
   };
 
+  const textareaRef = useRef(null);
+
+  const autoResizeTextarea = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  };
+
   const handleSend = async () => {
     if (!msgInput.trim() || !phone) return;
     try {
@@ -1271,6 +1280,7 @@ function CustomerPopup({ customer, onClose }) {
     const { data } = await supabase.from('sms_messages').insert(msg).select();
     if (data) setSmsMessages(prev => [...prev, ...data]);
     setMsgInput('');
+    if (textareaRef.current) { textareaRef.current.style.height = '34px'; }
   };
 
   const fmtDateFull = (d) => {
@@ -1354,7 +1364,7 @@ function CustomerPopup({ customer, onClose }) {
               })}
             </div>
             <div className="cp-chat-input">
-              <input className="input" value={msgInput} onChange={e => setMsgInput(e.target.value)} placeholder="문자 입력..." onKeyDown={e => e.key === 'Enter' && handleSend()} style={{flex:1,height:34,fontSize:12}} />
+              <textarea ref={textareaRef} rows={1} value={msgInput} onChange={e => { setMsgInput(e.target.value); autoResizeTextarea(); }} placeholder="문자 입력..." onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} />
               <button className="btn-primary" onClick={handleSend} style={{padding:'0 14px',fontSize:12,fontWeight:600,whiteSpace:'nowrap'}}>전송</button>
             </div>
           </div>
