@@ -927,7 +927,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     const isOpen = badgeOpen?.id === r.id && badgeOpen?.field === col.key;
     const [bg, c] = getBadgeColor(col.key, dbVal || displayVal);
     const empty = <span className="empty-dot">●</span>;
-    const MW = { status:52, payment_status:52, record_type:56 };
+    const MW = { status:56, payment_status:56, record_type:60, brand:44, model:56, intake_carrier:56, release_carrier:56, invoice_type:40, technician:44 };
     const mw = MW[col.key] || 0;
     return (
       <div className="badge-expand-panel" onClick={e => e.stopPropagation()}>
@@ -985,42 +985,42 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     }
 
     // Display
-    const B = (bg, color, text, extra) => <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color,...(extra||{})}}>{text}</span>;
+    const B = (bg, color, text, extra) => <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',background:bg,color,...(extra||{})}}>{text}</span>;
     const empty = <span className="empty-dot">●</span>;
 
-    // 읽기전용 셀 (출고 그룹 — 택배발송에서 자동 입력)
+    // 읽기전용 셀 (출고 그룹)
     if (col.type === 'readonly') {
-      if (!val) return <span className="empty-dot">●</span>;
-      if (col.key === 'release_date') return B('#E8EBF0','#3A3F4B',fmtDate(val));
-      if (col.key === 'tracking_number') return B('#E8EBF0','#3A3F4B',val,{fontFamily:'monospace',fontSize:10});
-      return B('#E8EBF0','#3A3F4B',val);
+      if (!val) return empty;
+      if (col.key === 'release_date') return <span style={{fontSize:12,fontWeight:500,color:'#5A6070'}}>{fmtDate(val)}</span>;
+      if (col.key === 'tracking_number') return <span style={{fontSize:13,fontWeight:400,color:'#1A1D23'}}>{val}</span>;
+      return <span style={{fontSize:13,fontWeight:400,color:'#1A1D23'}}>{val}</span>;
     }
     // 문자 아이콘 컬럼
     if (col.key === '_msg') {
       return <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{cursor:'pointer',opacity:0.7,display:'block',margin:'0 auto'}} onClick={e => { e.stopPropagation(); onOpenCustomer && onOpenCustomer(r.customer_name, r.customer_phone, r.company_name); }} onMouseOver={e => e.currentTarget.style.opacity='1'} onMouseOut={e => e.currentTarget.style.opacity='0.7'}><path d="M2 2.5C2 1.7 2.7 1 3.5 1h7C11.3 1 12 1.7 12 2.5v5c0 .8-.7 1.5-1.5 1.5H8l-2.5 2.5V9H3.5C2.7 9 2 8.3 2 7.5v-5z" fill="#185FA5"/></svg>;
     }
-    // 확인 컬럼 — 견적 안내 발송 여부
+    // 확인 컬럼
     if (col.key === '_confirm') {
-      if (confirmMap && r.customer_phone && confirmMap[r.customer_phone]) return <span style={{display:'inline-flex',justifyContent:'center',minWidth:44,background:'#FCEBEB',color:'#791F1F',padding:'3px 6px',borderRadius:3,fontSize:9,fontWeight:700,whiteSpace:'nowrap'}}>발송완료</span>;
+      if (confirmMap && r.customer_phone && confirmMap[r.customer_phone]) return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',minWidth:44,background:'#FCEBEB',color:'#791F1F',padding:'3px 6px',borderRadius:3,fontSize:9,fontWeight:700,whiteSpace:'nowrap'}}>발송완료</span>;
       return empty;
     }
     // 입고일
-    if (col.type === 'date') return val ? B('#E8EBF0','#3A3F4B',fmtDate(val)) : empty;
+    if (col.type === 'date') return val ? <span style={{fontSize:12,fontWeight:500,color:'#5A6070'}}>{fmtDate(val)}</span> : empty;
     // 택배 버튼
     if (col.key === '_ship_btn') {
-      if (r.release_date || r.tracking_number) return empty; // 이미 출고 완료
-      if (r.status !== '완료' && r.status !== '수리X') return empty; // 완료 또는 수리X만
-      if (r.payment_status !== '완료') return empty; // 입금 미완료
-      return <button style={{background:'#CC2222',color:'#FFFFFF',border:'none',borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'inherit'}} onClick={e => { e.stopPropagation(); onAddShip && onAddShip(r); }}>발송</button>;
+      if (r.release_date || r.tracking_number) return empty;
+      if (r.status !== '완료' && r.status !== '수리X') return empty;
+      if (r.payment_status !== '완료') return empty;
+      return <button style={{background:'#CC2222',color:'#FFFFFF',border:'none',borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}} onClick={e => { e.stopPropagation(); onAddShip && onAddShip(r); }}>발송</button>;
     }
     // AS비용
-    if (col.key === 'repair_cost') return val ? <span style={{color:'#185FA5',fontWeight:700}}>{fmt(val)}</span> : empty;
-    // 운임 — 방문이면 뱃지
+    if (col.key === 'repair_cost') return val ? <span style={{fontSize:13,fontWeight:700,color:'#185FA5'}}>{fmt(val)}</span> : empty;
+    // 운임
     if (col.key === 'shipping_fee') {
-      if (r.intake_carrier === '방문') return <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,background:'#F4F6FA',color:'#5A6070',whiteSpace:'nowrap'}}>방문</span>;
-      return val || empty;
+      if (r.intake_carrier === '방문') return B('#F4F6FA','#5A6070','방문',{minWidth:56});
+      return val ? <span style={{fontSize:13,fontWeight:700,color:'#185FA5'}}>{val}</span> : empty;
     }
-    // 거래처/성함 — 인라인 편집 (단일 input, "거래처 / 성함" 형태)
+    // 거래처/성함
     if (col.key === 'company_name') {
       if (isEditing) {
         return (
@@ -1032,17 +1032,17 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       }
       const p = [r.company_name, r.customer_name].filter(Boolean);
       if (p.length === 0) return empty;
-      return <span style={{fontSize:12,color:'#1A1D23',cursor:'text'}}>{p.join(' / ')}</span>;
+      return <span style={{fontSize:13,fontWeight:400,color:'#1A1D23',cursor:'text'}}>{p.join(' / ')}</span>;
     }
     // 연락처
-    if (col.key === 'customer_phone') return val ? <span style={{fontSize:12,color:'#5A6070'}}>{val}</span> : empty;
+    if (col.key === 'customer_phone') return val ? <span style={{fontSize:13,fontWeight:400,color:'#1A1D23'}}>{val}</span> : empty;
     // 처리결과 — 쉼표 기준 뱃지 분리
     if (col.key === 'repair_result') {
       if (!val) return empty;
       const parts = String(val).split(',').map(s => s.trim()).filter(Boolean);
-      return <span style={{display:'inline-flex',gap:4,flexWrap:'wrap'}}>{parts.map((p, i) => <span key={i} style={{display:'inline-flex',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:600,background:'#E1F5EE',color:'#085041',whiteSpace:'nowrap'}}>{p}</span>)}</span>;
+      return <span style={{display:'flex',flexWrap:'wrap',gap:3,justifyContent:'center'}}>{parts.map((p, i) => <span key={i} style={{display:'inline-flex',padding:'2px 6px',borderRadius:4,fontSize:11,fontWeight:600,background:'#E1F5EE',color:'#085041',whiteSpace:'nowrap'}}>{p}</span>)}</span>;
     }
-    return val || empty;
+    return val ? <span style={{fontSize:13,fontWeight:400,color:'#1A1D23'}}>{val}</span> : empty;
   };
 
   const [newBadgeOpen, setNewBadgeOpen] = useState(null); // field name
