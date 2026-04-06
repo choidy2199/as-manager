@@ -40,7 +40,10 @@ export default function Home() {
   const [typeFilter, setTypeFilter] = useState('전체');
   const [statusFilter, setStatusFilter] = useState('전체');
   const [brandFilter, setBrandFilter] = useState('전체');
-  const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0,7));
+  const [monthFilter] = useState(new Date().toISOString().slice(0,7)); // 택배발송/설정용 유지
+  const [dateFrom, setDateFrom] = useState(today());
+  const [dateTo, setDateTo] = useState(today());
+  const [dateAll, setDateAll] = useState(false);
 
   /* ── 새 접수 입력 행 표시 ── */
   const [showNewRow, setShowNewRow] = useState(false);
@@ -106,14 +109,11 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
-  /* ── Data Load (월별 최적화, 검색어 있으면 전체) ── */
-  const loadData = useCallback(async (month, fullSearch) => {
-    const m = month || monthFilter;
+  /* ── Data Load (날짜 범위 기반, 검색어 있으면 전체) ── */
+  const loadData = useCallback(async (unused, fullSearch) => {
     let asQuery = supabase.from('as_records').select('*').order('receipt_date', { ascending: false });
-    if (!fullSearch) {
-      const [y, mo] = m.split('-').map(Number);
-      const lastDay = new Date(y, mo, 0).getDate();
-      asQuery = asQuery.gte('receipt_date', m + '-01').lte('receipt_date', m + '-' + String(lastDay).padStart(2, '0'));
+    if (!fullSearch && !dateAll && dateFrom && dateTo) {
+      asQuery = asQuery.gte('receipt_date', dateFrom).lte('receipt_date', dateTo);
     }
     const [asRes, shipRes, partsRes, productsRes, techRes] = await Promise.all([
       asQuery,
@@ -128,19 +128,19 @@ export default function Home() {
     if (productsRes.data) setProducts(productsRes.data);
     if (techRes.data) setTechnicians(techRes.data);
     if (loading) setLoading(false);
-  }, [monthFilter]);
+  }, [dateFrom, dateTo, dateAll]);
 
-  useEffect(() => { if (user) loadData(monthFilter, debouncedSearch.length >= 2); }, [user, monthFilter, loadData, debouncedSearch]);
+  useEffect(() => { if (user) loadData(null, debouncedSearch.length >= 2); }, [user, dateFrom, dateTo, dateAll, loadData, debouncedSearch]);
 
   /* ── Realtime ── */
   useEffect(() => {
     if (!user) return;
     const ch = supabase.channel('db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'as_records' }, () => loadData(monthFilter))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ship_records' }, () => loadData(monthFilter))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'as_records' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ship_records' }, () => loadData())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [user, loadData, monthFilter]);
+  }, [user, loadData]);
 
   /* ── AS inline save ── */
   const saveASField = async (id, field, value) => {
@@ -207,13 +207,12 @@ export default function Home() {
     const mt = typeFilter === '전체' || dbToRecordType(r.record_type) === typeFilter;
     const mst = statusFilter === '전체' || r.status === statusFilter;
     const mb = brandFilter === '전체' || r.brand === brandFilter;
-    const mm = search.length >= 2 || !monthFilter || r.receipt_date?.startsWith(monthFilter);
     const mk = !kpiFilter || (KPI_STATUS_MAP[kpiFilter] || []).includes(r.status);
-    return ms && mt && mst && mb && mm && mk;
+    return ms && mt && mst && mb && mk;
   });
 
   /* ── KPI ── */
-  const monthAS = asRecords.filter(r => r.receipt_date?.startsWith(monthFilter));
+  const monthAS = asRecords; // 이미 날짜 범위로 필터된 데이터
   const kpiTotal = monthAS.length;
   const kpiReception = monthAS.filter(r => ['접수','진단중'].includes(r.status)).length;
   const kpiRepairing = monthAS.filter(r => ['수리중','부품대기'].includes(r.status)).length;
@@ -243,9 +242,13 @@ export default function Home() {
   }
   if (loading) return <div className="loading"><div style={{ textAlign:'center' }}><div style={{ fontSize:20, fontWeight:700, color:'var(--tl-primary)', marginBottom:8 }}>AS Manager</div><div>데이터 로딩 중...</div></div></div>;
 
-  const monthLabel = (() => {
-    const [y,m] = monthFilter.split('-');
-    return `${y}년 ${parseInt(m)}월`;
+  const dateLabel = (() => {
+    if (dateAll) return '전체 기간';
+    const fmt2 = (d) => { const dt = new Date(d + 'T00:00:00'); return `${dt.getFullYear()}년 ${dt.getMonth()+1}월 ${dt.getDate()}일`; };
+    if (dateFrom === dateTo) return fmt2(dateFrom);
+    const f = new Date(dateFrom + 'T00:00:00'); const t = new Date(dateTo + 'T00:00:00');
+    if (f.getFullYear() === t.getFullYear() && f.getMonth() === t.getMonth()) return `${f.getFullYear()}년 ${f.getMonth()+1}월 ${f.getDate()}일 ~ ${t.getDate()}일`;
+    return `${fmt2(dateFrom)} ~ ${fmt2(dateTo)}`;
   })();
 
   return (
@@ -333,15 +336,25 @@ export default function Home() {
                   <option>전체</option>{STATUS_LIST.map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
-              <div className="as-filter-pair"><span className="as-filter-label">기간</span>
-                <input className="input as-filter-month" type="month" value={monthFilter} onChange={e => setMonthFilter(e.target.value)} />
+              <div className="as-filter-pair" style={{marginLeft:'auto'}}>
+                <span className="as-filter-label">기간</span>
+                <div style={{display:'flex',alignItems:'center',border:'0.5px solid #DDE1EB',borderRadius:6,padding:'2px 4px',background:'#fff'}}>
+                  <input type="date" value={dateAll ? '' : dateFrom} onChange={e => { setDateAll(false); setDateFrom(e.target.value); }} style={{fontSize:12,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
+                  <span style={{color:'#9BA3B2',padding:'0 4px',fontSize:12}}>~</span>
+                  <input type="date" value={dateAll ? '' : dateTo} onChange={e => { setDateAll(false); setDateTo(e.target.value); }} style={{fontSize:12,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
+                </div>
+                <div style={{display:'flex',gap:4,marginLeft:4}}>
+                  <button onClick={() => { setDateAll(false); setDateFrom(today()); setDateTo(today()); }} style={{padding:'5px 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#185FA5',color:'#fff'}}>오늘</button>
+                  <button onClick={() => { setDateAll(false); const d=new Date(); setDateFrom(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'); setDateTo(today()); }} style={{padding:'5px 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#E6F1FB',color:'#0C447C'}}>이번 달</button>
+                  <button onClick={() => { setDateAll(true); }} style={{padding:'5px 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#F4F6FA',color:'#5A6070'}}>전체</button>
+                </div>
               </div>
             </div>
 
             {/* 페이지 요약 + 버튼 */}
             <div className="page-header">
               <div className="page-header-summary">
-                <span style={{fontSize:12,color:'var(--tl-text-hint)'}}>{monthLabel}</span>
+                <span style={{fontSize:12,color:'var(--tl-text-hint)'}}>{dateLabel}</span>
                 <span style={{fontSize:13,fontWeight:700,color:'var(--tl-text)',marginLeft:4}}>— {filteredAS.length}건</span>
               </div>
               <div style={{display:'flex',gap:8}}>
@@ -385,7 +398,7 @@ export default function Home() {
                   onSaveField={saveASField}
                   onAddNew={addNewAS}
                   onDelete={deleteAS}
-                  onReload={() => loadData(monthFilter)}
+                  onReload={() => loadData()}
                   showNewRow={showNewRow}
                   onHideNewRow={() => setShowNewRow(false)}
                   deleteMode={deleteMode}
@@ -452,7 +465,7 @@ export default function Home() {
                 <ShipTable
                   records={filtered}
                   asRecords={asRecords}
-                  onSave={async (id, field, value) => { const {error} = await supabase.from('ship_records').update({[field]:value}).eq('id',id); if(error) { console.error('Ship save error:', error); alert('저장 실패: '+error.message); } loadData(monthFilter); }}
+                  onSave={async (id, field, value) => { const {error} = await supabase.from('ship_records').update({[field]:value}).eq('id',id); if(error) { console.error('Ship save error:', error); alert('저장 실패: '+error.message); } loadData(); }}
                   onAdd={addShip}
                   onDelete={deleteShip}
                   showNewRow={showNewShipRow}
@@ -524,7 +537,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="as-table-wrapper" style={{flex:1,overflow:'auto'}}>
-                  <ProductsTable products={filteredProducts} onReload={() => loadData(monthFilter)} />
+                  <ProductsTable products={filteredProducts} onReload={() => loadData()} />
                 </div>
               </div>
             </div>
@@ -543,12 +556,12 @@ export default function Home() {
                 const { error } = await supabase.from('parts').update(d).eq('id', modal.data.id);
                 if (error) alert('수정 실패: ' + error.message);
               }
-              setModal(null); loadData(monthFilter);
+              setModal(null); loadData();
             }}
             onDelete={modal.type === 'part-edit' ? async () => {
               if (!confirm('이 부품을 삭제하시겠습니까?')) return;
               await supabase.from('parts').delete().eq('id', modal.data.id);
-              setModal(null); loadData(monthFilter);
+              setModal(null); loadData();
             } : null}
             onClose={() => setModal(null)}
           />
