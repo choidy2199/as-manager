@@ -139,7 +139,7 @@ export default function Home() {
       asQuery,
       supabase.from('ship_records').select('*').order('ship_date', { ascending: false }).limit(100),
       supabase.from('parts').select('*').order('code'),
-      supabase.from('products').select('*').order('created_at', { ascending: false }),
+      supabase.from('products').select('*').order('sort_order', { ascending: true }),
       supabase.from('technicians').select('*').order('created_at'),
     ]);
     if (asRes.data) setAsRecords(asRes.data);
@@ -552,9 +552,10 @@ export default function Home() {
                   <div style={{display:'flex',alignItems:'center',gap:10}}>
                     <span style={{fontSize:12,color:'rgba(255,255,255,0.5)'}}>총 {filteredProducts.length}건</span>
                     <button className="btn-primary" style={{fontSize:11,padding:'4px 12px'}} onClick={async () => {
-                      const { data, error } = await supabase.from('products').insert({ brand: '', model: '', price: 0 }).select().single();
+                      const maxOrder = products.reduce((m, p) => Math.max(m, p.sort_order || 0), 0);
+                      const { data, error } = await supabase.from('products').insert({ brand: '', model: '', price: 0, sort_order: maxOrder + 1 }).select().single();
                       if (error) { alert('추가 실패: ' + error.message); return; }
-                      setProducts(prev => [data, ...prev]);
+                      setProducts(prev => [...prev, data]);
                     }}>+ 제품 추가</button>
                   </div>
                 </div>
@@ -1063,8 +1064,8 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         {records.map((r, rowIdx) => (
           <tr key={r.id} className="as-data-row" style={rowIdx % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
             {deleteMode && (
-              <td style={{textAlign:'center',cursor:'pointer',padding:'2px'}} onClick={e => { e.stopPropagation(); if (confirm(`이 AS 건을 삭제하시겠습니까?\n고객: ${r.customer_name||'-'} / 모델: ${r.model||'-'}`)) onDelete(r.id); }}>
-                <span style={{color:'#CC2222',fontSize:14,fontWeight:700,display:'inline-flex',width:22,height:22,alignItems:'center',justifyContent:'center',borderRadius:4}} onMouseOver={e => e.currentTarget.style.background='#FCEBEB'} onMouseOut={e => e.currentTarget.style.background='transparent'}>✕</span>
+              <td style={{textAlign:'center',padding:'2px'}}>
+                <button style={{background:'#FCEBEB',color:'#791F1F',padding:'2px 6px',borderRadius:4,fontSize:10,fontWeight:600,border:'none',cursor:'pointer',lineHeight:1,fontFamily:'inherit'}} onClick={e => { e.stopPropagation(); if (confirm(`이 AS 건을 삭제하시겠습니까?\n고객: ${r.customer_name||'-'} / 모델: ${r.model||'-'}`)) onDelete(r.id); }}>X</button>
               </td>
             )}
             {COLS.map(c => {
@@ -1871,9 +1872,9 @@ function ProductsTable({ products, onReload, setProducts }) {
     { key: 'model', label: '모델넘버', w: 180 },
     { key: 'price', label: '제품가격', w: 120 },
     { key: 'memo', label: '비고', w: 140 },
-    { key: '_manage', label: '관리', w: 110 },
+    { key: '_manage', label: '관리', w: 160 },
   ];
-  const DEFAULT_W = { brand: 100, model: 180, price: 120, memo: 140, _manage: 110 };
+  const DEFAULT_W = { brand: 100, model: 180, price: 120, memo: 140, _manage: 160 };
   const getW = (k) => savedWidthsRef.current[k] || DEFAULT_W[k] || 80;
 
   const BRAND_COLORS = {
@@ -1923,6 +1924,26 @@ function ProductsTable({ products, onReload, setProducts }) {
     if (error) { alert('삭제 실패: ' + error.message); onReload(); }
   };
 
+  const moveProduct = async (idx, dir) => {
+    const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= products.length) return;
+    const a = products[idx], b = products[swapIdx];
+    const aOrder = a.sort_order, bOrder = b.sort_order;
+    // 로컬 state 즉시 갱신
+    setProducts(prev => {
+      const next = [...prev];
+      next[idx] = { ...a, sort_order: bOrder };
+      next[swapIdx] = { ...b, sort_order: aOrder };
+      next.sort((x, y) => (x.sort_order || 0) - (y.sort_order || 0));
+      return next;
+    });
+    // Supabase 저장
+    await Promise.all([
+      supabase.from('products').update({ sort_order: bOrder }).eq('id', a.id),
+      supabase.from('products').update({ sort_order: aOrder }).eq('id', b.id),
+    ]);
+  };
+
   const startResize = (colIdx, colKey, e) => {
     e.preventDefault(); e.stopPropagation();
     const table = tableRef.current; if (!table) return;
@@ -1944,7 +1965,7 @@ function ProductsTable({ products, onReload, setProducts }) {
 
   const empty = <span className="empty-dot">●</span>;
 
-  const renderCell = (p, col) => {
+  const renderCell = (p, col, rowIdx) => {
     const val = p[col.key];
     const isEditing = editCell?.id === p.id && editCell?.field === col.key;
 
@@ -1971,8 +1992,14 @@ function ProductsTable({ products, onReload, setProducts }) {
     }
 
     if (col.key === '_manage') {
+      const isFirst = rowIdx === 0;
+      const isLast = rowIdx === products.length - 1;
       return (
-        <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
+          <button style={{ background: 'none', border: 'none', fontSize: 12, color: isFirst ? '#DDE1EB' : '#5A6070', cursor: isFirst ? 'default' : 'pointer', padding: '2px 4px', fontFamily: 'inherit' }}
+            onClick={e => { e.stopPropagation(); if (!isFirst) moveProduct(rowIdx, -1); }}>▲</button>
+          <button style={{ background: 'none', border: 'none', fontSize: 12, color: isLast ? '#DDE1EB' : '#5A6070', cursor: isLast ? 'default' : 'pointer', padding: '2px 4px', fontFamily: 'inherit' }}
+            onClick={e => { e.stopPropagation(); if (!isLast) moveProduct(rowIdx, 1); }}>▼</button>
           <span style={{ display: 'inline-flex', padding: '3px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: '#E6F1FB', color: '#0C447C', cursor: 'pointer', whiteSpace: 'nowrap' }}
             onClick={e => { e.stopPropagation(); startEdit(p.id, 'model', p.model || ''); }}>수정</span>
           <span style={{ display: 'inline-flex', padding: '3px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: '#FCEBEB', color: '#791F1F', cursor: 'pointer', whiteSpace: 'nowrap' }}
@@ -2012,7 +2039,7 @@ function ProductsTable({ products, onReload, setProducts }) {
                   if (c.key === 'brand' || c.key === '_manage') return;
                   startEdit(p.id, c.key, c.key === 'price' ? (p[c.key]?.toString() || '') : (p[c.key] || ''));
                 }}>
-                {renderCell(p, c)}
+                {renderCell(p, c, i)}
               </td>
             ))}
           </tr>
