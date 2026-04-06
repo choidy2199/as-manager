@@ -906,7 +906,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   ];
 
   // 뱃지 색상 매핑
-  const CARRIER_COLORS = { '롯데택배':['#185FA5','#FFFFFF'],'CJ대한통운':['#1D9E75','#FFFFFF'],'한진택배':['#534AB7','#FFFFFF'],'경동택배':['#854F0B','#FFFFFF'],'대신화물':['#D85A30','#FFFFFF'],'로젠택배':['#CC2222','#FFFFFF'],'우체국':['#EF9F27','#FFFFFF'],'방문':['#5A6070','#FFFFFF'],'용차':['#5A6070','#FFFFFF'],'퀵':['#5A6070','#FFFFFF'] };
+  const CARRIER_COLORS = { '롯데택배':['#185FA5','#FFFFFF'],'CJ대한통운':['#1D9E75','#FFFFFF'],'한진택배':['#534AB7','#FFFFFF'],'경동택배':['#854F0B','#FFFFFF'],'대신화물':['#D85A30','#FFFFFF'],'로젠택배':['#CC2222','#FFFFFF'],'우체국':['#EF9F27','#FFFFFF'],'방문':['#5A6070','#FFFFFF'],'용차':['#5A6070','#FFFFFF'],'퀵':['#5A6070','#FFFFFF'],'매장':['#5A6070','#FFFFFF'] };
   const BADGE_COLORS = {
     record_type: { as_repair:['#E6F1FB','#0C447C'], product_sale:['#E1F5EE','#085041'], parts_sale:['#FAEEDA','#412402'] },
     brand: { '콜라보':['#E6F1FB','#0C447C'],'마끼다':['#E1F5EE','#085041'],'디월트':['#FAEEDA','#412402'],'프레레':['#EEEDFE','#26215C'],'기타':['#F1EFE8','#2C2C2A'] },
@@ -930,7 +930,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     const isOpen = badgeOpen?.id === r.id && badgeOpen?.field === col.key;
     const [bg, c] = getBadgeColor(col.key, dbVal || displayVal);
     const empty = <span className="empty-dot">●</span>;
-    const MW = { status:56, payment_status:56, record_type:60, brand:44, model:56, intake_carrier:56, release_carrier:56, invoice_type:40, technician:44 };
+    const MW = { status:56, payment_status:56, record_type:60, brand:44, model:56, intake_carrier:72, release_carrier:72, invoice_type:40, technician:44 };
     const mw = MW[col.key] || 0;
     return (
       <div className="badge-expand-panel" onClick={e => e.stopPropagation()}>
@@ -995,7 +995,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     if (col.type === 'readonly') {
       if (!val) return empty;
       if (col.key === 'release_date') return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,minWidth:56,background:'#5A6070',color:'#FFFFFF',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}}>{fmtDate(val)}</span>;
-      if (col.key === 'tracking_number') return <span style={{fontSize:13,fontWeight:400,color:'#1A1D23',fontFamily:'Pretendard,sans-serif'}}>{val}</span>;
+      if (col.key === 'tracking_number') return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,background:'#5A6070',color:'#FFFFFF',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}}>{val}</span>;
       return <span style={{fontSize:13,fontWeight:400,color:'#1A1D23',fontFamily:'Pretendard,sans-serif'}}>{val}</span>;
     }
     // 문자 아이콘 컬럼
@@ -1014,7 +1014,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       if (r.release_date || r.tracking_number) return empty;
       if (r.status !== '완료' && r.status !== '수리X') return empty;
       if (r.payment_status !== '완료') return empty;
-      return <button style={{background:'#CC2222',color:'#FFFFFF',border:'none',borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}} onClick={e => { e.stopPropagation(); onAddShip && onAddShip(r); }}>발송</button>;
+      return <button style={{display:'inline-flex',justifyContent:'center',alignItems:'center',background:'#CC2222',color:'#FFFFFF',border:'none',borderRadius:4,padding:'4px 8px',fontSize:11,fontWeight:700,minWidth:44,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}} onClick={e => { e.stopPropagation(); onAddShip && onAddShip(r); }}>발송</button>;
     }
     // AS비용
     if (col.key === 'repair_cost') return val ? <span style={{fontSize:13,fontWeight:700,color:'#185FA5',fontFamily:'Pretendard,sans-serif'}}>{fmt(val)}</span> : empty;
@@ -1397,7 +1397,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
   };
 
   const SHIP_BADGE_COLORS = { '선불':['#E6F1FB','#0C447C'], '착불':['#FAEEDA','#412402'] };
-  const SHIP_CARRIER_COLORS = { '롯데택배':['#185FA5','#FFFFFF'],'CJ대한통운':['#1D9E75','#FFFFFF'],'한진택배':['#534AB7','#FFFFFF'],'경동택배':['#854F0B','#FFFFFF'],'대신화물':['#D85A30','#FFFFFF'],'로젠택배':['#CC2222','#FFFFFF'],'우체국':['#EF9F27','#FFFFFF'],'방문':['#5A6070','#FFFFFF'],'용차':['#5A6070','#FFFFFF'],'퀵':['#5A6070','#FFFFFF'] };
+  const SHIP_CARRIER_COLORS = { '롯데택배':['#185FA5','#FFFFFF'],'CJ대한통운':['#1D9E75','#FFFFFF'],'한진택배':['#534AB7','#FFFFFF'],'경동택배':['#854F0B','#FFFFFF'],'대신화물':['#D85A30','#FFFFFF'],'로젠택배':['#CC2222','#FFFFFF'],'우체국':['#EF9F27','#FFFFFF'],'방문':['#5A6070','#FFFFFF'],'용차':['#5A6070','#FFFFFF'],'퀵':['#5A6070','#FFFFFF'],'매장':['#5A6070','#FFFFFF'] };
   const getShipBadgeColor = (key, v) => {
     if (key === 'sender_name' && SHIP_BADGE_COLORS[v]) return SHIP_BADGE_COLORS[v];
     if (key === 'carrier' && SHIP_CARRIER_COLORS[v]) return SHIP_CARRIER_COLORS[v];
