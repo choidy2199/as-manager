@@ -931,7 +931,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     const mw = MW[col.key] || 0;
     return (
       <div className="badge-expand-panel" onClick={e => e.stopPropagation()}>
-        <span style={{display:'inline-flex',justifyContent:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',background: displayVal ? bg : '#F4F6FA',color: displayVal ? c : '#9BA3B2',cursor:'pointer',border: isOpen ? `2px solid ${c}` : '2px solid transparent',...(mw?{minWidth:mw}:{})}}
+        <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif',background: displayVal ? bg : '#F4F6FA',color: displayVal ? c : '#9BA3B2',cursor:'pointer',border: isOpen ? `2px solid ${c}` : '2px solid transparent',...(mw?{minWidth:mw}:{})}}
           onClick={e => { if (isOpen) { setBadgeOpen(null); setBadgePos(null); } else { const rect = e.currentTarget.getBoundingClientRect(); setBadgePos({top:rect.bottom+2,left:rect.left}); setBadgeOpen({id:r.id, field:col.key}); } }}>
           {displayVal ? getBadgeLabel(col, dbVal) : '—'}
         </span>
@@ -941,7 +941,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
               const ov = col.toDb ? col.toDb(o) : o;
               const [obg,oc] = getBadgeColor(col.key, ov);
               const selected = (dbVal === ov) || (displayVal === o);
-              return <div key={o} style={{display:'flex',justifyContent:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer',background:obg,color:oc,marginBottom:2,border: selected ? `2px solid ${oc}` : '2px solid transparent',whiteSpace:'nowrap',...(mw?{minWidth:mw}:{})}}
+              return <div key={o} style={{display:'flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif',background:obg,color:oc,marginBottom:2,border: selected ? `2px solid ${oc}` : '2px solid transparent',whiteSpace:'nowrap',...(mw?{minWidth:mw}:{})}}
                 onClick={() => saveBadge(r.id, col.key, ov)}>{getBadgeLabel(col, ov)}</div>;
             })}
           </div>
@@ -985,15 +985,15 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     }
 
     // Display
-    const B = (bg, color, text, extra) => <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',background:bg,color,...(extra||{})}}>{text}</span>;
+    const B = (bg, color, text, extra) => <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif',background:bg,color,...(extra||{})}}>{text}</span>;
     const empty = <span className="empty-dot">●</span>;
 
     // 읽기전용 셀 (출고 그룹)
     if (col.type === 'readonly') {
       if (!val) return empty;
-      if (col.key === 'release_date') return <span style={{fontSize:12,fontWeight:500,color:'#5A6070'}}>{fmtDate(val)}</span>;
-      if (col.key === 'tracking_number') return <span style={{fontSize:13,fontWeight:400,color:'#1A1D23'}}>{val}</span>;
-      return <span style={{fontSize:13,fontWeight:400,color:'#1A1D23'}}>{val}</span>;
+      if (col.key === 'release_date') return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,minWidth:56,background:'#5A6070',color:'#FFFFFF',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}}>{fmtDate(val)}</span>;
+      if (col.key === 'tracking_number') return <span style={{fontSize:13,fontWeight:400,color:'#1A1D23',fontFamily:'Pretendard,sans-serif'}}>{val}</span>;
+      return <span style={{fontSize:13,fontWeight:400,color:'#1A1D23',fontFamily:'Pretendard,sans-serif'}}>{val}</span>;
     }
     // 문자 아이콘 컬럼
     if (col.key === '_msg') {
@@ -1001,11 +1001,11 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     }
     // 확인 컬럼
     if (col.key === '_confirm') {
-      if (confirmMap && r.customer_phone && confirmMap[r.customer_phone]) return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',minWidth:44,background:'#FCEBEB',color:'#791F1F',padding:'3px 6px',borderRadius:3,fontSize:9,fontWeight:700,whiteSpace:'nowrap'}}>발송완료</span>;
+      if (confirmMap && r.customer_phone && confirmMap[r.customer_phone]) return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',minWidth:44,background:'#FCEBEB',color:'#791F1F',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}}>발송완료</span>;
       return empty;
     }
     // 입고일
-    if (col.type === 'date') return val ? <span style={{fontSize:12,fontWeight:500,color:'#5A6070'}}>{fmtDate(val)}</span> : empty;
+    if (col.type === 'date') return val ? <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,minWidth:56,background:'#5A6070',color:'#FFFFFF',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}}>{fmtDate(val)}</span> : empty;
     // 택배 버튼
     if (col.key === '_ship_btn') {
       if (r.release_date || r.tracking_number) return empty;
@@ -1014,11 +1014,11 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       return <button style={{background:'#CC2222',color:'#FFFFFF',border:'none',borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}} onClick={e => { e.stopPropagation(); onAddShip && onAddShip(r); }}>발송</button>;
     }
     // AS비용
-    if (col.key === 'repair_cost') return val ? <span style={{fontSize:13,fontWeight:700,color:'#185FA5'}}>{fmt(val)}</span> : empty;
+    if (col.key === 'repair_cost') return val ? <span style={{fontSize:13,fontWeight:700,color:'#185FA5',fontFamily:'Pretendard,sans-serif'}}>{fmt(val)}</span> : empty;
     // 운임
     if (col.key === 'shipping_fee') {
       if (r.intake_carrier === '방문') return B('#F4F6FA','#5A6070','방문',{minWidth:56});
-      return val ? <span style={{fontSize:13,fontWeight:700,color:'#185FA5'}}>{val}</span> : empty;
+      return val ? <span style={{fontSize:13,fontWeight:700,color:'#185FA5',fontFamily:'Pretendard,sans-serif'}}>{val}</span> : empty;
     }
     // 거래처/성함
     if (col.key === 'company_name') {
@@ -1032,17 +1032,17 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       }
       const p = [r.company_name, r.customer_name].filter(Boolean);
       if (p.length === 0) return empty;
-      return <span style={{fontSize:13,fontWeight:400,color:'#1A1D23',cursor:'text'}}>{p.join(' / ')}</span>;
+      return <span style={{fontSize:13,fontWeight:400,color:'#1A1D23',fontFamily:'Pretendard,sans-serif',cursor:'text'}}>{p.join(' / ')}</span>;
     }
     // 연락처
-    if (col.key === 'customer_phone') return val ? <span style={{fontSize:13,fontWeight:400,color:'#1A1D23'}}>{val}</span> : empty;
+    if (col.key === 'customer_phone') return val ? <span style={{fontSize:13,fontWeight:400,color:'#1A1D23',fontFamily:'Pretendard,sans-serif'}}>{val}</span> : empty;
     // 처리결과 — 쉼표 기준 뱃지 분리
     if (col.key === 'repair_result') {
       if (!val) return empty;
       const parts = String(val).split(',').map(s => s.trim()).filter(Boolean);
-      return <span style={{display:'flex',flexWrap:'wrap',gap:3,justifyContent:'center'}}>{parts.map((p, i) => <span key={i} style={{display:'inline-flex',padding:'2px 6px',borderRadius:4,fontSize:11,fontWeight:600,background:'#E1F5EE',color:'#085041',whiteSpace:'nowrap'}}>{p}</span>)}</span>;
+      return <span style={{display:'flex',flexWrap:'wrap',gap:3,justifyContent:'center'}}>{parts.map((p, i) => <span key={i} style={{display:'inline-flex',padding:'2px 6px',borderRadius:4,fontSize:11,fontWeight:600,background:'#E1F5EE',color:'#085041',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}}>{p}</span>)}</span>;
     }
-    return val ? <span style={{fontSize:13,fontWeight:400,color:'#1A1D23'}}>{val}</span> : empty;
+    return val ? <span style={{fontSize:13,fontWeight:400,color:'#1A1D23',fontFamily:'Pretendard,sans-serif'}}>{val}</span> : empty;
   };
 
   const [newBadgeOpen, setNewBadgeOpen] = useState(null); // field name
