@@ -469,8 +469,11 @@ export default function Home() {
               <div className="section-header">
                 <span style={{fontSize:12,fontWeight:600}}>AS 일지</span>
                 <div className="kpi-bar">
+                  <button style={{background:'#185FA5',color:'#fff',padding:'5px 12px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer',border:'none',fontFamily:'inherit',outline:(!kpiFilter&&!paymentFilter)?'2px solid white':'none',outlineOffset:1}} onClick={() => { setKpiFilter(null); setPaymentFilter(null); }}>
+                    전체 {kpiTotal}
+                  </button>
+                  <span style={{color:'rgba(255,255,255,0.2)',margin:'0 6px',fontSize:16,userSelect:'none'}}>|</span>
                   {[
-                    { key: null, label: '전체', value: kpiTotal, bg: '#185FA5' },
                     { key: 'reception', label: '접수', value: kpiReception, bg: '#185FA5' },
                     { key: 'repairing', label: '수리중', value: kpiRepairing, bg: '#EF9F27', bold: true },
                     { key: 'done', label: '완료', value: kpiDone, bg: '#185FA5' },
