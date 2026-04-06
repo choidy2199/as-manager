@@ -930,11 +930,9 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     const isOpen = badgeOpen?.id === r.id && badgeOpen?.field === col.key;
     const [bg, c] = getBadgeColor(col.key, dbVal || displayVal);
     const empty = <span className="empty-dot">●</span>;
-    const MW = { status:56, payment_status:56, record_type:60, brand:44, model:56, intake_carrier:72, release_carrier:72, invoice_type:40, technician:44 };
-    const mw = MW[col.key] || 0;
     return (
-      <div className="badge-expand-panel" onClick={e => e.stopPropagation()}>
-        <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif',background: displayVal ? bg : '#F4F6FA',color: displayVal ? c : '#9BA3B2',cursor:'pointer',border: isOpen ? `2px solid ${c}` : '2px solid transparent',...(mw?{minWidth:mw}:{})}}
+      <div className="badge-expand-panel" style={{overflow:'hidden'}} onClick={e => e.stopPropagation()}>
+        <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',fontFamily:'Pretendard,sans-serif',background: displayVal ? bg : '#F4F6FA',color: displayVal ? c : '#9BA3B2',cursor:'pointer',border: isOpen ? `2px solid ${c}` : '2px solid transparent'}}
           onClick={e => { if (isOpen) { setBadgeOpen(null); setBadgePos(null); } else { const rect = e.currentTarget.getBoundingClientRect(); setBadgePos({top:rect.bottom+2,left:rect.left}); setBadgeOpen({id:r.id, field:col.key}); } }}>
           {displayVal ? getBadgeLabel(col, dbVal) : '—'}
         </span>
@@ -944,7 +942,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
               const ov = col.toDb ? col.toDb(o) : o;
               const [obg,oc] = getBadgeColor(col.key, ov);
               const selected = (dbVal === ov) || (displayVal === o);
-              return <div key={o} style={{display:'flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif',background:obg,color:oc,marginBottom:2,border: selected ? `2px solid ${oc}` : '2px solid transparent',whiteSpace:'nowrap',...(mw?{minWidth:mw}:{})}}
+              return <div key={o} style={{display:'flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif',background:obg,color:oc,marginBottom:2,border: selected ? `2px solid ${oc}` : '2px solid transparent',whiteSpace:'nowrap'}}
                 onClick={() => saveBadge(r.id, col.key, ov)}>{getBadgeLabel(col, ov)}</div>;
             })}
           </div>
@@ -988,13 +986,13 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     }
 
     // Display
-    const B = (bg, color, text, extra) => <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif',background:bg,color,...(extra||{})}}>{text}</span>;
+    const B = (bg, color, text, extra) => <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',fontFamily:'Pretendard,sans-serif',background:bg,color,...(extra||{})}}>{text}</span>;
     const empty = <span className="empty-dot">●</span>;
 
     // 읽기전용 셀 (출고 그룹)
     if (col.type === 'readonly') {
       if (!val) return empty;
-      if (col.key === 'release_date') return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,minWidth:56,background:'#5A6070',color:'#FFFFFF',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}}>{fmtDate(val)}</span>;
+      if (col.key === 'release_date') return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,background:'#5A6070',color:'#FFFFFF',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',fontFamily:'Pretendard,sans-serif'}}>{fmtDate(val)}</span>;
       if (col.key === 'tracking_number') return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,background:'#5A6070',color:'#FFFFFF',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}}>{val}</span>;
       return <span style={{fontSize:13,fontWeight:400,color:'#1A1D23',fontFamily:'Pretendard,sans-serif'}}>{val}</span>;
     }
@@ -1004,23 +1002,23 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     }
     // 확인 컬럼
     if (col.key === '_confirm') {
-      if (confirmMap && r.customer_phone && confirmMap[r.customer_phone]) return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',minWidth:44,background:'#FCEBEB',color:'#791F1F',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}}>발송완료</span>;
+      if (confirmMap && r.customer_phone && confirmMap[r.customer_phone]) return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',background:'#FCEBEB',color:'#791F1F',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',fontFamily:'Pretendard,sans-serif'}}>발송완료</span>;
       return empty;
     }
     // 입고일
-    if (col.type === 'date') return val ? <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,minWidth:56,background:'#5A6070',color:'#FFFFFF',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}}>{fmtDate(val)}</span> : empty;
+    if (col.type === 'date') return val ? <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,background:'#5A6070',color:'#FFFFFF',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',fontFamily:'Pretendard,sans-serif'}}>{fmtDate(val)}</span> : empty;
     // 택배 버튼
     if (col.key === '_ship_btn') {
       if (r.release_date || r.tracking_number) return empty;
       if (r.status !== '완료' && r.status !== '수리X') return empty;
       if (r.payment_status !== '완료') return empty;
-      return <button style={{display:'inline-flex',justifyContent:'center',alignItems:'center',background:'#CC2222',color:'#FFFFFF',border:'none',borderRadius:4,padding:'4px 8px',fontSize:11,fontWeight:700,minWidth:44,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}} onClick={e => { e.stopPropagation(); onAddShip && onAddShip(r); }}>발송</button>;
+      return <button style={{display:'inline-flex',justifyContent:'center',alignItems:'center',background:'#CC2222',color:'#FFFFFF',border:'none',borderRadius:4,padding:'4px 8px',fontSize:11,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}} onClick={e => { e.stopPropagation(); onAddShip && onAddShip(r); }}>발송</button>;
     }
     // AS비용
     if (col.key === 'repair_cost') return val ? <span style={{fontSize:13,fontWeight:700,color:'#185FA5',fontFamily:'Pretendard,sans-serif'}}>{fmt(val)}</span> : empty;
     // 운임
     if (col.key === 'shipping_fee') {
-      if (r.intake_carrier === '방문') return B('#F4F6FA','#5A6070','방문',{minWidth:56});
+      if (r.intake_carrier === '방문') return B('#F4F6FA','#5A6070','방문');
       return val ? <span style={{fontSize:13,fontWeight:700,color:'#185FA5',fontFamily:'Pretendard,sans-serif'}}>{val}</span> : empty;
     }
     // 거래처/성함
@@ -1408,10 +1406,9 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
     const dbVal = r[col.key];
     const isOpen = shipBadgeOpen?.id === r.id && shipBadgeOpen?.field === col.key;
     const [bg, c] = dbVal ? getShipBadgeColor(col.key, dbVal) : ['#F4F6FA','#9BA3B2'];
-    const mw = col.key === 'carrier' ? 72 : 0;
     return (
-      <div className="badge-expand-panel" onClick={e => e.stopPropagation()}>
-        <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif',background:bg,color:c,cursor:'pointer',border:isOpen?`2px solid ${c}`:'2px solid transparent',...(mw?{minWidth:mw}:{})}}
+      <div className="badge-expand-panel" style={{overflow:'hidden'}} onClick={e => e.stopPropagation()}>
+        <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',fontFamily:'Pretendard,sans-serif',background:bg,color:c,cursor:'pointer',border:isOpen?`2px solid ${c}`:'2px solid transparent'}}
           onClick={e => { if (isOpen) { setShipBadgeOpen(null); } else { const rect = e.currentTarget.getBoundingClientRect(); setShipBadgePos({top:rect.bottom+2,left:rect.left}); setShipBadgeOpen({id:r.id,field:col.key}); } }}>
           {dbVal || '—'}
         </span>
@@ -1419,7 +1416,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
           <div style={{position:'fixed',top:shipBadgePos.top,left:shipBadgePos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,minWidth:80,maxHeight:200,overflowY:'auto'}}>
             {col.opts.map(o => {
               const [obg,oc] = getShipBadgeColor(col.key, o);
-              return <div key={o} style={{display:'flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif',background:obg,color:oc,marginBottom:2,border:dbVal===o?`2px solid ${oc}`:'2px solid transparent',whiteSpace:'nowrap',...(mw?{minWidth:mw}:{})}}
+              return <div key={o} style={{display:'flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif',background:obg,color:oc,marginBottom:2,border:dbVal===o?`2px solid ${oc}`:'2px solid transparent',whiteSpace:'nowrap'}}
                 onClick={() => saveShipBadge(r.id, col.key, o)}>{o}</div>;
             })}
           </div>
@@ -1432,7 +1429,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
     const val = r[col.key];
     const isEditing = editCell?.id === r.id && editCell?.field === col.key;
     const empty = <span className="empty-dot">●</span>;
-    const B = (bg,c,t,ex) => <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif',background:bg,color:c,...(ex||{})}}>{t}</span>;
+    const B = (bg,c,t,ex) => <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',fontFamily:'Pretendard,sans-serif',background:bg,color:c,...(ex||{})}}>{t}</span>;
 
     // 고정값 셀
     if (col.type === 'static') return B('#F4F6FA','#5A6070', col.value);
@@ -1441,7 +1438,7 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
     // 읽기전용
     if (col.type === 'readonly') {
       if (!val) return <span className="empty-dot">●</span>;
-      if (col.key === 'ship_date') return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,minWidth:56,background:'#5A6070',color:'#FFFFFF',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}}>{fmtDate(val)}</span>;
+      if (col.key === 'ship_date') return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,background:'#5A6070',color:'#FFFFFF',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',fontFamily:'Pretendard,sans-serif'}}>{fmtDate(val)}</span>;
       return <span style={{fontSize:13,fontWeight:400,color:'#1A1D23',fontFamily:'Pretendard,sans-serif'}}>{val}</span>;
     }
     // 뱃지 선택
@@ -1534,15 +1531,15 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
                   </>
                 ) : c.type === 'select' ? (
                   <div className="badge-expand-panel" onClick={e => e.stopPropagation()}>
-                    {(() => { const [nbg,nc] = newRow[c.key] ? getShipBadgeColor(c.key, newRow[c.key]) : ['#F4F6FA','#9BA3B2']; const nmw = c.key === 'carrier' ? 72 : 0; return (
-                    <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif',background:nbg,color:nc,cursor:'pointer',border:newShipBadgeOpen===c.key?`2px solid ${nc}`:'2px solid transparent',...(nmw?{minWidth:nmw}:{})}}
+                    {(() => { const [nbg,nc] = newRow[c.key] ? getShipBadgeColor(c.key, newRow[c.key]) : ['#F4F6FA','#9BA3B2']; return (
+                    <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',fontFamily:'Pretendard,sans-serif',background:nbg,color:nc,cursor:'pointer',border:newShipBadgeOpen===c.key?`2px solid ${nc}`:'2px solid transparent'}}
                       onClick={e => { if (newShipBadgeOpen===c.key) { setNewShipBadgeOpen(null); } else { const rect=e.currentTarget.getBoundingClientRect(); setNewShipBadgePos({top:rect.bottom+2,left:rect.left}); setNewShipBadgeOpen(c.key); } }}>
                       {newRow[c.key] || '선택'}
                     </span>); })()}
                     {newShipBadgeOpen===c.key && newShipBadgePos && (
                       <div style={{position:'fixed',top:newShipBadgePos.top,left:newShipBadgePos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,minWidth:80,maxHeight:200,overflowY:'auto'}}>
-                        {c.opts.map(o => { const [obg,oc] = getShipBadgeColor(c.key, o); const omw = c.key === 'carrier' ? 72 : 0; return (
-                          <div key={o} style={{display:'flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif',background:obg,color:oc,marginBottom:2,border:newRow[c.key]===o?`2px solid ${oc}`:'2px solid transparent',whiteSpace:'nowrap',...(omw?{minWidth:omw}:{})}}
+                        {c.opts.map(o => { const [obg,oc] = getShipBadgeColor(c.key, o); return (
+                          <div key={o} style={{display:'flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif',background:obg,color:oc,marginBottom:2,border:newRow[c.key]===o?`2px solid ${oc}`:'2px solid transparent',whiteSpace:'nowrap'}}
                             onClick={() => { setNewRow(p=>({...p,[c.key]:o})); setNewShipBadgeOpen(null); }}>{o}</div>); })}
                       </div>
                     )}
