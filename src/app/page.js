@@ -1341,6 +1341,7 @@ function CustomerPopup({ customer, onClose }) {
   });
 
   return (
+    <>
     <div className="cp-overlay" onClick={onClose}>
       <div className="cp-modal" ref={modalRef} onClick={e => e.stopPropagation()}>
         {/* 헤더 */}
@@ -1352,7 +1353,7 @@ function CustomerPopup({ customer, onClose }) {
               <div style={{fontSize:12,color:'rgba(255,255,255,0.75)'}}>{phone || '연락처 없음'}{company ? ` · ${company}` : ''}</div>
             </div>
           </div>
-          <div style={{display:'flex',gap:20,alignItems:'center'}}>
+          <div style={{display:'flex',gap:20,alignItems:'center',flexShrink:0}}>
             <div className="cp-stat"><span className="cp-stat-label">총 AS</span><span className="cp-stat-value">{records.length}<span className="cp-stat-unit">건</span></span></div>
             <div className="cp-stat"><span className="cp-stat-label">총 비용</span><span className="cp-stat-value">{fmt(totalCost)}</span></div>
             <div className="cp-stat"><span className="cp-stat-label">보증중</span><span className="cp-stat-value" style={{color:'#7BE8B8'}}>{warrantyCount}<span className="cp-stat-unit">건</span></span></div>
@@ -1430,10 +1431,11 @@ function CustomerPopup({ customer, onClose }) {
           </div>
         </div>
       </div>
-
-      {/* 클립보드 수정 모달 */}
-      {clipModal && <ClipboardEditModal clipboards={clipboards} colors={CLIP_COLORS} textColors={CLIP_TEXT_COLORS} onSave={(items) => { saveClipboards(items); setClipModal(false); }} onClose={() => setClipModal(false)} />}
     </div>
+
+    {/* 클립보드 수정 모달 — cp-overlay 바깥에 위치하여 이벤트 버블링 방지 */}
+    {clipModal && <ClipboardEditModal clipboards={clipboards} colors={CLIP_COLORS} textColors={CLIP_TEXT_COLORS} onSave={(items) => { saveClipboards(items); setClipModal(false); }} onClose={() => setClipModal(false)} />}
+    </>
   );
 }
 
@@ -1462,13 +1464,13 @@ function ClipboardEditModal({ clipboards, colors, textColors, onSave, onClose })
   };
 
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    const handler = (e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
 
   return (
-    <div className="modal-overlay" style={{zIndex:300}} onClick={onClose}>
+    <div className="modal-overlay" style={{zIndex:300}} onClick={e => { e.stopPropagation(); onClose(); }}>
       <div className="modal-content" style={{maxWidth:480,maxHeight:'80vh',overflow:'auto'}} onClick={e => e.stopPropagation()}>
         <div className="modal-header"><h2 style={{fontSize:15}}>클립보드 관리</h2><button onClick={onClose} className="modal-close">✕</button></div>
         <div style={{padding:16}}>
