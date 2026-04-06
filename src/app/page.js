@@ -619,9 +619,14 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   const saveBadge = async (id, field, value) => {
     setBadgeOpen(null);
     await onSaveField(id, field, value);
-    // 택배사 "방문" 선택 시 운임 자동 0원
+    // 입고 택배사 "방문" 선택 시 운임 자동 0원
     if (field === 'intake_carrier' && value === '방문') {
       await onSaveField(id, 'shipping_fee', '0');
+    }
+    // 출고 택배 "방문" 선택 시 출고일+운송장 자동 설정
+    if (field === 'release_carrier' && value === '방문') {
+      await onSaveField(id, 'release_date', today());
+      await onSaveField(id, 'tracking_number', '방문');
     }
     onReload();
   };
@@ -693,7 +698,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     invoice_type:70, company_name:160, _msg:30, customer_phone:120, model:100, symptom:180, memo:100,
     repair_result:160, technician:80, status:80, repair_cost:90,
     payment_status:70, payer:80,
-    release_date:120, release_carrier:70, tracking_number:130, _ship_btn:55,
+    release_date:120, release_carrier:80, tracking_number:130, _ship_btn:55,
   };
   const COL_GROUPS = [
     { label: '입고', bg: '#E6F1FB', color: '#0C447C', border: '#85B7EB', span: 12 },
@@ -726,7 +731,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'payer', label:'입금자', w:80, type:'text', groupEnd: true, groupBorderColor: '#FAC775', groupBorderColorBody: '#FAEEDA' },
     // 보라 그룹 — 읽기전용 (택배발송에서 자동 입력)
     { key:'release_date', label:'출고일', w:115, type:'readonly' },
-    { key:'release_carrier', label:'택배', w:70, type:'readonly' },
+    { key:'release_carrier', label:'택배', w:80, type:'select', opts: ["롯데택배","CJ대한통운","한진택배","경동택배","로젠택배","우체국","대신화물","방문","용차","퀵"] },
     { key:'tracking_number', label:'운송장번호', w:130, type:'readonly' },
     { key:'_ship_btn', label:'택배', w:55, type:'action' },
   ];
@@ -920,7 +925,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
                 const ov = col.toDb ? col.toDb(o) : o;
                 const [obg,oc] = getBadgeColor(col.key, ov);
                 return <div key={o} style={{padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer',background:obg,color:oc,marginBottom:2,whiteSpace:'nowrap',border:dbVal===ov?`2px solid ${oc}`:'2px solid transparent'}}
-                  onClick={() => { setNewRow(p => { const next = {...p, [col.key]: ov}; if (col.key === 'intake_carrier' && ov === '방문') next.shipping_fee = '0'; return next; }); setNewBadgeOpen(null); }}>{getBadgeLabel(col, ov)}</div>;
+                  onClick={() => { setNewRow(p => { const next = {...p, [col.key]: ov}; if (col.key === 'intake_carrier' && ov === '방문') next.shipping_fee = '0'; if (col.key === 'release_carrier' && ov === '방문') { next.release_date = today(); next.tracking_number = '방문'; } return next; }); setNewBadgeOpen(null); }}>{getBadgeLabel(col, ov)}</div>;
               })}
             </div>
           )}
