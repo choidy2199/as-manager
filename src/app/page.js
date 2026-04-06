@@ -69,6 +69,7 @@ export default function Home() {
   /* ── 새 접수 입력 행 표시 ── */
   const [showNewRow, setShowNewRow] = useState(false);
   const [kpiFilter, setKpiFilter] = useState(null);
+  const [paymentFilter, setPaymentFilter] = useState(null);
   const [customerPopup, setCustomerPopup] = useState(null);
   const [deleteMode, setDeleteMode] = useState(false);
   const [smsPopup, setSmsPopup] = useState(false);
@@ -287,7 +288,8 @@ export default function Home() {
     const mst = statusFilter === '전체' || r.status === statusFilter;
     const mb = brandFilter === '전체' || r.brand === brandFilter;
     const mk = !kpiFilter || (KPI_STATUS_MAP[kpiFilter] || []).includes(r.status);
-    return ms && mt && mst && mb && mk;
+    const mp = !paymentFilter || r.payment_status === paymentFilter;
+    return ms && mt && mst && mb && mk && mp;
   });
 
   /* ── KPI ── */
@@ -297,6 +299,15 @@ export default function Home() {
   const kpiRepairing = monthAS.filter(r => ['수리중','부품대기'].includes(r.status)).length;
   const kpiDone = monthAS.filter(r => r.status === '완료').length;
   const kpiNoRepair = monthAS.filter(r => ['수리X','폐기'].includes(r.status)).length;
+
+  // 입금 상태 건수 (kpiFilter 적용된 범위 내에서 계산)
+  const paymentBase = monthAS.filter(r => !kpiFilter || (KPI_STATUS_MAP[kpiFilter] || []).includes(r.status));
+  const payDone = paymentBase.filter(r => r.payment_status === '완료').length;
+  const payWait = paymentBase.filter(r => r.payment_status === '대기').length;
+  const payInvoice = paymentBase.filter(r => r.payment_status === '명세서').length;
+  const payFree = paymentBase.filter(r => r.payment_status === '무상').length;
+  const payCard = paymentBase.filter(r => r.payment_status === '카드').length;
+  const payVisit = paymentBase.filter(r => r.payment_status === '방문결제').length;
 
   /* ── 부속 필터 (기존) ── */
   const filteredParts = parts.filter(p => {
@@ -468,6 +479,20 @@ export default function Home() {
                       <span className="kpi-btn-value">{k.value}</span>
                     </button>
                   ))}
+                  <span style={{color:'rgba(255,255,255,0.2)',margin:'0 6px',fontSize:16,userSelect:'none'}}>|</span>
+                  {[
+                    { key:'완료', label:'완료', value:payDone, bg:'#1D9E75' },
+                    { key:'대기', label:'대기', value:payWait, bg:'#EF9F27' },
+                    { key:'명세서', label:'명세서', value:payInvoice, bg:'#854F0B' },
+                    { key:'무상', label:'무상', value:payFree, bg:'#5A6070' },
+                    { key:'카드', label:'카드', value:payCard, bg:'#185FA5' },
+                    { key:'방문결제', label:'방문결제', value:payVisit, bg:'#534AB7' },
+                  ].map(p => (
+                    <button key={p.key} style={{background:p.bg,color:'#fff',padding:'4px 10px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer',border:'none',fontFamily:'inherit',outline:paymentFilter===p.key?'2px solid white':'none',outlineOffset:1}} onClick={() => setPaymentFilter(paymentFilter===p.key?null:p.key)}>
+                      {p.label} {p.value}
+                    </button>
+                  ))}
+                  <span style={{color:'rgba(255,255,255,0.2)',margin:'0 6px',fontSize:16,userSelect:'none'}}>|</span>
                   <button style={{background: deleteMode ? '#1D9E75' : '#CC2222', border:'none', color:'#fff', fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:5, cursor:'pointer', fontFamily:'inherit'}}
                     onClick={() => setDeleteMode(!deleteMode)}>{deleteMode ? '완료' : '삭제'}</button>
                 </div>
