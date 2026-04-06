@@ -141,7 +141,8 @@ export default function Home() {
 
   const addNewAS = async (row) => {
     const { error } = await supabase.from('as_records').insert(row);
-    if (!error) loadData();
+    if (error) { alert('저장 실패: ' + error.message); console.error('addNewAS error:', error); return; }
+    loadData();
   };
 
   const deleteAS = async (id) => {
@@ -544,6 +545,8 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   const [editValue, setEditValue] = useState('');
   const [badgeOpen, setBadgeOpen] = useState(null); // {id, field} — 뱃지 펼침용
   const [newRow, setNewRow] = useState(emptyRow());
+  // showNewRow 열릴 때마다 오늘 날짜로 리셋
+  useEffect(() => { if (showNewRow) setNewRow(emptyRow()); }, [showNewRow]);
   const savedWidthsRef = useRef((() => {
     if (typeof window === 'undefined') return {};
     try { const v = JSON.parse(localStorage.getItem('as_column_widths')); return (v && typeof v === 'object') ? v : {}; } catch { return {}; }
@@ -651,6 +654,8 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     row.receipt_date = row.receipt_date || today();
     row.record_type = row.record_type || 'as_repair';
     row.status = row.status || '접수';
+    // Supabase 테이블에 없는 필드 제거
+    delete row.release_memo;
     await onAddNew(row);
     setNewRow(emptyRow());
     if (onHideNewRow) onHideNewRow();
