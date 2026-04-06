@@ -1149,7 +1149,12 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         <tr className="as-col-header">
           {COLS.map((c, idx) => (
             <th key={c.key} style={{ position: 'sticky', top: 34, zIndex: 20, background: '#EAECF2', fontSize: 12, fontWeight: 600, color: '#5A6070', textAlign: 'center', padding: '8px 10px', boxShadow: '0 1px 0 0 #DDE1EB', borderRight: c.groupEnd && c.groupBorderColor ? `2px solid ${c.groupBorderColor}` : '1px solid #DDE1EB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', userSelect: 'none' }}>
-              {c.isMsgCol ? <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{verticalAlign:'middle'}}><path d="M2 2.5C2 1.7 2.7 1 3.5 1h7C11.3 1 12 1.7 12 2.5v5c0 .8-.7 1.5-1.5 1.5H8l-2.5 2.5V9H3.5C2.7 9 2 8.3 2 7.5v-5z" fill="#185FA5"/></svg> : c.label}
+              {showNewRow && idx === 0 ? (
+                <div style={{display:'flex',gap:4,justifyContent:'center'}}>
+                  <button style={{background:'#1D9E75',color:'#FFFFFF',border:'none',borderRadius:4,padding:'4px 10px',fontSize:11,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}} onClick={handleNewRowSave}>저장</button>
+                  <button style={{background:'#5A6070',color:'#FFFFFF',border:'none',borderRadius:4,padding:'4px 10px',fontSize:11,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif'}} onClick={onHideNewRow}>취소</button>
+                </div>
+              ) : c.isMsgCol ? <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{verticalAlign:'middle'}}><path d="M2 2.5C2 1.7 2.7 1 3.5 1h7C11.3 1 12 1.7 12 2.5v5c0 .8-.7 1.5-1.5 1.5H8l-2.5 2.5V9H3.5C2.7 9 2 8.3 2 7.5v-5z" fill="#185FA5"/></svg> : c.label}
               <span className="col-resize-handle" onMouseDown={e => startResize(idx, c.key, e)} />
             </th>
           ))}
@@ -1161,12 +1166,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
           <tr className="as-new-row">
             {COLS.map(c => (
               <td key={c.key} style={{...(c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {})}}>
-                {c.key === '_ship_btn' ? (
-                  <div style={{display:'flex',gap:4}}>
-                    <button className="btn-primary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={handleNewRowSave}>저장</button>
-                    <button className="btn-secondary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={onHideNewRow}>취소</button>
-                  </div>
-                ) : c.type === 'action' ? null : renderNewCell(c)}
+                {c.type === 'action' ? null : renderNewCell(c)}
               </td>
             ))}
           </tr>
