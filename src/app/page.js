@@ -234,8 +234,8 @@ export default function Home() {
   };
 
   const deleteAS = async (id) => {
-    if (!confirm('정말 삭제하시겠습니까?')) return;
     await supabase.from('as_records').delete().eq('id', id);
+    setAsRecords(prev => prev.filter(r => r.id !== id));
     loadData();
   };
 
@@ -468,8 +468,8 @@ export default function Home() {
                       <span className="kpi-btn-value">{k.value}</span>
                     </button>
                   ))}
-                  <button style={{background: deleteMode ? 'rgba(204,34,34,0.5)' : 'rgba(204,34,34,0.2)', border: deleteMode ? '1px solid rgba(240,149,149,0.6)' : '1px solid rgba(240,149,149,0.35)', color: deleteMode ? '#fff' : '#F09595', fontSize:11, fontWeight: deleteMode ? 700 : 500, padding:'4px 10px', borderRadius:5, cursor:'pointer', fontFamily:'inherit'}}
-                    onClick={() => setDeleteMode(!deleteMode)}>삭제</button>
+                  <button style={{background: deleteMode ? '#1D9E75' : '#CC2222', border:'none', color:'#fff', fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:5, cursor:'pointer', fontFamily:'inherit'}}
+                    onClick={() => setDeleteMode(!deleteMode)}>{deleteMode ? '완료' : '삭제'}</button>
                 </div>
               </div>
               <div className="as-table-wrapper">
@@ -1146,7 +1146,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
                   }}
                 >
                   {deleteMode && c.key === 'record_type' && (
-                    <button style={{position:'absolute',left:2,top:'50%',transform:'translateY(-50%)',zIndex:5,background:'#FCEBEB',color:'#791F1F',padding:'1px 4px',borderRadius:3,fontSize:9,fontWeight:700,border:'none',cursor:'pointer',lineHeight:1,fontFamily:'inherit'}}
+                    <button style={{position:'absolute',left:2,top:'50%',transform:'translateY(-50%)',zIndex:5,background:'#CC2222',color:'#FFFFFF',padding:'1px 4px',borderRadius:3,fontSize:9,fontWeight:700,border:'none',cursor:'pointer',lineHeight:1,fontFamily:'inherit'}}
                       onClick={e => { e.stopPropagation(); const name = r.customer_name || r.company_name || '미입력'; const model = r.model || '미입력'; const symptom = r.symptom ? ` / 증상: ${r.symptom}` : ''; if (confirm(`정말 삭제하시겠습니까?\n고객: ${name} / 모델: ${model}${symptom}`)) onDelete(r.id); }}>X</button>
                   )}
                   {renderCell(r, c)}
