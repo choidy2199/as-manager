@@ -1002,9 +1002,9 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     // 택배 버튼
     if (col.key === '_ship_btn') {
       if (r.release_date || r.tracking_number) return empty; // 이미 출고 완료
-      if (r.status !== '완료') return empty; // 수리 미완료
+      if (r.status !== '완료' && r.status !== '수리X') return empty; // 완료 또는 수리X만
       if (r.payment_status !== '완료') return empty; // 입금 미완료
-      return <button style={{background:'#EEEDFE',color:'#534AB7',border:'1px solid #AFA9EC',borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'inherit'}} onClick={e => { e.stopPropagation(); onAddShip && onAddShip(r); }}>발송</button>;
+      return <button style={{background:'#CC2222',color:'#FFFFFF',border:'none',borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'inherit'}} onClick={e => { e.stopPropagation(); onAddShip && onAddShip(r); }}>발송</button>;
     }
     // AS비용
     if (col.key === 'repair_cost') return val ? <span style={{color:'#185FA5',fontWeight:700}}>{fmt(val)}</span> : empty;
