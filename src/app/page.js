@@ -544,6 +544,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   const [editCell, setEditCell] = useState(null); // {id, field} — 텍스트/숫자/날짜용
   const [editValue, setEditValue] = useState('');
   const [editCompany, setEditCompany] = useState({ company: '', customer: '' }); // 거래처/성함 전용
+  const companyCommitRef = useRef(false); // 거래처 커밋 중복 방지
   const [badgeOpen, setBadgeOpen] = useState(null); // {id, field} — 뱃지 펼침용
   const [newRow, setNewRow] = useState(emptyRow());
   // showNewRow 열릴 때마다 오늘 날짜로 리셋
@@ -646,20 +647,28 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     const { id, field } = editCell;
 
     if (field === 'company_name') {
+      if (companyCommitRef.current) return; // 중복 방지
+      companyCommitRef.current = true;
       const row = records.find(r => r.id === id);
       const prevCompany = row?.company_name || '';
       const prevCustomer = row?.customer_name || '';
+      const nextCompany = editCompany.company;
+      const nextCustomer = editCompany.customer;
       setEditCell(null);
-      let changed = false;
-      if (editCompany.company !== prevCompany) {
-        await onSaveField(id, 'company_name', editCompany.company || null);
-        changed = true;
+      try {
+        let changed = false;
+        if (nextCompany !== prevCompany) {
+          await onSaveField(id, 'company_name', nextCompany || null);
+          changed = true;
+        }
+        if (nextCustomer !== prevCustomer) {
+          await onSaveField(id, 'customer_name', nextCustomer || null);
+          changed = true;
+        }
+        if (changed) onReload();
+      } finally {
+        companyCommitRef.current = false;
       }
-      if (editCompany.customer !== prevCustomer) {
-        await onSaveField(id, 'customer_name', editCompany.customer || null);
-        changed = true;
-      }
-      if (changed) onReload();
       return;
     }
 
@@ -842,24 +851,23 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     // 거래처/성함 — 인라인 편집
     if (col.key === 'company_name') {
       if (isEditing) {
-        const blurHandler = (e) => {
-          // 같은 편집 영역 내 포커스 이동이면 commitEdit 안 함
+        const blurHandler = () => {
           setTimeout(() => {
             const active = document.activeElement;
             if (active && active.closest('.company-edit-group')) return;
             commitEdit();
-          }, 0);
+          }, 50);
         };
         return (
           <div className="company-edit-group" style={{display:'flex',flexDirection:'column',gap:2}} onClick={e => e.stopPropagation()}>
-            <input className="as-cell-input" value={editCompany.company} autoFocus placeholder="거래처"
+            <input className="as-cell-input" defaultValue={r.company_name || ''} autoFocus placeholder="거래처"
               onChange={e => setEditCompany(p => ({...p, company: e.target.value}))}
               onBlur={blurHandler}
-              onKeyDown={e => e.key === 'Enter' && commitEdit()} />
-            <input className="as-cell-input" value={editCompany.customer} placeholder="성함"
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }}} />
+            <input className="as-cell-input" defaultValue={r.customer_name || ''} placeholder="성함"
               onChange={e => setEditCompany(p => ({...p, customer: e.target.value}))}
               onBlur={blurHandler}
-              onKeyDown={e => e.key === 'Enter' && commitEdit()} />
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }}} />
           </div>
         );
       }
