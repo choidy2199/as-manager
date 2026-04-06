@@ -132,7 +132,7 @@ export default function Home() {
 
   /* ── Data Load (날짜 범위 기반, 검색어 있으면 전체) ── */
   const loadData = useCallback(async (unused, fullSearch) => {
-    let asQuery = supabase.from('as_records').select('*').order('receipt_date', { ascending: false });
+    let asQuery = supabase.from('as_records').select('*').order('created_at', { ascending: false });
     if (!fullSearch && !dateAll && dateFrom && dateTo) {
       asQuery = asQuery.gte('receipt_date', dateFrom).lte('receipt_date', dateTo);
     }
@@ -225,6 +225,7 @@ export default function Home() {
   const addNewAS = async (row) => {
     const { data, error } = await supabase.from('as_records').insert(row).select().single();
     if (error) { alert('저장 실패: ' + error.message); console.error('addNewAS error:', error); return; }
+    if (data) setAsRecords(prev => [data, ...prev]);
     loadData();
     // 입고 알림 자동 발송: 연락처+성함/거래처+모델명 모두 있을 때
     if (data && data.customer_phone && (data.customer_name || data.company_name) && data.model) {
