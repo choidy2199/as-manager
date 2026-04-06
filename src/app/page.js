@@ -543,6 +543,7 @@ export default function Home() {
 function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip, deleteMode }) {
   const [editCell, setEditCell] = useState(null); // {id, field} — 텍스트/숫자/날짜용
   const [editValue, setEditValue] = useState('');
+  const [editCompany, setEditCompany] = useState({ company: '', customer: '' }); // 거래처/성함 전용
   const [badgeOpen, setBadgeOpen] = useState(null); // {id, field} — 뱃지 펼침용
   const [newRow, setNewRow] = useState(emptyRow());
   // showNewRow 열릴 때마다 오늘 날짜로 리셋
@@ -618,17 +619,45 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   const saveBadge = async (id, field, value) => {
     setBadgeOpen(null);
     await onSaveField(id, field, value);
+    // 택배사 "방문" 선택 시 운임 자동 0원
+    if (field === 'intake_carrier' && value === '방문') {
+      await onSaveField(id, 'shipping_fee', '0');
+    }
     onReload();
   };
 
   const startEdit = (id, field, value) => {
     setEditCell({ id, field });
-    setEditValue(value ?? '');
+    if (field === 'company_name') {
+      const row = records.find(r => r.id === id);
+      setEditCompany({ company: row?.company_name || '', customer: row?.customer_name || '' });
+    } else {
+      setEditValue(value ?? '');
+    }
   };
 
   const commitEdit = async () => {
     if (!editCell) return;
     const { id, field } = editCell;
+
+    if (field === 'company_name') {
+      const row = records.find(r => r.id === id);
+      const prevCompany = row?.company_name || '';
+      const prevCustomer = row?.customer_name || '';
+      setEditCell(null);
+      let changed = false;
+      if (editCompany.company !== prevCompany) {
+        await onSaveField(id, 'company_name', editCompany.company || null);
+        changed = true;
+      }
+      if (editCompany.customer !== prevCustomer) {
+        await onSaveField(id, 'customer_name', editCompany.customer || null);
+        changed = true;
+      }
+      if (changed) onReload();
+      return;
+    }
+
     let val = editValue;
     if (field === 'repair_cost') val = parseInt(String(val).replace(/,/g, '')) || 0;
     const finalVal = val || null;
@@ -642,7 +671,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 
     if (String(prev ?? '') !== String(next ?? '')) {
       await onSaveField(id, field, next);
-      onReload(); // Realtime 지연 시 대비하여 수동 갱신
+      onReload();
     }
   };
 
@@ -681,14 +710,14 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'intake_carrier', label:'택배', w:80, type:'select', opts: CARRIERS_IN },
     { key:'shipping_fee', label:'운임', w:80, type:'text' },
     { key:'invoice_type', label:'계산서', w:75, type:'select', opts: INVOICE_TYPES },
-    { key:'company_name', label:'거래처/성함', w:150, type:'text', combined: true, isLink: true },
+    { key:'company_name', label:'거래처/성함', w:150, type:'text', combined: true },
     { key:'_msg', label:'msg', w:30, type:'action', isMsgCol: true },
     { key:'customer_phone', label:'연락처', w:115, type:'text' },
     { key:'model', label:'모델명', w:100, type:'select', opts: MODELS },
     { key:'symptom', label:'증상', w:180, type:'text' },
-    { key:'memo', label:'비고', w:100, type:'text', groupEnd: true, groupBorderColor: '#B5D4F4', groupBorderColorBody: '#E6F1FB' },
+    { key:'memo', label:'비고', w:100, type:'memo', groupEnd: true, groupBorderColor: '#B5D4F4', groupBorderColorBody: '#E6F1FB' },
     // 초록 그룹
-    { key:'repair_result', label:'처리결과', w:160, type:'text' },
+    { key:'repair_result', label:'처리결과', w:160, type:'memo' },
     { key:'technician', label:'처리자', w:80, type:'text' },
     { key:'status', label:'AS상태', w:80, type:'select', opts: STATUS_LIST },
     { key:'repair_cost', label:'AS비용', w:90, type:'number', groupEnd: true, groupBorderColor: '#9FE1CB', groupBorderColorBody: '#E1F5EE' },
@@ -747,6 +776,20 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     // 드롭다운 셀 → 뱃지 펼침
     if (col.type === 'select') return renderBadgeExpand(r, col);
 
+    // 메모 타입 — 아이콘 버튼 + 팝업
+    if (col.type === 'memo') {
+      const hasContent = !!val;
+      const iconColor = col.key === 'repair_result' ? (hasContent ? '#1D9E75' : '#9BA3B2') : (hasContent ? '#185FA5' : '#9BA3B2');
+      const title = col.key === 'repair_result' ? '처리결과' : '비고';
+      return (
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{cursor:'pointer',display:'block',margin:'0 auto'}}
+          onClick={e => { e.stopPropagation(); openMemoPopup(r.id, col.key, r[col.key], title); }}>
+          <path d="M3 2.5A1.5 1.5 0 014.5 1h7A1.5 1.5 0 0113 2.5v9a1.5 1.5 0 01-1.5 1.5H6l-3 2.5V2.5z" fill={iconColor}/>
+          {hasContent && <path d="M5.5 5h5M5.5 7.5h3.5" stroke="#fff" strokeWidth="1" strokeLinecap="round"/>}
+        </svg>
+      );
+    }
+
     if (isEditing) {
       if (col.type === 'date') {
         return <input type="date" className="as-cell-input" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={commitEdit} />;
@@ -786,11 +829,24 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     }
     // AS비용
     if (col.key === 'repair_cost') return val ? <span style={{color:'#185FA5',fontWeight:700}}>{fmt(val)}</span> : empty;
-    // 거래처/성함 — 파란 링크 스타일
+    // 거래처/성함 — 인라인 편집
     if (col.key === 'company_name') {
+      if (isEditing) {
+        return (
+          <div style={{display:'flex',flexDirection:'column',gap:2}} onClick={e => e.stopPropagation()}>
+            <input className="as-cell-input" value={editCompany.company} autoFocus placeholder="거래처"
+              onChange={e => setEditCompany(p => ({...p, company: e.target.value}))}
+              onKeyDown={e => e.key === 'Enter' && commitEdit()} />
+            <input className="as-cell-input" value={editCompany.customer} placeholder="성함"
+              onChange={e => setEditCompany(p => ({...p, customer: e.target.value}))}
+              onBlur={commitEdit}
+              onKeyDown={e => e.key === 'Enter' && commitEdit()} />
+          </div>
+        );
+      }
       const p = [r.company_name, r.customer_name].filter(Boolean);
       if (p.length === 0) return empty;
-      return <span className="customer-link" onClick={e => { e.stopPropagation(); onOpenCustomer && onOpenCustomer(r.customer_name, r.customer_phone, r.company_name); }}>{p.join(' / ')}</span>;
+      return <span style={{fontSize:12,color:'#1A1D23',cursor:'text'}}>{p.join(' / ')}</span>;
     }
     // 연락처
     if (col.key === 'customer_phone') return val ? <span style={{fontSize:12,color:'#5A6070'}}>{val}</span> : empty;
@@ -798,6 +854,23 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   };
 
   const [newBadgeOpen, setNewBadgeOpen] = useState(null); // field name
+  const [memoPopup, setMemoPopup] = useState(null); // {id, field, value, title, isNew}
+  const [memoValue, setMemoValue] = useState('');
+
+  const openMemoPopup = (id, field, currentVal, title, isNew = false) => {
+    setMemoPopup({ id, field, title, isNew });
+    setMemoValue(currentVal || '');
+  };
+  const saveMemoPopup = async () => {
+    if (!memoPopup) return;
+    if (memoPopup.isNew) {
+      setNewRow(p => ({...p, [memoPopup.field]: memoValue || ''}));
+    } else {
+      await onSaveField(memoPopup.id, memoPopup.field, memoValue || null);
+      onReload();
+    }
+    setMemoPopup(null);
+  };
 
   useEffect(() => {
     if (!newBadgeOpen) return;
@@ -827,7 +900,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
                 const ov = col.toDb ? col.toDb(o) : o;
                 const [obg,oc] = getBadgeColor(col.key, ov);
                 return <div key={o} style={{padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer',background:obg,color:oc,marginBottom:2,whiteSpace:'nowrap',border:dbVal===ov?`2px solid ${oc}`:'2px solid transparent'}}
-                  onClick={() => { setNewRow(p => ({...p, [col.key]: ov})); setNewBadgeOpen(null); }}>{getBadgeLabel(col, ov)}</div>;
+                  onClick={() => { setNewRow(p => { const next = {...p, [col.key]: ov}; if (col.key === 'intake_carrier' && ov === '방문') next.shipping_fee = '0'; return next; }); setNewBadgeOpen(null); }}>{getBadgeLabel(col, ov)}</div>;
               })}
             </div>
           )}
@@ -841,6 +914,18 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
       }
       return <input type="date" className="as-cell-input" value={val} onChange={e => setNewRow(p => ({...p,[col.key]:e.target.value}))} />;
     }
+    if (col.type === 'memo') {
+      const hasContent = !!val;
+      const iconColor = col.key === 'repair_result' ? (hasContent ? '#1D9E75' : '#9BA3B2') : (hasContent ? '#185FA5' : '#9BA3B2');
+      const title = col.key === 'repair_result' ? '처리결과' : '비고';
+      return (
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{cursor:'pointer',display:'block',margin:'0 auto'}}
+          onClick={e => { e.stopPropagation(); openMemoPopup(null, col.key, val, title, true); }}>
+          <path d="M3 2.5A1.5 1.5 0 014.5 1h7A1.5 1.5 0 0113 2.5v9a1.5 1.5 0 01-1.5 1.5H6l-3 2.5V2.5z" fill={iconColor}/>
+          {hasContent && <path d="M5.5 5h5M5.5 7.5h3.5" stroke="#fff" strokeWidth="1" strokeLinecap="round"/>}
+        </svg>
+      );
+    }
     return (
       <input className="as-cell-input" value={val} placeholder={col.label}
         onChange={e => setNewRow(p => ({...p,[col.key]:e.target.value}))}
@@ -849,7 +934,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     );
   };
 
-  return (
+  return (<>
     <table className="as-table" ref={tableRef} style={{width: COLS.reduce((s, c) => s + getColWidth(c.key), 0)}}>
       <colgroup>
         {COLS.map(c => <col key={c.key} style={{width: getColWidth(c.key)}} />)}
@@ -903,7 +988,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
                 return (
                 <td key={c.key} style={Object.keys(tdStyle).length ? tdStyle : undefined}
                   onClick={() => {
-                    if (c.isLink || c.type === 'action' || c.type === 'select' || c.type === 'readonly') return;
+                    if (c.isLink || c.type === 'action' || c.type === 'select' || c.type === 'readonly' || c.type === 'memo') return;
                     const val = c.key === 'company_name' ? (r.company_name || '') :
                       c.fromDb ? (c.fromDb(r[c.key]) || '') :
                       (c.key === 'repair_cost' ? (r[c.key]?.toString() || '') : (r[c.key] || ''));
@@ -920,6 +1005,29 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         )}
       </tbody>
     </table>
+    {/* 비고/처리결과 팝업 */}
+    {memoPopup && (
+      <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}>
+        <div style={{background:'#fff',borderRadius:12,width:400,maxHeight:'85vh',overflow:'hidden',boxShadow:'0 20px 60px rgba(0,0,0,0.15)'}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:16,borderBottom:'1px solid #DDE1EB'}}>
+            <h3 style={{fontSize:16,fontWeight:600,margin:0}}>{memoPopup.title}</h3>
+            <button style={{background:'none',border:'none',cursor:'pointer',fontSize:18,color:'#5A6070',padding:4}} onClick={() => setMemoPopup(null)}>✕</button>
+          </div>
+          <div style={{padding:16}}>
+            <textarea value={memoValue} onChange={e => setMemoValue(e.target.value)}
+              style={{width:'100%',minHeight:120,fontSize:14,fontFamily:'Pretendard, sans-serif',border:'0.5px solid #DDE1EB',borderRadius:8,padding:12,resize:'vertical',outline:'none',boxSizing:'border-box'}}
+              onFocus={e => e.target.style.borderColor='#185FA5'}
+              onBlur={e => e.target.style.borderColor='#DDE1EB'}
+              autoFocus />
+          </div>
+          <div style={{display:'flex',justifyContent:'flex-end',gap:8,padding:'12px 16px',borderTop:'1px solid #DDE1EB'}}>
+            <button onClick={() => setMemoPopup(null)} style={{background:'#fff',color:'#5A6070',border:'0.5px solid #DDE1EB',borderRadius:6,padding:'6px 16px',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>취소</button>
+            <button onClick={saveMemoPopup} style={{background:'#185FA5',color:'#fff',border:'none',borderRadius:6,padding:'6px 16px',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>저장</button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
