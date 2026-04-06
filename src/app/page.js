@@ -1980,9 +1980,9 @@ function ProductsTable({ products, onReload, setProducts }) {
     { key: 'model', label: '모델넘버', w: 180 },
     { key: 'price', label: '제품가격', w: 120 },
     { key: 'memo', label: '비고', w: 140 },
-    { key: '_manage', label: '관리', w: 160 },
+    { key: '_manage', label: '관리', w: 110 },
   ];
-  const DEFAULT_W = { brand: 100, model: 180, price: 120, memo: 140, _manage: 160 };
+  const DEFAULT_W = { brand: 100, model: 180, price: 120, memo: 140, _manage: 110 };
   const getW = (k) => savedWidthsRef.current[k] || DEFAULT_W[k] || 80;
 
   const BRAND_COLORS = {
@@ -2032,24 +2032,26 @@ function ProductsTable({ products, onReload, setProducts }) {
     if (error) { alert('삭제 실패: ' + error.message); onReload(); }
   };
 
-  const moveProduct = async (product, dir) => {
-    const sortedAll = [...products].sort((x, y) => (x.sort_order || 0) - (y.sort_order || 0));
-    const curIdx = sortedAll.findIndex(p => p.id === product.id);
-    const swapIdx = curIdx + dir;
-    if (swapIdx < 0 || swapIdx >= sortedAll.length) return;
-    const a = sortedAll[curIdx], b = sortedAll[swapIdx];
-    const aOrder = a.sort_order, bOrder = b.sort_order;
+  // 드래그 앤 드롭
+  const dragRef = useRef({ dragId: null, overId: null });
+  const [dragId, setDragId] = useState(null);
+  const [overId, setOverId] = useState(null);
+
+  const handleDrop = async (dropIdx) => {
+    const fromId = dragRef.current.dragId;
+    if (!fromId) return;
+    const sorted = [...products].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    const fromIdx = sorted.findIndex(p => p.id === fromId);
+    if (fromIdx === -1 || fromIdx === dropIdx) { setDragId(null); setOverId(null); return; }
+    const item = sorted[fromIdx];
+    const newArr = [...sorted]; newArr.splice(fromIdx, 1); newArr.splice(dropIdx, 0, item);
     // 로컬 state 즉시 갱신
-    setProducts(prev => prev.map(p => {
-      if (p.id === a.id) return { ...p, sort_order: bOrder };
-      if (p.id === b.id) return { ...p, sort_order: aOrder };
-      return p;
-    }).sort((x, y) => (x.sort_order || 0) - (y.sort_order || 0)));
-    // Supabase 저장
-    await Promise.all([
-      supabase.from('products').update({ sort_order: bOrder }).eq('id', a.id),
-      supabase.from('products').update({ sort_order: aOrder }).eq('id', b.id),
-    ]);
+    const updated = newArr.map((p, i) => ({ ...p, sort_order: i + 1 }));
+    setProducts(updated);
+    setDragId(null); setOverId(null);
+    // Supabase 저장 — 변경된 것만
+    const changes = updated.filter((p, i) => sorted.findIndex(s => s.id === p.id) !== i || p.sort_order !== sorted.find(s => s.id === p.id)?.sort_order);
+    await Promise.all(changes.map(p => supabase.from('products').update({ sort_order: p.sort_order }).eq('id', p.id)));
   };
 
   const startResize = (colIdx, colKey, e) => {
@@ -2100,14 +2102,8 @@ function ProductsTable({ products, onReload, setProducts }) {
     }
 
     if (col.key === '_manage') {
-      const isFirst = rowIdx === 0;
-      const isLast = rowIdx === products.length - 1;
       return (
         <div style={{ display: 'flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
-          <button style={{ background: 'none', border: 'none', fontSize: 12, color: isFirst ? '#DDE1EB' : '#5A6070', cursor: isFirst ? 'default' : 'pointer', padding: '2px 4px', fontFamily: 'inherit' }}
-            onClick={e => { e.stopPropagation(); if (!isFirst) moveProduct(p, -1); }}>▲</button>
-          <button style={{ background: 'none', border: 'none', fontSize: 12, color: isLast ? '#DDE1EB' : '#5A6070', cursor: isLast ? 'default' : 'pointer', padding: '2px 4px', fontFamily: 'inherit' }}
-            onClick={e => { e.stopPropagation(); if (!isLast) moveProduct(p, 1); }}>▼</button>
           <span style={{ display: 'inline-flex', padding: '3px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: '#E6F1FB', color: '#0C447C', cursor: 'pointer', whiteSpace: 'nowrap' }}
             onClick={e => { e.stopPropagation(); startEdit(p.id, 'model', p.model || ''); }}>수정</span>
           <span style={{ display: 'inline-flex', padding: '3px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: '#FCEBEB', color: '#791F1F', cursor: 'pointer', whiteSpace: 'nowrap' }}
@@ -2128,19 +2124,39 @@ function ProductsTable({ products, onReload, setProducts }) {
   };
 
   return (
-    <table className="as-table" ref={tableRef} style={{ width: COLS.reduce((s, c) => s + getW(c.key), 0) }}>
-      <colgroup>{COLS.map(c => <col key={c.key} style={{ width: getW(c.key) }} />)}</colgroup>
+    <table className="as-table" ref={tableRef} style={{ width: 24 + COLS.reduce((s, c) => s + getW(c.key), 0) }}>
+      <colgroup>
+        <col style={{ width: 24 }} />
+        {COLS.map(c => <col key={c.key} style={{ width: getW(c.key) }} />)}
+      </colgroup>
       <thead><tr className="as-col-header">
+        <th style={{ width: 24, minWidth: 24, maxWidth: 24, padding: 0 }} />
         {COLS.map((c, idx) => (
           <th key={c.key}>
             {c.label}
-            <span className="col-resize-handle" onMouseDown={e => startResize(idx, c.key, e)} />
+            <span className="col-resize-handle" onMouseDown={e => startResize(idx + 1, c.key, e)} />
           </th>
         ))}
       </tr></thead>
       <tbody>
         {products.map((p, i) => (
-          <tr key={p.id} className="as-data-row" style={i % 2 === 1 ? { background: '#FAFBFC' } : undefined}>
+          <tr key={p.id} className="as-data-row"
+            draggable={dragId === p.id}
+            onDragOver={e => e.preventDefault()}
+            onDragEnter={e => { e.preventDefault(); setOverId(p.id); }}
+            onDragLeave={() => { if (overId === p.id) setOverId(null); }}
+            onDrop={e => { e.preventDefault(); handleDrop(i); }}
+            onDragEnd={() => { setDragId(null); setOverId(null); }}
+            style={{
+              ...(i % 2 === 1 && dragId !== p.id ? { background: '#FAFBFC' } : {}),
+              ...(dragId === p.id ? { background: '#E6F1FB', outline: '2px solid #185FA5', opacity: 0.7 } : {}),
+              ...(overId === p.id && dragId !== p.id ? { borderTop: '2px dashed #185FA5' } : {}),
+            }}>
+            <td style={{ width: 24, minWidth: 24, maxWidth: 24, padding: '4px 0', textAlign: 'center', cursor: 'grab', userSelect: 'none' }}
+              onMouseDown={() => { dragRef.current.dragId = p.id; setDragId(p.id); }}
+              onMouseUp={() => { if (!overId) { dragRef.current.dragId = null; setDragId(null); } }}>
+              <span style={{ color: '#9BA3B2', fontSize: 14 }}>≡</span>
+            </td>
             {COLS.map(c => (
               <td key={c.key} style={{ ...(c.key === 'brand' ? { overflow: 'visible', position: 'relative' } : {}), ...(c.key === '_manage' ? { textAlign: 'center' } : {}) }}
                 onClick={() => {
@@ -2152,7 +2168,7 @@ function ProductsTable({ products, onReload, setProducts }) {
             ))}
           </tr>
         ))}
-        {products.length === 0 && <tr><td colSpan={5} className="empty">등록된 제품이 없습니다</td></tr>}
+        {products.length === 0 && <tr><td colSpan={6} className="empty">등록된 제품이 없습니다</td></tr>}
       </tbody>
     </table>
   );
