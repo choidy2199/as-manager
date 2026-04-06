@@ -89,6 +89,10 @@ export default function Home() {
   const [partsCatFilter, setPartsCatFilter] = useState('전체');
   const [modal, setModal] = useState(null);
 
+  /* ── 제품가격 state ── */
+  const [products, setProducts] = useState([]);
+  const [productsSearch, setProductsSearch] = useState('');
+
   /* ── Auth ── */
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -110,14 +114,16 @@ export default function Home() {
       const lastDay = new Date(y, mo, 0).getDate();
       asQuery = asQuery.gte('receipt_date', m + '-01').lte('receipt_date', m + '-' + String(lastDay).padStart(2, '0'));
     }
-    const [asRes, shipRes, partsRes] = await Promise.all([
+    const [asRes, shipRes, partsRes, productsRes] = await Promise.all([
       asQuery,
       supabase.from('ship_records').select('*').order('ship_date', { ascending: false }).limit(100),
       supabase.from('parts').select('*').order('code'),
+      supabase.from('products').select('*').order('created_at', { ascending: false }),
     ]);
     if (asRes.data) setAsRecords(asRes.data);
     if (shipRes.data) setShipRecords(shipRes.data);
     if (partsRes.data) setParts(partsRes.data);
+    if (productsRes.data) setProducts(productsRes.data);
     if (loading) setLoading(false);
   }, [monthFilter]);
 
@@ -219,6 +225,13 @@ export default function Home() {
   });
   const partCats = ['전체', ...new Set(parts.map(p => p.category).filter(Boolean))];
 
+  /* ── 제품 필터 ── */
+  const filteredProducts = products.filter(p => {
+    if (!productsSearch) return true;
+    const q = productsSearch.toLowerCase();
+    return [p.brand, p.model].some(f => f?.toLowerCase().includes(q));
+  });
+
   /* ── Auth gate ── */
   if (authLoading) return <div className="loading"><span>로딩 중...</span></div>;
   if (!user) {
@@ -243,7 +256,7 @@ export default function Home() {
           AS Manager
         </div>
         <div className="nav-tabs">
-          {[['as','AS 일지'],['ship','택배발송'],['parts','부속가격'],['settings','설정']].map(([k,v]) => (
+          {[['as','AS 일지'],['ship','택배발송'],['parts','제품/부속가격'],['settings','설정']].map(([k,v]) => (
             <button key={k} onClick={() => { setTab(k); localStorage.setItem('as_active_tab', k); }} className={`nav-tab ${tab===k?'active':''}`}>{v}</button>
           ))}
         </div>
@@ -457,35 +470,61 @@ export default function Home() {
           </div>
         )}
 
-        {/* ═══ 부속가격 ═══ */}
+        {/* ═══ 제품/부속가격 ═══ */}
         {tab === 'parts' && (
-          <>
-            {/* 검색 + 필터 */}
-            <div className="as-filter-row">
-              <div className="as-filter-search-wrap">
-                <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                <input className="input as-filter-search" placeholder="부품코드, 품명, 스펙 검색..." value={partsSearch} onChange={e => setPartsSearch(e.target.value)} autoComplete="off" />
-              </div>
-              <div className="as-filter-pair"><span className="as-filter-label">구분</span>
-                <select className="input as-filter-select" value={partsCatFilter} onChange={e => setPartsCatFilter(e.target.value)}>
-                  {partCats.map(c => <option key={c}>{c}</option>)}
-                </select>
-              </div>
-            </div>
-            {/* 다크바 */}
-            <div className="section">
-              <div className="section-header">
-                <span style={{fontSize:12,fontWeight:600}}>부속 가격</span>
-                <div style={{display:'flex',alignItems:'center',gap:10}}>
-                  <span style={{fontSize:12,color:'rgba(255,255,255,0.5)'}}>총 {filteredParts.length}건</span>
-                  <button className="btn-primary" style={{fontSize:11,padding:'4px 12px'}} onClick={() => setModal({type:'part-new'})}>+ 새 부품</button>
+          <div style={{display:'flex',gap:0,height:'calc(100vh - 110px)'}}>
+            {/* 좌측 — 부속가격 */}
+            <div style={{flex:1,borderRight:'0.5px solid #DDE1EB',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+              <div className="as-filter-row" style={{padding:'8px 12px'}}>
+                <div className="as-filter-search-wrap">
+                  <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                  <input className="input as-filter-search" placeholder="부품코드, 품명, 스펙 검색..." value={partsSearch} onChange={e => setPartsSearch(e.target.value)} autoComplete="off" />
+                </div>
+                <div className="as-filter-pair"><span className="as-filter-label">구분</span>
+                  <select className="input as-filter-select" value={partsCatFilter} onChange={e => setPartsCatFilter(e.target.value)}>
+                    {partCats.map(c => <option key={c}>{c}</option>)}
+                  </select>
                 </div>
               </div>
-              <div className="as-table-wrapper" style={{maxHeight:'calc(100vh - 200px)'}}>
-                <PartsTable parts={filteredParts} onEdit={p => setModal({type:'part-edit',data:p})} />
+              <div className="section" style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                <div className="section-header">
+                  <span style={{fontSize:12,fontWeight:600}}>부속가격</span>
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    <span style={{fontSize:12,color:'rgba(255,255,255,0.5)'}}>총 {filteredParts.length}건</span>
+                    <button className="btn-primary" style={{fontSize:11,padding:'4px 12px'}} onClick={() => setModal({type:'part-new'})}>+ 새 부품</button>
+                  </div>
+                </div>
+                <div className="as-table-wrapper" style={{flex:1,overflow:'auto'}}>
+                  <PartsTable parts={filteredParts} onEdit={p => setModal({type:'part-edit',data:p})} />
+                </div>
               </div>
             </div>
-          </>
+            {/* 우측 — 제품가격 */}
+            <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+              <div className="as-filter-row" style={{padding:'8px 12px'}}>
+                <div className="as-filter-search-wrap">
+                  <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                  <input className="input as-filter-search" placeholder="브랜드, 모델 검색..." value={productsSearch} onChange={e => setProductsSearch(e.target.value)} autoComplete="off" />
+                </div>
+              </div>
+              <div className="section" style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                <div className="section-header">
+                  <span style={{fontSize:12,fontWeight:600}}>제품가격</span>
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    <span style={{fontSize:12,color:'rgba(255,255,255,0.5)'}}>총 {filteredProducts.length}건</span>
+                    <button className="btn-primary" style={{fontSize:11,padding:'4px 12px'}} onClick={async () => {
+                      const { data, error } = await supabase.from('products').insert({ brand: '', model: '', price: 0 }).select().single();
+                      if (error) { alert('추가 실패: ' + error.message); return; }
+                      setProducts(prev => [data, ...prev]);
+                    }}>+ 제품 추가</button>
+                  </div>
+                </div>
+                <div className="as-table-wrapper" style={{flex:1,overflow:'auto'}}>
+                  <ProductsTable products={filteredProducts} onReload={() => loadData(monthFilter)} />
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* 부품 모달 */}
@@ -1751,6 +1790,167 @@ function PartsTable({ parts, onEdit }) {
           </tr>
         ))}
         {sorted.length === 0 && <tr><td colSpan={5} className="empty">부품이 없습니다</td></tr>}
+      </tbody>
+    </table>
+  );
+}
+
+
+/* ═══ PRODUCTS TABLE — 제품가격 인라인 편집 ═══ */
+function ProductsTable({ products, onReload }) {
+  const [editCell, setEditCell] = useState(null);
+  const [editValue, setEditValue] = useState('');
+  const [badgeOpen, setBadgeOpen] = useState(null);
+  const [showNewRow, setShowNewRow] = useState(false);
+  const tableRef = useRef(null);
+  const savedWidthsRef = useRef((() => {
+    if (typeof window === 'undefined') return {};
+    try { const v = JSON.parse(localStorage.getItem('products_column_widths')); return (v && typeof v === 'object') ? v : {}; } catch { return {}; }
+  })());
+
+  const COLS = [
+    { key: 'brand', label: '브랜드', w: 100 },
+    { key: 'model', label: '모델넘버', w: 180 },
+    { key: 'price', label: '제품가격', w: 120 },
+    { key: '_manage', label: '관리', w: 80 },
+  ];
+  const DEFAULT_W = { brand: 100, model: 180, price: 120, _manage: 80 };
+  const getW = (k) => savedWidthsRef.current[k] || DEFAULT_W[k] || 80;
+
+  const BRAND_COLORS = {
+    '콜라보': ['#EEEDFE', '#3C3489'], '마끼다': ['#FAEEDA', '#412402'],
+    '디월트': ['#E1F5EE', '#085041'], '프레레': ['#E6F1FB', '#0C447C'],
+    '기타': ['#F4F6FA', '#5A6070'],
+  };
+  const BRAND_OPTS = ['콜라보', '마끼다', '디월트', '프레레', '기타'];
+
+  // 뱃지 바깥 클릭 닫기
+  useEffect(() => {
+    if (!badgeOpen) return;
+    const h = (e) => { if (!e.target.closest('.badge-expand-panel')) setBadgeOpen(null); };
+    const esc = (e) => { if (e.key === 'Escape') setBadgeOpen(null); };
+    const timer = setTimeout(() => { document.addEventListener('click', h); document.addEventListener('keydown', esc); }, 0);
+    return () => { clearTimeout(timer); document.removeEventListener('click', h); document.removeEventListener('keydown', esc); };
+  }, [badgeOpen]);
+
+  const saveBrand = async (id, brand) => {
+    setBadgeOpen(null);
+    const { error } = await supabase.from('products').update({ brand, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) alert('저장 실패: ' + error.message);
+    onReload();
+  };
+
+  const startEdit = (id, field, value) => {
+    setEditCell({ id, field });
+    setEditValue(value ?? '');
+  };
+
+  const commitEdit = async () => {
+    if (!editCell) return;
+    const { id, field } = editCell;
+    let val = editValue;
+    if (field === 'price') val = parseInt(String(val).replace(/,/g, '')) || 0;
+    setEditCell(null);
+    const { error } = await supabase.from('products').update({ [field]: val || null, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) alert('저장 실패: ' + error.message);
+    onReload();
+  };
+
+  const deleteProduct = async (p) => {
+    if (!confirm(`이 제품을 삭제하시겠습니까?\n${p.brand || ''} ${p.model || ''}`)) return;
+    const { error } = await supabase.from('products').delete().eq('id', p.id);
+    if (error) alert('삭제 실패: ' + error.message);
+    onReload();
+  };
+
+  const startResize = (colIdx, colKey, e) => {
+    e.preventDefault(); e.stopPropagation();
+    const table = tableRef.current; if (!table) return;
+    const col = table.querySelector('colgroup').children[colIdx]; if (!col) return;
+    const startX = e.clientX;
+    const startW = col.offsetWidth || getW(colKey);
+    const startTableW = table.offsetWidth;
+    document.body.style.userSelect = 'none'; document.body.style.cursor = 'col-resize';
+    const onMove = (ev) => { ev.preventDefault(); const newW = Math.max(40, startW + ev.clientX - startX); col.style.width = newW + 'px'; table.style.width = (startTableW + (newW - startW)) + 'px'; };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = ''; document.body.style.cursor = '';
+      const finalW = parseInt(col.style.width) || startW;
+      savedWidthsRef.current = { ...savedWidthsRef.current, [colKey]: finalW };
+      localStorage.setItem('products_column_widths', JSON.stringify(savedWidthsRef.current));
+    };
+    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+  };
+
+  const empty = <span className="empty-dot">●</span>;
+
+  const renderCell = (p, col) => {
+    const val = p[col.key];
+    const isEditing = editCell?.id === p.id && editCell?.field === col.key;
+
+    if (col.key === 'brand') {
+      const [bg, c] = BRAND_COLORS[val] || ['#F4F6FA', '#5A6070'];
+      const isOpen = badgeOpen === p.id;
+      return (
+        <div style={{ position: 'relative' }} className="badge-expand-panel" onClick={e => e.stopPropagation()}>
+          <span style={{ display: 'inline-flex', padding: '3px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', background: val ? bg : '#F4F6FA', color: val ? c : '#9BA3B2', cursor: 'pointer', border: isOpen ? `2px solid ${c}` : '2px solid transparent' }}
+            onClick={() => setBadgeOpen(isOpen ? null : p.id)}>
+            {val || '선택'}
+          </span>
+          {isOpen && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 20, background: '#fff', border: '1px solid #DDE1EB', borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: 4, marginTop: 2, minWidth: 80 }}>
+              {BRAND_OPTS.map(o => {
+                const [obg, oc] = BRAND_COLORS[o];
+                return <div key={o} style={{ padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: obg, color: oc, marginBottom: 2, whiteSpace: 'nowrap', border: val === o ? `2px solid ${oc}` : '2px solid transparent' }}
+                  onClick={() => saveBrand(p.id, o)}>{o}</div>;
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (col.key === '_manage') {
+      return <button style={{ fontSize: 11, color: '#CC2222', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }} onClick={e => { e.stopPropagation(); deleteProduct(p); }}>삭제</button>;
+    }
+
+    if (isEditing) {
+      return <input className="as-cell-input" defaultValue={col.key === 'price' ? (val?.toLocaleString('ko-KR') || '') : (val || '')} autoFocus
+        onChange={e => setEditValue(e.target.value)}
+        onBlur={commitEdit}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(); } }} />;
+    }
+
+    if (col.key === 'price') return val ? <span style={{ color: '#185FA5', fontWeight: 700 }}>{val.toLocaleString('ko-KR')}</span> : empty;
+    return val || empty;
+  };
+
+  return (
+    <table className="as-table" ref={tableRef} style={{ width: COLS.reduce((s, c) => s + getW(c.key), 0) }}>
+      <colgroup>{COLS.map(c => <col key={c.key} style={{ width: getW(c.key) }} />)}</colgroup>
+      <thead><tr className="as-col-header">
+        {COLS.map((c, idx) => (
+          <th key={c.key}>
+            {c.label}
+            <span className="col-resize-handle" onMouseDown={e => startResize(idx, c.key, e)} />
+          </th>
+        ))}
+      </tr></thead>
+      <tbody>
+        {products.map((p, i) => (
+          <tr key={p.id} className="as-data-row" style={i % 2 === 1 ? { background: '#FAFBFC' } : undefined}>
+            {COLS.map(c => (
+              <td key={c.key} style={{ ...(c.key === 'brand' ? { overflow: 'visible', position: 'relative' } : {}), ...(c.key === '_manage' ? { textAlign: 'center' } : {}) }}
+                onClick={() => {
+                  if (c.key === 'brand' || c.key === '_manage') return;
+                  startEdit(p.id, c.key, c.key === 'price' ? (p[c.key]?.toString() || '') : (p[c.key] || ''));
+                }}>
+                {renderCell(p, c)}
+              </td>
+            ))}
+          </tr>
+        ))}
+        {products.length === 0 && <tr><td colSpan={4} className="empty">등록된 제품이 없습니다</td></tr>}
       </tbody>
     </table>
   );
