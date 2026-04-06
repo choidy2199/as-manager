@@ -519,7 +519,7 @@ export default function Home() {
 
       {/* ═══ 기타 MODALS (부품 모달이 아닐 때만) ═══ */}
       {modal && modal.type !== 'part-new' && modal.type !== 'part-edit' && (
-        <div className="modal-overlay" onClick={() => setModal(null)}>
+        <div className="modal-overlay">
           <div className="modal-content" onClick={e => e.stopPropagation()} />
         </div>
       )}
@@ -1347,7 +1347,7 @@ function CustomerPopup({ customer, onClose }) {
 
   return (
     <>
-    <div className="cp-overlay" onClick={onClose}>
+    <div className="cp-overlay">
       <div className="cp-modal" ref={modalRef} onClick={e => e.stopPropagation()}>
         {/* 헤더 */}
         <div className="cp-header">
@@ -1475,7 +1475,7 @@ function ClipboardEditModal({ clipboards, colors, textColors, onSave, onClose })
   }, [onClose]);
 
   return (
-    <div className="modal-overlay" style={{zIndex:300}} onClick={e => { e.stopPropagation(); onClose(); }}>
+    <div className="modal-overlay" style={{zIndex:300}}>
       <div className="modal-content" style={{maxWidth:480,maxHeight:'80vh',overflow:'auto'}} onClick={e => e.stopPropagation()}>
         <div className="modal-header"><h2 style={{fontSize:15}}>클립보드 관리</h2><button onClick={onClose} className="modal-close">✕</button></div>
         <div style={{padding:16}}>
@@ -1667,7 +1667,7 @@ function PartModal({ initial, onSave, onDelete, onClose }) {
   }, [onClose]);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal-content" style={{maxWidth:480}} onClick={e => e.stopPropagation()}>
         <div className="modal-header"><h2>{isEdit ? '부품 수정' : '새 부품 추가'}</h2><button onClick={onClose} className="modal-close">✕</button></div>
         <div className="modal-body">
@@ -1777,7 +1777,7 @@ function SettingsTab({ asRecords, monthFilter }) {
       </div>
 
       {pwModal && (
-        <div className="modal-overlay" onClick={() => { setPwModal(false); setSubTab('system'); }}>
+        <div className="modal-overlay">
           <div className="modal-content" style={{maxWidth:360,padding:0}} onClick={e => e.stopPropagation()}>
             <div style={{padding:'24px',textAlign:'center'}}>
               <div style={{fontSize:16,fontWeight:700,marginBottom:16}}>🔒 정산 관리 접근</div>
@@ -2079,7 +2079,7 @@ function SMSPopup({ onClose, onUnreadChange }) {
 
   return (
     <>
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200}} onClick={onClose}>
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200}}>
       <div ref={popupRef} style={{width:700,height:'80vh',minWidth:600,minHeight:500,maxWidth:'95vw',maxHeight:'95vh',background:'#fff',borderRadius:12,overflow:'hidden',display:'flex',boxShadow:'0 8px 32px rgba(0,0,0,0.18)',resize:'both'}} onClick={e => e.stopPropagation()}>
         {/* 좌측: 고객 목록 */}
         <div style={{width:280,flexShrink:0,display:'flex',flexDirection:'column',borderRight:'1px solid #EAECF2'}}>
