@@ -907,8 +907,8 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   const BADGE_COLORS = {
     record_type: { as_repair:['#E6F1FB','#0C447C'], product_sale:['#E1F5EE','#085041'], parts_sale:['#FAEEDA','#412402'] },
     brand: { '콜라보':['#E6F1FB','#0C447C'],'마끼다':['#E1F5EE','#085041'],'디월트':['#FAEEDA','#412402'],'프레레':['#EEEDFE','#26215C'],'기타':['#F1EFE8','#2C2C2A'] },
-    status: { '접수':['#E6F1FB','#0C447C'],'진단중':['#E6F1FB','#0C447C'],'부품대기':['#FAEEDA','#412402'],'수리중':['#FAEEDA','#412402'],'완료':['#E1F5EE','#085041'],'수리X':['#FCEBEB','#791F1F'],'폐기':['#FCEBEB','#791F1F'] },
-    payment_status: { '완료':['#E1F5EE','#085041'],'대기':['#FAEEDA','#412402'],'명세서':['#FAEEDA','#412402'],'무상':['#F1EFE8','#2C2C2A'],'카드':['#E6F1FB','#0C447C'],'방문결제':['#EEEDFE','#26215C'] },
+    status: { '접수':['#185FA5','#FFFFFF'],'진단중':['#185FA5','#FFFFFF'],'부품대기':['#EF9F27','#FFFFFF'],'수리중':['#D85A30','#FFFFFF'],'완료':['#1D9E75','#FFFFFF'],'수리X':['#CC2222','#FFFFFF'],'폐기':['#5A6070','#FFFFFF'] },
+    payment_status: { '완료':['#1D9E75','#FFFFFF'],'대기':['#185FA5','#FFFFFF'],'명세서':['#854F0B','#FFFFFF'],'무상':['#5A6070','#FFFFFF'],'카드':['#CC2222','#FFFFFF'],'방문결제':['#534AB7','#FFFFFF'] },
     invoice_type: { '없음(일반소매)':['#F1EFE8','#2C2C2A'],'계산서(거래처)':['#E6F1FB','#0C447C'],'월말':['#FAEEDA','#412402'] },
   };
   const getBadgeColor = (field, v) => {
