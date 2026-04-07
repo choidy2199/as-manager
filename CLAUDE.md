@@ -14,18 +14,16 @@
 
 ## 최근 변경사항 (2026-04-08)
 
-### 이번 세션 작업 내역 (택배발송 달력 필터 + 거래처 자동완성)
-1. **today() 전역 함수 KST 처리**: `new Date()` → `toLocaleString('en-US', { timeZone: 'Asia/Seoul' })` 명시
-2. **택배발송 달력 필터 AS일지 패턴 통일**: shipMonthFilter(월 단위 type="month") → shipDateFrom/To/All/Mode(일 범위) 교체
-3. **택배발송 "오늘/이번달/전체" 버튼 추가**: AS일지와 동일 UI·동작 (active/inactive 스타일)
-4. **ship_records Supabase 쿼리 ���짜 필터**: limit(100) → 날짜 범위 gte/lte 필터링
-5. **택배발송 localStorage 날짜 저장/복원**: ship_date_filter_mode/from/to 키, 과거 종료일 자동 오늘 갱신
-6. **날짜 변경 시 자동 refetch**: useCallback/useEffect 의존성에 shipDateFrom/To/All 추가
-7. **AS일지 이번달 버튼 KST 통일**: new Date() → KST 처리
-8. **택배발송 수령자명 거래처 자동완성**: 입력 시 통합 드롭다운 (직접입력 + AS발송대기 + 거래처 목록)
-9. **거래처 선택 시 자동 채움**: receiver_name/phone/address 자동 입력 + 다음 필드 포커스
-10. **드롭다운 position:fixed**: zIndex 9999, 바깥 클릭/ESC 닫힘, 테이블 잘림 방지
-11. **companies state 공유**: 거래처 탭 추가/수정 → 택배발송 자동완성에 실��간 반영
+### 이번 세션 작업 내역
+1. **종료일 기본값 오늘 날짜 수정**: today() 함수 UTC→로컬 시간 기준 변경, localStorage custom 모드 과거일 자동 갱신
+2. **거래처 탭 신규 생성**: CompaniesTab — Supabase companies 연동, 검색, 다크바 KPI(전체/계산서/일반), 인라인 편집, 계산서구분 드롭다운, 새 거래처 추가, 삭제, 컬럼 리사이즈
+3. **거래처 수정/저장 모드**: 읽기↔수정 토글, pendingEdits/pendingDeletes 일괄 저장, 삭제 예정 행(line-through+빨간배경), 복원 기능
+4. **택배사 드롭다운 텍스트 축약**: 롯데택배→롯데, CJ대한통운→CJ 등 + 대신화물/경동화물 추가, 기존 DB값 호환 색상 매핑
+5. **새 접수 거래처 자동완성**: 거래처/성함 입력→companies 실시간 검색, 거래처 선택→invoice_type/phone 자동 채움, 일반 소비자 옵션
+6. **택배발송 달력 필터 통일**: shipMonthFilter→shipDateFrom/To/All/Mode(일 범위) 교체, 오늘/이번달/전체 버튼
+7. **ship_records Supabase 날짜 필터**: limit(100)→날짜 범위 gte/lte, localStorage 저장/복원
+8. **택배발송 수령자명 거래처 자동완성**: 직접입력 + AS발송대기 + 거래처 목록 통합 드롭다운
+9. **companies state 공유**: 거래처 탭 추가/수정 → AS일지+택배발송 자동완성에 실시간 반영
 
 ### 이전 변경사항 (2026-04-07 — 디자인 스킬 적용 — 스타일 전면 통일)
 1. **AS일지 폰트/크기/정렬 통일**: 모든 셀 fontFamily Pretendard, 텍스트13px, 금액 파란볼드, 헤더12px/600
