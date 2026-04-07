@@ -7,7 +7,7 @@ const MODELS = ["DC660","DC661","DC662","DC886","DC990X1","DC990K","DC990S","DC9
 const BRANDS = ["콜라보","마끼다","디월트","프레레","기타"];
 const STATUS_LIST = ["접수","부품대기","수리중","완료","수리X","폐기"];
 const RECORD_TYPES = ["AS 수리","제품 판매","부품 판매"];
-const CARRIERS_IN = ["롯데택배","CJ대한통운","한진택배","경동택배","로젠택배","우체국","대신화물","대신택배","방문","용차","퀵"];
+const CARRIERS_IN = ["롯데","CJ","한진","경동","로젠","우체국","대신택배","대신화물","경동화물","방문","용차","퀵"];
 const CARRIERS_OUT = [...CARRIERS_IN, "매장"];
 const INVOICE_TYPES = ["없음(일반소매)","계산서(거래처)","월말"];
 const PAYMENT_STATUS = ["완료","대기","명세서","무상","카드","방문결제"];
@@ -534,7 +534,7 @@ export default function Home() {
 
         {/* ═══ 택배발송 ═══ */}
         {tab === 'ship' && (() => {
-          const SHIP_CARRIERS = ['롯데택배','CJ대한통운','한진택배','경동택배','로젠택배','우체국','대신택배'];
+          const SHIP_CARRIERS = ['롯데','CJ','한진','경동','로젠','우체국','대신택배','대신화물','경동화물'];
           const filtered = shipRecords.filter(r => {
             const ms = !shipSearch || [r.receiver_name, r.receiver_phone, r.contents].some(f => f?.toLowerCase().includes(shipSearch.toLowerCase()));
             const mc = shipCarrierFilter === '전체' || r.carrier === shipCarrierFilter;
@@ -778,7 +778,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 
   function emptyRow() {
     return {
-      record_type: 'as_repair', receipt_date: today(), brand: '', intake_carrier: '',
+      record_type: 'as_repair', receipt_date: today(), brand: '', intake_carrier: '롯데',
       shipping_fee: '', invoice_type: '없음(일반소매)', company_name: '', customer_name: '',
       customer_phone: '', model: '', symptom: '', memo: '',
       repair_result: '', technician: '', status: '접수', repair_cost: '',
@@ -910,13 +910,13 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'payer', label:'입금자', w:80, type:'text', groupEnd: true, groupBorderColor: '#FAC775', groupBorderColorBody: '#FAEEDA' },
     // 보라 그룹 — 읽기전용 (택배발송에서 자동 입력)
     { key:'release_date', label:'출고일', w:115, type:'readonly' },
-    { key:'release_carrier', label:'택배', w:80, type:'select', opts: ["롯데택배","CJ대한통운","한진택배","경동택배","로젠택배","우체국","대신화물","방문","용차","퀵"] },
+    { key:'release_carrier', label:'택배', w:80, type:'select', opts: ["롯데","CJ","한진","경동","로젠","우체국","대신택배","대신화물","경동화물","방문","용차","퀵"] },
     { key:'tracking_number', label:'운송장번호', w:130, type:'readonly' },
     { key:'_ship_btn', label:'택배', w:55, type:'action' },
   ];
 
   // 뱃지 색상 매핑
-  const CARRIER_COLORS = { '롯데택배':['#185FA5','#FFFFFF'],'CJ대한통운':['#1D9E75','#FFFFFF'],'한진택배':['#534AB7','#FFFFFF'],'경동택배':['#854F0B','#FFFFFF'],'대신화물':['#D85A30','#FFFFFF'],'로젠택배':['#CC2222','#FFFFFF'],'우체국':['#EF9F27','#FFFFFF'],'방문':['#5A6070','#FFFFFF'],'용차':['#5A6070','#FFFFFF'],'퀵':['#5A6070','#FFFFFF'],'매장':['#5A6070','#FFFFFF'] };
+  const CARRIER_COLORS = { '롯데':['#185FA5','#FFFFFF'],'롯데택배':['#185FA5','#FFFFFF'],'CJ':['#1D9E75','#FFFFFF'],'CJ대한통운':['#1D9E75','#FFFFFF'],'한진':['#534AB7','#FFFFFF'],'한진택배':['#534AB7','#FFFFFF'],'경동':['#854F0B','#FFFFFF'],'경동택배':['#854F0B','#FFFFFF'],'경동화물':['#854F0B','#FFFFFF'],'대신화물':['#D85A30','#FFFFFF'],'대신택배':['#D85A30','#FFFFFF'],'로젠':['#CC2222','#FFFFFF'],'로젠택배':['#CC2222','#FFFFFF'],'우체국':['#EF9F27','#FFFFFF'],'방문':['#5A6070','#FFFFFF'],'용차':['#5A6070','#FFFFFF'],'퀵':['#5A6070','#FFFFFF'],'매장':['#5A6070','#FFFFFF'] };
   const BADGE_COLORS = {
     record_type: { as_repair:['#E6F1FB','#0C447C'], product_sale:['#E1F5EE','#085041'], parts_sale:['#FAEEDA','#412402'] },
     brand: { '콜라보':['#E6F1FB','#0C447C'],'마끼다':['#E1F5EE','#085041'],'디월트':['#FAEEDA','#412402'],'프레레':['#EEEDFE','#26215C'],'기타':['#F1EFE8','#2C2C2A'] },
@@ -1286,11 +1286,11 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, onHideNewRow, saveASField, sendAutoSMS }) {
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState('');
-  const [newRow, setNewRow] = useState({ ship_date: today(), carrier: 'CJ대한통운', tracking_no: '', sender_name: '선불', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
+  const [newRow, setNewRow] = useState({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선불', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
   const [sortKey, setSortKey] = useState('ship_date');
   const [sortAsc, setSortAsc] = useState(false);
   const [recipientQuery, setRecipientQuery] = useState('');
-  const SHIP_CARRIERS = ['롯데택배','CJ대한통운','한진택배','경동택배','로젠택배','우체국','대신택배'];
+  const SHIP_CARRIERS = ['롯데','CJ','한진','경동','로젠','우체국','대신택배','대신화물','경동화물'];
   const tableRef = useRef(null);
   const savedWidthsRef = useRef((() => {
     if (typeof window === 'undefined') return {};
@@ -1399,13 +1399,13 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
     Object.keys(row).forEach(k => { if (row[k] === '') row[k] = null; });
     row.ship_date = row.ship_date || today();
     await onAdd({ shipDate: row.ship_date, carrier: row.carrier, trackingNo: row.tracking_no, senderName: row.sender_name, receiverName: row.receiver_name, receiverPhone: row.receiver_phone, receiverAddress: row.receiver_address, contents: row.contents, memo: row.memo, asRecordId: row.as_record_id });
-    setNewRow({ ship_date: today(), carrier: 'CJ대한통운', tracking_no: '', sender_name: '선불', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
+    setNewRow({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선불', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
     setRecipientQuery('');
     onHideNewRow();
   };
 
   const SHIP_BADGE_COLORS = { '선불':['#E6F1FB','#0C447C'], '착불':['#FAEEDA','#412402'] };
-  const SHIP_CARRIER_COLORS = { '롯데택배':['#185FA5','#FFFFFF'],'CJ대한통운':['#1D9E75','#FFFFFF'],'한진택배':['#534AB7','#FFFFFF'],'경동택배':['#854F0B','#FFFFFF'],'대신화물':['#D85A30','#FFFFFF'],'로젠택배':['#CC2222','#FFFFFF'],'우체국':['#EF9F27','#FFFFFF'],'방문':['#5A6070','#FFFFFF'],'용차':['#5A6070','#FFFFFF'],'퀵':['#5A6070','#FFFFFF'],'매장':['#5A6070','#FFFFFF'] };
+  const SHIP_CARRIER_COLORS = { '롯데':['#185FA5','#FFFFFF'],'롯데택배':['#185FA5','#FFFFFF'],'CJ':['#1D9E75','#FFFFFF'],'CJ대한통운':['#1D9E75','#FFFFFF'],'한진':['#534AB7','#FFFFFF'],'한진택배':['#534AB7','#FFFFFF'],'경동':['#854F0B','#FFFFFF'],'경동택배':['#854F0B','#FFFFFF'],'경동화물':['#854F0B','#FFFFFF'],'대신화물':['#D85A30','#FFFFFF'],'대신택배':['#D85A30','#FFFFFF'],'로젠':['#CC2222','#FFFFFF'],'로젠택배':['#CC2222','#FFFFFF'],'우체국':['#EF9F27','#FFFFFF'],'방문':['#5A6070','#FFFFFF'],'용차':['#5A6070','#FFFFFF'],'퀵':['#5A6070','#FFFFFF'],'매장':['#5A6070','#FFFFFF'] };
   const getShipBadgeColor = (key, v) => {
     if (key === 'sender_name' && SHIP_BADGE_COLORS[v]) return SHIP_BADGE_COLORS[v];
     if (key === 'carrier' && SHIP_CARRIER_COLORS[v]) return SHIP_CARRIER_COLORS[v];
