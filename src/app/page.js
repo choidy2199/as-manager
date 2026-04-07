@@ -13,7 +13,7 @@ const INVOICE_TYPES = ["없음(일반소매)","계산서(거래처)","월말"];
 const PAYMENT_STATUS = ["완료","대기","명세서","무상","카드","방문결제"];
 
 const fmt = (n) => n?.toLocaleString('ko-KR') ?? '0';
-const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
+const today = () => { const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' })); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
 const fmtDate = (d) => {
   if (!d) return '—';
   const dt = new Date(d + 'T00:00:00');
@@ -108,7 +108,29 @@ export default function Home() {
   const [shipSearch, setShipSearch] = useState('');
   const [shipCarrierFilter, setShipCarrierFilter] = useState('전체');
   const [shipTrackingFilter, setShipTrackingFilter] = useState('전체');
-  const [shipMonthFilter, setShipMonthFilter] = useState(new Date().toISOString().slice(0,7));
+  const [shipDateFilterMode, setShipDateFilterMode] = useState(() => {
+    if (typeof window === 'undefined') return 'month';
+    return localStorage.getItem('ship_date_filter_mode') || 'month';
+  });
+  const [shipDateFrom, setShipDateFrom] = useState(() => {
+    if (typeof window === 'undefined') return today();
+    const mode = localStorage.getItem('ship_date_filter_mode') || 'month';
+    if (mode === 'today') return today();
+    if (mode === 'all') return '';
+    if (mode === 'custom') return localStorage.getItem('ship_date_from') || today();
+    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' })); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-01';
+  });
+  const [shipDateTo, setShipDateTo] = useState(() => {
+    if (typeof window === 'undefined') return today();
+    const mode = localStorage.getItem('ship_date_filter_mode') || 'month';
+    if (mode === 'all') return '';
+    if (mode === 'custom') { const saved = localStorage.getItem('ship_date_to'); return (saved && saved >= today()) ? saved : today(); }
+    return today();
+  });
+  const [shipDateAll, setShipDateAll] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return (localStorage.getItem('ship_date_filter_mode') || 'month') === 'all';
+  });
   const [showNewShipRow, setShowNewShipRow] = useState(false);
 
   /* ── 부속 기존 state ── */
@@ -143,7 +165,7 @@ export default function Home() {
     }
     const [asRes, shipRes, partsRes, productsRes, techRes, compRes] = await Promise.all([
       asQuery,
-      supabase.from('ship_records').select('*').order('ship_date', { ascending: false }).limit(100),
+      (() => { let q = supabase.from('ship_records').select('*').order('ship_date', { ascending: false }); if (!shipDateAll && shipDateFrom && shipDateTo) { q = q.gte('ship_date', shipDateFrom).lte('ship_date', shipDateTo); } return q; })(),
       supabase.from('parts').select('*').order('code'),
       supabase.from('products').select('*').order('sort_order', { ascending: true }),
       supabase.from('technicians').select('*').order('created_at'),
@@ -166,9 +188,9 @@ export default function Home() {
     if (techRes.data) setTechnicians(techRes.data);
     if (compRes.data) setCompanies(compRes.data);
     if (loading) setLoading(false);
-  }, [dateFrom, dateTo, dateAll]);
+  }, [dateFrom, dateTo, dateAll, shipDateFrom, shipDateTo, shipDateAll]);
 
-  useEffect(() => { if (user) loadData(null, debouncedSearch.length >= 2); }, [user, dateFrom, dateTo, dateAll, loadData, debouncedSearch]);
+  useEffect(() => { if (user) loadData(null, debouncedSearch.length >= 2); }, [user, dateFrom, dateTo, dateAll, shipDateFrom, shipDateTo, shipDateAll, loadData, debouncedSearch]);
 
   /* ── Realtime ── */
   useEffect(() => {
@@ -444,7 +466,7 @@ export default function Home() {
                 {(() => { const active = {height:32,padding:'0 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#185FA5',color:'#fff'}; const inactive = {...active,background:'#E6F1FB',color:'#0C447C'}; return (
                 <div style={{display:'flex',gap:4,marginLeft:4}}>
                   <button onClick={() => { setDateAll(false); setDateFrom(today()); setDateTo(today()); setDateFilterMode('today'); localStorage.setItem('as_date_filter_mode','today'); }} style={dateFilterMode==='today'?active:inactive}>오늘</button>
-                  <button onClick={() => { setDateAll(false); const d=new Date(); setDateFrom(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'); setDateTo(today()); setDateFilterMode('month'); localStorage.setItem('as_date_filter_mode','month'); }} style={dateFilterMode==='month'?active:inactive}>이번 달</button>
+                  <button onClick={() => { setDateAll(false); const d=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'})); setDateFrom(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'); setDateTo(today()); setDateFilterMode('month'); localStorage.setItem('as_date_filter_mode','month'); }} style={dateFilterMode==='month'?active:inactive}>이번 달</button>
                   <button onClick={() => { setDateAll(true); setDateFilterMode('all'); localStorage.setItem('as_date_filter_mode','all'); }} style={dateFilterMode==='all'?active:inactive}>전체</button>
                 </div>); })()}
               </div>
@@ -540,10 +562,14 @@ export default function Home() {
             const ms = !shipSearch || [r.receiver_name, r.receiver_phone, r.contents].some(f => f?.toLowerCase().includes(shipSearch.toLowerCase()));
             const mc = shipCarrierFilter === '전체' || r.carrier === shipCarrierFilter;
             const mt = shipTrackingFilter === '전체' || (shipTrackingFilter === '미입력' ? !r.tracking_no : !!r.tracking_no);
-            const mm = !shipMonthFilter || r.ship_date?.startsWith(shipMonthFilter);
-            return ms && mc && mt && mm;
+            return ms && mc && mt;
           });
-          const shipMonthLabel = (() => { const [y,m] = shipMonthFilter.split('-'); return `${y}년 ${parseInt(m)}월`; })();
+          const shipDateLabel = (() => {
+            if (shipDateAll) return '전체 기간';
+            const fmt2 = (ds) => { const dt = new Date(ds + 'T00:00:00'); return `${dt.getFullYear()}. ${String(dt.getMonth()+1).padStart(2,'0')}. ${String(dt.getDate()).padStart(2,'0')}.`; };
+            if (shipDateFrom === shipDateTo) return fmt2(shipDateFrom);
+            return `${fmt2(shipDateFrom)} ~ ${fmt2(shipDateTo)}`;
+          })();
           return (
           <>
             <div className="as-filter-row">
@@ -561,14 +587,25 @@ export default function Home() {
                   <option>전체</option><option>미입력</option><option>입력완료</option>
                 </select>
               </div>
-              <div className="as-filter-pair"><span className="as-filter-label">기간</span>
-                <input className="input as-filter-month" type="month" value={shipMonthFilter} onChange={e => setShipMonthFilter(e.target.value)} />
+              <div className="as-filter-pair" style={{marginLeft:'auto'}}>
+                <span className="as-filter-label">기간</span>
+                <div style={{display:'flex',alignItems:'center',height:32,border:'0.5px solid #DDE1EB',borderRadius:6,padding:'0 6px',background:'#fff'}}>
+                  <input type="date" value={shipDateAll ? '' : shipDateFrom} onChange={e => { setShipDateAll(false); setShipDateFrom(e.target.value); setShipDateFilterMode('custom'); localStorage.setItem('ship_date_filter_mode','custom'); localStorage.setItem('ship_date_from',e.target.value); localStorage.setItem('ship_date_to',shipDateTo); }} style={{fontSize:12,height:28,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
+                  <span style={{color:'#9BA3B2',padding:'0 4px',fontSize:12}}>~</span>
+                  <input type="date" value={shipDateAll ? '' : shipDateTo} onChange={e => { setShipDateAll(false); setShipDateTo(e.target.value); setShipDateFilterMode('custom'); localStorage.setItem('ship_date_filter_mode','custom'); localStorage.setItem('ship_date_from',shipDateFrom); localStorage.setItem('ship_date_to',e.target.value); }} style={{fontSize:12,height:28,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
+                </div>
+                {(() => { const active = {height:32,padding:'0 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#185FA5',color:'#fff'}; const inactive = {...active,background:'#E6F1FB',color:'#0C447C'}; return (
+                <div style={{display:'flex',gap:4,marginLeft:4}}>
+                  <button onClick={() => { setShipDateAll(false); setShipDateFrom(today()); setShipDateTo(today()); setShipDateFilterMode('today'); localStorage.setItem('ship_date_filter_mode','today'); }} style={shipDateFilterMode==='today'?active:inactive}>오늘</button>
+                  <button onClick={() => { setShipDateAll(false); const d=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'})); setShipDateFrom(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'); setShipDateTo(today()); setShipDateFilterMode('month'); localStorage.setItem('ship_date_filter_mode','month'); }} style={shipDateFilterMode==='month'?active:inactive}>이번 달</button>
+                  <button onClick={() => { setShipDateAll(true); setShipDateFilterMode('all'); localStorage.setItem('ship_date_filter_mode','all'); }} style={shipDateFilterMode==='all'?active:inactive}>전체</button>
+                </div>); })()}
               </div>
             </div>
             <div className="page-header">
               <div />
               <div style={{display:'flex',gap:8}}>
-                <button className="btn-outline-secondary" onClick={() => exportShipExcel(filtered, shipMonthLabel)}>
+                <button className="btn-outline-secondary" onClick={() => exportShipExcel(filtered, shipDateLabel)}>
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{marginRight:4,verticalAlign:-1}}><path d="M2 1.5h8M3 4.5h6M4 7.5h4M5 10.5h2" stroke="#5A6070" strokeWidth="1" strokeLinecap="round"/></svg>
                   송장 엑셀 출력
                 </button>
@@ -578,7 +615,7 @@ export default function Home() {
             <div className="section">
               <div className="section-header">
                 <span style={{fontSize:12,fontWeight:600}}>택배 발송</span>
-                <span style={{fontSize:12,color:'rgba(255,255,255,0.5)'}}>{shipMonthLabel} — {filtered.length}건</span>
+                <span style={{fontSize:12,color:'rgba(255,255,255,0.5)'}}>{shipDateLabel} — {filtered.length}건</span>
               </div>
               <div className="as-table-wrapper" style={{maxHeight:'calc(100vh - 220px)'}}>
                 <ShipTable
