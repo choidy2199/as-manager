@@ -120,6 +120,9 @@ export default function Home() {
   const [products, setProducts] = useState([]);
   const [productsSearch, setProductsSearch] = useState('');
 
+  /* ── 거래처 state ── */
+  const [companies, setCompanies] = useState([]);
+
   /* ── Auth ── */
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -138,12 +141,13 @@ export default function Home() {
     if (!fullSearch && !dateAll && dateFrom && dateTo) {
       asQuery = asQuery.gte('receipt_date', dateFrom).lte('receipt_date', dateTo);
     }
-    const [asRes, shipRes, partsRes, productsRes, techRes] = await Promise.all([
+    const [asRes, shipRes, partsRes, productsRes, techRes, compRes] = await Promise.all([
       asQuery,
       supabase.from('ship_records').select('*').order('ship_date', { ascending: false }).limit(100),
       supabase.from('parts').select('*').order('code'),
       supabase.from('products').select('*').order('sort_order', { ascending: true }),
       supabase.from('technicians').select('*').order('created_at'),
+      supabase.from('companies').select('*').order('created_at', { ascending: false }),
     ]);
     if (asRes.data) {
       setAsRecords(asRes.data);
@@ -160,6 +164,7 @@ export default function Home() {
     if (partsRes.data) setParts(partsRes.data);
     if (productsRes.data) setProducts(productsRes.data);
     if (techRes.data) setTechnicians(techRes.data);
+    if (compRes.data) setCompanies(compRes.data);
     if (loading) setLoading(false);
   }, [dateFrom, dateTo, dateAll]);
 
@@ -355,7 +360,7 @@ export default function Home() {
           AS Manager
         </div>
         <div className="nav-tabs">
-          {[['as','AS 일지'],['ship','택배발송'],['parts','제품/부속가격'],['settings','설정']].map(([k,v]) => (
+          {[['as','AS 일지'],['ship','택배발송'],['companies','거래처'],['parts','제품/부속가격'],['settings','설정']].map(([k,v]) => (
             <button key={k} onClick={() => { setTab(k); localStorage.setItem('as_active_tab', k); }} className={`nav-tab ${tab===k?'active':''}`}>{v}</button>
           ))}
         </div>
@@ -599,6 +604,11 @@ export default function Home() {
             <div style={{fontSize:18,fontWeight:600,marginBottom:8}}>수리내역 조회</div>
             <div>다음 단계에서 구현 예정입니다</div>
           </div>
+        )}
+
+        {/* ═══ 거래처 ═══ */}
+        {tab === 'companies' && (
+          <CompaniesTab companies={companies} setCompanies={setCompanies} onReload={loadData} />
         )}
 
         {/* ═══ 제품/부속가격 ═══ */}
@@ -2294,6 +2304,257 @@ function PartModal({ initial, onSave, onDelete, onClose }) {
         </div>
       </div>
     </div>
+  );
+}
+
+
+/* ═══ COMPANIES TAB ═══ */
+function CompaniesTab({ companies, setCompanies, onReload }) {
+  const [search, setSearch] = useState('');
+  const [showNewRow, setShowNewRow] = useState(false);
+  const [newRow, setNewRow] = useState({ company_name: '', phone: '', contact_person: '', address: '', invoice_type: '', memo: '' });
+  const [editCell, setEditCell] = useState(null);
+  const [editValue, setEditValue] = useState('');
+  const [invoiceDropdown, setInvoiceDropdown] = useState(null); // company id
+  const [invoiceDropPos, setInvoiceDropPos] = useState(null);
+  const tableRef = useRef(null);
+
+  // 컬럼 리사이즈
+  const DEFAULT_WIDTHS = { _no: 50, company_name: 160, phone: 130, contact_person: 100, address: 280, invoice_type: 100, memo: 160, _delete: 60 };
+  const [colWidths, setColWidths] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_WIDTHS;
+    try { const s = localStorage.getItem('companies-col-widths'); return s ? { ...DEFAULT_WIDTHS, ...JSON.parse(s) } : DEFAULT_WIDTHS; } catch { return DEFAULT_WIDTHS; }
+  });
+  const getColWidth = (k) => colWidths[k] || DEFAULT_WIDTHS[k] || 100;
+  const resizeRef = useRef(null);
+  const startResize = (idx, key, e) => {
+    e.preventDefault(); e.stopPropagation();
+    const startX = e.clientX; const startW = getColWidth(key);
+    const onMove = (ev) => { const diff = ev.clientX - startX; const nw = Math.max(40, startW + diff); setColWidths(p => { const n = { ...p, [key]: nw }; localStorage.setItem('companies-col-widths', JSON.stringify(n)); return n; }); };
+    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+  };
+
+  const COLS = [
+    { key: '_no', label: 'No', w: 50 },
+    { key: 'company_name', label: '거래처명', w: 160 },
+    { key: 'phone', label: '연락처', w: 130 },
+    { key: 'contact_person', label: '담당자', w: 100 },
+    { key: 'address', label: '주소', w: 280, align: 'left' },
+    { key: 'invoice_type', label: '계산서구분', w: 100, type: 'select', opts: ['월말', '계산서', '일반'] },
+    { key: 'memo', label: '비고', w: 160 },
+    { key: '_delete', label: '관리', w: 60, type: 'action' },
+  ];
+
+  const INVOICE_BADGE = { '월말': ['#185FA5', '#FFFFFF'], '계산서': ['#1D9E75', '#FFFFFF'], '일반': ['#F1EFE8', '#2C2C2A'] };
+
+  const filtered = companies.filter(c => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return [c.company_name, c.contact_person, c.phone].some(f => f?.toLowerCase().includes(q));
+  });
+
+  const invoiceCount = companies.filter(c => c.invoice_type === '월말' || c.invoice_type === '계산서').length;
+  const normalCount = companies.length - invoiceCount;
+
+  // 인라인 편집 시작
+  const startEdit = (id, field, val) => { setEditCell({ id, field }); setEditValue(val || ''); };
+  const commitEdit = async () => {
+    if (!editCell) return;
+    const { id, field } = editCell;
+    const { error } = await supabase.from('companies').update({ [field]: editValue || null }).eq('id', id);
+    if (error) { alert('저장 실패: ' + error.message); }
+    else { setCompanies(prev => prev.map(c => c.id === id ? { ...c, [field]: editValue || null } : c)); }
+    setEditCell(null);
+  };
+
+  // 계산서구분 저장
+  const saveInvoiceType = async (id, val) => {
+    const { error } = await supabase.from('companies').update({ invoice_type: val }).eq('id', id);
+    if (error) { alert('저장 실패: ' + error.message); }
+    else { setCompanies(prev => prev.map(c => c.id === id ? { ...c, invoice_type: val } : c)); }
+    setInvoiceDropdown(null); setInvoiceDropPos(null);
+  };
+
+  // 드롭다운 바깥 클릭 닫기
+  useEffect(() => {
+    if (!invoiceDropdown) return;
+    const h = (e) => { if (!e.target.closest('.badge-expand-panel')) { setInvoiceDropdown(null); setInvoiceDropPos(null); } };
+    const timer = setTimeout(() => document.addEventListener('click', h), 0);
+    return () => { clearTimeout(timer); document.removeEventListener('click', h); };
+  }, [invoiceDropdown]);
+
+  // 새 거래처 저장
+  const handleNewSave = async () => {
+    if (!newRow.company_name?.trim()) { alert('거래처명을 입력하세요.'); return; }
+    const { data, error } = await supabase.from('companies').insert({
+      company_name: newRow.company_name.trim(),
+      phone: newRow.phone?.trim() || null,
+      contact_person: newRow.contact_person?.trim() || null,
+      address: newRow.address?.trim() || null,
+      invoice_type: newRow.invoice_type || null,
+      memo: newRow.memo?.trim() || null,
+    }).select().single();
+    if (error) { alert('저장 실패: ' + error.message); return; }
+    setCompanies(prev => [data, ...prev]);
+    setNewRow({ company_name: '', phone: '', contact_person: '', address: '', invoice_type: '', memo: '' });
+    setShowNewRow(false);
+  };
+
+  // 삭제
+  const handleDelete = async (c) => {
+    if (!confirm(`"${c.company_name}"을(를) 삭제하시겠습니까?`)) return;
+    const { error } = await supabase.from('companies').delete().eq('id', c.id);
+    if (error) { alert('삭제 실패: ' + error.message); return; }
+    setCompanies(prev => prev.filter(x => x.id !== c.id));
+  };
+
+  const empty = <span className="empty-dot">●</span>;
+
+  const renderCell = (c, col, rowIdx) => {
+    if (col.key === '_no') return <span style={{fontSize:13,fontWeight:400,color:'#5A6070',fontFamily:'Pretendard,sans-serif'}}>{rowIdx + 1}</span>;
+    if (col.key === '_delete') return <button style={{background:'#FCEBEB',color:'#CC2222',border:'none',borderRadius:4,padding:'3px 8px',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'Pretendard,sans-serif'}} onClick={e => { e.stopPropagation(); handleDelete(c); }}>삭제</button>;
+
+    const val = c[col.key];
+    const isEditing = editCell?.id === c.id && editCell?.field === col.key;
+
+    // 계산서구분 — 뱃지 드롭다운
+    if (col.key === 'invoice_type') {
+      const isOpen = invoiceDropdown === c.id;
+      const [bg, tc] = INVOICE_BADGE[val] || ['#F4F6FA', '#9BA3B2'];
+      return (
+        <div className="badge-expand-panel" style={{overflow:'hidden'}} onClick={e => e.stopPropagation()}>
+          <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',fontFamily:'Pretendard,sans-serif',background: val ? bg : '#F4F6FA',color: val ? tc : '#9BA3B2',cursor:'pointer',border: isOpen ? `2px solid ${tc}` : '2px solid transparent'}}
+            onClick={e => { if (isOpen) { setInvoiceDropdown(null); setInvoiceDropPos(null); } else { const rect = e.currentTarget.getBoundingClientRect(); setInvoiceDropPos({top:rect.bottom+2,left:rect.left}); setInvoiceDropdown(c.id); } }}>
+            {val || '—'}
+          </span>
+          {isOpen && invoiceDropPos && (
+            <div style={{position:'fixed',top:invoiceDropPos.top,left:invoiceDropPos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,minWidth:80}}>
+              {col.opts.map(o => { const [obg,oc] = INVOICE_BADGE[o] || ['#F4F6FA','#1A1D23']; return (
+                <div key={o} style={{display:'flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif',background:obg,color:oc,marginBottom:2,border:val===o?`2px solid ${oc}`:'2px solid transparent',whiteSpace:'nowrap'}}
+                  onClick={() => saveInvoiceType(c.id, o)}>{o}</div>
+              ); })}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // 인라인 편집 모드
+    if (isEditing) {
+      return <input className="as-cell-input" value={editValue} autoFocus
+        onChange={e => setEditValue(e.target.value)}
+        onBlur={commitEdit}
+        onKeyDown={e => e.key === 'Enter' && commitEdit()} />;
+    }
+
+    // 일반 텍스트
+    if (!val) return empty;
+    const fw = col.key === 'company_name' ? 600 : 400;
+    return <span style={{fontSize:13,fontWeight:fw,color:'#1A1D23',fontFamily:'Pretendard,sans-serif'}}>{val}</span>;
+  };
+
+  // 새 행 계산서 드롭다운
+  const [newInvOpen, setNewInvOpen] = useState(false);
+  const [newInvPos, setNewInvPos] = useState(null);
+  useEffect(() => {
+    if (!newInvOpen) return;
+    const h = (e) => { if (!e.target.closest('.badge-expand-panel')) { setNewInvOpen(false); setNewInvPos(null); } };
+    const timer = setTimeout(() => document.addEventListener('click', h), 0);
+    return () => { clearTimeout(timer); document.removeEventListener('click', h); };
+  }, [newInvOpen]);
+
+  return (
+    <>
+      <div className="as-filter-row">
+        <div className="as-filter-search-wrap">
+          <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
+          <input className="input as-filter-search" placeholder="거래처명, 담당자, 연락처 검색..." value={search} onChange={e => setSearch(e.target.value)} autoComplete="off" />
+        </div>
+        <span style={{fontSize:12,color:'#5A6070',fontWeight:500,fontFamily:'Pretendard,sans-serif'}}>전체 {companies.length}건</span>
+        <button className="btn-primary" style={{fontSize:11,padding:'4px 12px',marginLeft:'auto'}} onClick={() => setShowNewRow(true)}>+ 새 거래처</button>
+      </div>
+
+      <div className="section" style={{display:'flex',flexDirection:'column',overflow:'hidden',height:'calc(100vh - 160px)'}}>
+        <div className="section-header">
+          <span style={{fontSize:12,fontWeight:600}}>거래처 목록</span>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span style={{display:'inline-flex',alignItems:'center',gap:4,padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:700,background:'#185FA5',color:'#fff'}}>전체 {companies.length}</span>
+            <span style={{display:'inline-flex',alignItems:'center',gap:4,padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:700,background:'#1D9E75',color:'#fff'}}>계산서 {invoiceCount}</span>
+            <span style={{display:'inline-flex',alignItems:'center',gap:4,padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:700,background:'rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.8)'}}>일반 {normalCount}</span>
+          </div>
+        </div>
+        <div className="as-table-wrapper" style={{flex:1,overflow:'auto'}}>
+          <table className="as-table" ref={tableRef} style={{width: COLS.reduce((s, c) => s + getColWidth(c.key), 0)}}>
+            <colgroup>{COLS.map(c => <col key={c.key} style={{width: getColWidth(c.key)}} />)}</colgroup>
+            <thead>
+              <tr className="as-col-header">
+                {COLS.map((c, idx) => (
+                  <th key={c.key} style={{position:'sticky',top:0,zIndex:20,background:'#EAECF2',fontSize:12,fontWeight:600,color:'#5A6070',textAlign:'center',padding:'8px 10px',borderRight:'1px solid #DDE1EB',fontFamily:'Pretendard,sans-serif'}}>
+                    {c.label}
+                    <span className="col-resize-handle" onMouseDown={e => startResize(idx, c.key, e)} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {showNewRow && (
+                <tr className="as-new-row">
+                  {COLS.map(c => (
+                    <td key={c.key} style={{...(c.key === 'invoice_type' ? {overflow:'visible',position:'relative'} : {})}}>
+                      {c.key === '_no' ? <span style={{fontSize:11,color:'#9BA3B2'}}>new</span>
+                      : c.key === '_delete' ? (
+                        <div style={{display:'flex',gap:4,justifyContent:'center'}}>
+                          <button style={{background:'#1D9E75',color:'#fff',border:'none',borderRadius:4,padding:'4px 10px',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif'}} onClick={handleNewSave}>저장</button>
+                          <button style={{background:'#5A6070',color:'#fff',border:'none',borderRadius:4,padding:'4px 10px',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif'}} onClick={() => setShowNewRow(false)}>취소</button>
+                        </div>
+                      ) : c.key === 'invoice_type' ? (
+                        <div className="badge-expand-panel" onClick={e => e.stopPropagation()}>
+                          {(() => { const [nbg,nc] = newRow.invoice_type ? (INVOICE_BADGE[newRow.invoice_type] || ['#F4F6FA','#9BA3B2']) : ['#F4F6FA','#9BA3B2']; return (
+                          <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif',background:nbg,color:nc,cursor:'pointer',border:newInvOpen?`2px solid ${nc}`:'2px solid transparent'}}
+                            onClick={e => { if (newInvOpen) { setNewInvOpen(false); setNewInvPos(null); } else { const rect=e.currentTarget.getBoundingClientRect(); setNewInvPos({top:rect.bottom+2,left:rect.left}); setNewInvOpen(true); } }}>
+                            {newRow.invoice_type || '선택'}
+                          </span>); })()}
+                          {newInvOpen && newInvPos && (
+                            <div style={{position:'fixed',top:newInvPos.top,left:newInvPos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,minWidth:80}}>
+                              {c.opts.map(o => { const [obg,oc] = INVOICE_BADGE[o] || ['#F4F6FA','#1A1D23']; return (
+                                <div key={o} style={{display:'flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif',background:obg,color:oc,marginBottom:2,border:newRow.invoice_type===o?`2px solid ${oc}`:'2px solid transparent',whiteSpace:'nowrap'}}
+                                  onClick={() => { setNewRow(p=>({...p,invoice_type:o})); setNewInvOpen(false); setNewInvPos(null); }}>{o}</div>
+                              ); })}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <input className="as-cell-input" value={newRow[c.key]||''} placeholder={c.label}
+                          onChange={e => setNewRow(p=>({...p,[c.key]:e.target.value}))}
+                          onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }} />
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              )}
+              {filtered.map((c, i) => (
+                <tr key={c.id} className="as-data-row" style={i % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
+                  {COLS.map(col => (
+                    <td key={col.key}
+                      style={{...(col.align === 'left' ? {textAlign:'left'} : {}), ...(col.type === 'select' ? {overflow:'visible',position:'relative'} : {}), ...(col.type === 'action' ? {cursor:'default'} : {})}}
+                      onClick={() => {
+                        if (col.key === '_no' || col.key === '_delete' || col.type === 'select' || col.type === 'action') return;
+                        startEdit(c.id, col.key, c[col.key] || '');
+                      }}>
+                      {renderCell(c, col, i)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr><td colSpan={COLS.length} className="empty">거래처가 없습니다</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
   );
 }
 
