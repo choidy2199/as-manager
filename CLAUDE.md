@@ -12,9 +12,22 @@
 3. git add -A && git commit && git push origin main
 4. open https://as-manager-murex.vercel.app
 
-## 최근 변경사항 (2026-04-07)
+## 최근 변경사항 (2026-04-08)
 
-### 이번 세션 작업 내역 (디자인 스킬 적용 — 스타일 전면 통일)
+### 이번 세션 작업 내역 (택배발송 달력 필터 + 거래처 자동완성)
+1. **today() 전역 함수 KST 처리**: `new Date()` → `toLocaleString('en-US', { timeZone: 'Asia/Seoul' })` 명시
+2. **택배발송 달력 필터 AS일지 패턴 통일**: shipMonthFilter(월 단위 type="month") → shipDateFrom/To/All/Mode(일 범위) 교체
+3. **택배발송 "오늘/이번달/전체" 버튼 추가**: AS일지와 동일 UI·동작 (active/inactive 스타일)
+4. **ship_records Supabase 쿼리 ���짜 필터**: limit(100) → 날짜 범위 gte/lte 필터링
+5. **택배발송 localStorage 날짜 저장/복원**: ship_date_filter_mode/from/to 키, 과거 종료일 자동 오늘 갱신
+6. **날짜 변경 시 자동 refetch**: useCallback/useEffect 의존성에 shipDateFrom/To/All 추가
+7. **AS일지 이번달 버튼 KST 통일**: new Date() → KST 처리
+8. **택배발송 수령자명 거래처 자동완성**: 입력 시 통합 드롭다운 (직접입력 + AS발송대기 + 거래처 목록)
+9. **거래처 선택 시 자동 채움**: receiver_name/phone/address 자동 입력 + 다음 필드 포커스
+10. **드롭다운 position:fixed**: zIndex 9999, 바깥 클릭/ESC 닫힘, 테이블 잘림 방지
+11. **companies state 공유**: 거래처 탭 추가/수정 → 택배발송 자동완성에 실��간 반영
+
+### 이전 변경사항 (2026-04-07 — 디자인 스킬 적용 — 스타일 전면 통일)
 1. **AS일지 폰트/크기/정렬 통일**: 모든 셀 fontFamily Pretendard, 텍스트13px, 금액 파란볼드, 헤더12px/600
 2. **AS일지 날짜 뱃지**: 입고일/출고일 → #5A6070 배경 + 흰색 뱃지
 3. **AS일지 뱃지 공통 스타일**: padding 4px 8px, fontSize 11px, fontWeight 700, alignItems center
