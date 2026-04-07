@@ -519,6 +519,7 @@ export default function Home() {
                   deleteMode={deleteMode}
                   technicians={technicians}
                   products={products}
+                  companies={companies}
                   sendAutoSMS={sendAutoSMS}
                   confirmMap={confirmMap}
                   onOpenCustomer={(name, phone, company) => setCustomerPopup({ name, phone, company })}
@@ -722,7 +723,7 @@ export default function Home() {
 /* ═══════════════════════════════════════════════
    AS 테이블 — 인라인 편집
    ═══════════════════════════════════════════════ */
-function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip, deleteMode, technicians, products, sendAutoSMS, confirmMap }) {
+function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip, deleteMode, technicians, products, companies, sendAutoSMS, confirmMap }) {
   const [editCell, setEditCell] = useState(null); // {id, field} — 텍스트/숫자/날짜용
   const [editValue, setEditValue] = useState('');
   const [badgeOpen, setBadgeOpen] = useState(null); // {id, field} — 뱃지 펼침용
@@ -868,6 +869,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     row.status = row.status || '접수';
     await onAddNew(row);
     setNewRow(emptyRow());
+    setCompanyQuery(''); setCompanyDropOpen(false);
     if (onHideNewRow) onHideNewRow();
   };
 
@@ -1062,6 +1064,10 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   const [memoValue, setMemoValue] = useState('');
   const [productPickerOpen, setProductPickerOpen] = useState(false);
   const [productPickerSearch, setProductPickerSearch] = useState('');
+  const [companyQuery, setCompanyQuery] = useState('');
+  const [companyDropOpen, setCompanyDropOpen] = useState(false);
+  const [companyDropPos, setCompanyDropPos] = useState(null);
+  const companyInputRef = useRef(null);
 
   const openMemoPopup = (id, field, currentVal, title, isNew = false) => {
     setMemoPopup({ id, field, title, isNew });
@@ -1077,6 +1083,14 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     }
     setMemoPopup(null);
   };
+
+  // 거래처 자동완성 바깥 클릭 닫기
+  useEffect(() => {
+    if (!companyDropOpen) return;
+    const h = (e) => { if (!e.target.closest('.company-autocomplete')) { setCompanyDropOpen(false); setCompanyDropPos(null); } };
+    const timer = setTimeout(() => document.addEventListener('mousedown', h), 0);
+    return () => { clearTimeout(timer); document.removeEventListener('mousedown', h); };
+  }, [companyDropOpen]);
 
   useEffect(() => {
     if (!newBadgeOpen) return;
@@ -1131,6 +1145,44 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
           <path d="M3 2.5A1.5 1.5 0 014.5 1h7A1.5 1.5 0 0113 2.5v9a1.5 1.5 0 01-1.5 1.5H6l-3 2.5V2.5z" fill={iconColor}/>
           {hasContent && <path d="M5.5 5h5M5.5 7.5h3.5" stroke="#fff" strokeWidth="1" strokeLinecap="round"/>}
         </svg>
+      );
+    }
+    // 거래처/성함 — 자동완성
+    if (col.key === 'company_name') {
+      const INVOICE_BADGE_AC = { '월말': ['#185FA5','#FFFFFF'], '계산서': ['#1D9E75','#FFFFFF'] };
+      // "/" 앞부분(거래처명)으로 검색
+      const searchPart = companyQuery.split('/')[0].trim();
+      const matchedCompanies = searchPart.length >= 2 ? (companies || []).filter(c => c.company_name?.toLowerCase().includes(searchPart.toLowerCase())) : [];
+      return (
+        <div className="company-autocomplete" style={{position:'relative'}}>
+          <input className="as-cell-input" ref={companyInputRef} value={companyQuery} placeholder="거래처 / 성함"
+            onChange={e => { const v = e.target.value; setCompanyQuery(v); setNewRow(p => ({...p, company_name: v})); const sp = v.split('/')[0].trim(); if (sp.length >= 2 && !v.includes('/')) { const rect = e.currentTarget.getBoundingClientRect(); setCompanyDropPos({top:rect.bottom+2,left:rect.left}); setCompanyDropOpen(true); } else { setCompanyDropOpen(false); } }}
+            onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+            onFocus={e => { const sp = companyQuery.split('/')[0].trim(); if (sp.length >= 2 && !companyQuery.includes('/')) { const rect = e.currentTarget.getBoundingClientRect(); setCompanyDropPos({top:rect.bottom+2,left:rect.left}); setCompanyDropOpen(true); } }}
+          />
+          {companyDropOpen && companyDropPos && (
+            <div style={{position:'fixed',top:companyDropPos.top,left:companyDropPos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,width:240,maxHeight:300,overflowY:'auto',boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}}>
+              {/* 일반 소비자 */}
+              <div style={{padding:'8px 12px',background:'#FAFBFC',borderBottom:'1px solid #DDE1EB',cursor:'pointer',display:'flex',alignItems:'center',gap:8}}
+                onClick={() => { setNewRow(p => ({...p, company_name: searchPart, customer_name: searchPart, invoice_type: '없음(일반소매)', customer_phone: ''})); setCompanyQuery(searchPart + ' / '); setCompanyDropOpen(false); setTimeout(() => companyInputRef.current?.focus(), 50); }}>
+                <span style={{width:8,height:8,borderRadius:'50%',background:'#1D9E75',flexShrink:0}}></span>
+                <span style={{fontSize:12,fontWeight:500,color:'#0F6E56',fontFamily:'Pretendard,sans-serif'}}>일반 소비자</span>
+              </div>
+              {matchedCompanies.map(co => { const [bbg,btc] = INVOICE_BADGE_AC[co.invoice_type] || [null,null]; return (
+                <div key={co.id} style={{padding:'8px 12px',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between',gap:6,fontFamily:'Pretendard,sans-serif'}}
+                  onMouseOver={e => e.currentTarget.style.background='#E6F1FB'} onMouseOut={e => e.currentTarget.style.background=''}
+                  onClick={() => { setNewRow(p => ({...p, company_name: co.company_name + ' / ', invoice_type: co.invoice_type === '월말' ? '월말' : co.invoice_type === '계산서' ? '계산서(거래처)' : '없음(일반소매)', customer_phone: co.phone || '', customer_name: ''})); setCompanyQuery(co.company_name + ' / '); setCompanyDropOpen(false); setTimeout(() => companyInputRef.current?.focus(), 50); }}>
+                  <div style={{minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:500,color:'#1A1D23',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{co.company_name}</div>
+                    {co.phone && <div style={{fontSize:11,color:'#9BA3B2'}}>{co.phone}</div>}
+                  </div>
+                  {bbg && <span style={{display:'inline-flex',padding:'2px 6px',borderRadius:3,fontSize:10,fontWeight:700,background:bbg,color:btc,whiteSpace:'nowrap',flexShrink:0}}>{co.invoice_type}</span>}
+                </div>
+              ); })}
+              {matchedCompanies.length === 0 && <div style={{padding:'10px 12px',fontSize:11,color:'#9BA3B2',textAlign:'center'}}>일치하는 거래처 없음</div>}
+            </div>
+          )}
+        </div>
       );
     }
     return (
