@@ -621,6 +621,7 @@ export default function Home() {
                 <ShipTable
                   records={filtered}
                   asRecords={asRecords}
+                  companies={companies}
                   onSave={async (id, field, value) => { const {error} = await supabase.from('ship_records').update({[field]:value}).eq('id',id); if(error) { console.error('Ship save error:', error); alert('저장 실패: '+error.message); } loadData(); }}
                   onAdd={addShip}
                   onDelete={deleteShip}
@@ -1372,13 +1373,16 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 
 
 /* ═══ SHIP TABLE — 인라인 편집 ═══ */
-function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, onHideNewRow, saveASField, sendAutoSMS }) {
+function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, showNewRow, onHideNewRow, saveASField, sendAutoSMS }) {
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [newRow, setNewRow] = useState({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선불', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
   const [sortKey, setSortKey] = useState('ship_date');
   const [sortAsc, setSortAsc] = useState(false);
   const [recipientQuery, setRecipientQuery] = useState('');
+  const [companyDropOpen, setCompanyDropOpen] = useState(false);
+  const [companyDropPos, setCompanyDropPos] = useState(null);
+  const companyInputRef = useRef(null);
   const SHIP_CARRIERS = ['롯데','CJ','한진','경동','로젠','우체국','대신택배','대신화물','경동화물'];
   const tableRef = useRef(null);
   const savedWidthsRef = useRef((() => {
@@ -1444,6 +1448,15 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
     const timer = setTimeout(() => { document.addEventListener('click', h); document.addEventListener('keydown', esc); }, 0);
     return () => { clearTimeout(timer); document.removeEventListener('click', h); document.removeEventListener('keydown', esc); };
   }, [shipBadgeOpen, newShipBadgeOpen]);
+
+  // 거래처 자동완성 드롭다운 바깥 클릭 시 닫기
+  useEffect(() => {
+    if (!companyDropOpen) return;
+    const h = (e) => { if (!e.target.closest('.ship-company-dropdown')) setCompanyDropOpen(false); };
+    const esc = (e) => { if (e.key === 'Escape') setCompanyDropOpen(false); };
+    const timer = setTimeout(() => { document.addEventListener('mousedown', h); document.addEventListener('keydown', esc); }, 0);
+    return () => { clearTimeout(timer); document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
+  }, [companyDropOpen]);
 
   const saveShipBadge = async (id, field, value) => {
     setShipBadgeOpen(null);
@@ -1598,36 +1611,94 @@ function ShipTable({ records, asRecords, onSave, onAdd, onDelete, showNewRow, on
                     <button className="btn-secondary" style={{fontSize:11,padding:'4px 8px',whiteSpace:'nowrap'}} onClick={onHideNewRow}>취소</button>
                   </div>
                 ) : c.key === 'receiver_name' ? (
-                  <>
-                    <input className="as-cell-input" value={newRow.receiver_name||''} placeholder="수령자명"
-                      onChange={e => { setNewRow(p=>({...p, receiver_name: e.target.value, as_record_id: null})); setRecipientQuery(e.target.value); }}
-                      onKeyDown={e => { if (e.key==='Enter') e.preventDefault(); }} />
-                    {showNewRow && pendingShip.length > 0 && (
-                      <div className="search-dropdown" style={{minWidth:350,top:'100%',left:0}}>
-                        <div className="search-dropdown-header">
-                          <span style={{fontSize:10,fontWeight:600,color:'#5A6070'}}>발송 대기 {pendingShip.length}건</span>
-                        </div>
-                        {pendingShip.slice(0,8).map((ar,i) => (
-                          <div key={ar.id} className="search-dropdown-item" onClick={() => {
-                            setNewRow(p => ({...p, receiver_name: ar.customer_name || '', receiver_phone: ar.customer_phone || '', contents: ar.model || '', as_record_id: ar.id }));
-                            setRecipientQuery('');
-                          }}>
-                            <div style={{flex:1,minWidth:0}}>
-                              <div style={{display:'flex',alignItems:'center',gap:6}}>
-                                <span style={{fontSize:12,fontWeight:600,color:'#1A1D23'}}>{ar.customer_name || '-'}</span>
-                                {ar.model && <span style={{display:'inline-flex',padding:'1px 6px',borderRadius:4,fontSize:10,fontWeight:600,background:'#E6F1FB',color:'#0C447C'}}>{ar.model}</span>}
-                              </div>
-                              <div style={{fontSize:11,color:'#5A6070'}}>{ar.customer_phone || '-'}</div>
-                            </div>
-                            <div style={{textAlign:'right',flexShrink:0}}>
-                              <div style={{fontSize:10,color:'#5A6070',maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ar.repair_result || ar.symptom || '-'}</div>
-                              <div style={{fontSize:10,color:'#9BA3B2'}}>{fmtDate(ar.receipt_date)}</div>
-                            </div>
+                  (() => {
+                    const q = recipientQuery.trim().toLowerCase();
+                    const matchedCompanies = q.length >= 2 ? (companies || []).filter(comp =>
+                      comp.company_name?.toLowerCase().includes(q) || comp.contact_person?.toLowerCase().includes(q) || comp.phone?.includes(q)
+                    ) : [];
+                    const hasAS = pendingShip.length > 0;
+                    const hasComp = matchedCompanies.length > 0;
+                    const showDrop = showNewRow && recipientQuery.length >= 1 && (hasAS || hasComp);
+                    return (
+                    <>
+                      <input ref={companyInputRef} className="as-cell-input" value={newRow.receiver_name||''} placeholder="수령자명"
+                        onChange={e => { setNewRow(p=>({...p, receiver_name: e.target.value, as_record_id: null})); setRecipientQuery(e.target.value); setCompanyDropOpen(true); }}
+                        onFocus={() => { if (recipientQuery.length >= 1) setCompanyDropOpen(true); }}
+                        onKeyDown={e => { if (e.key==='Enter') e.preventDefault(); }} />
+                      {showDrop && companyDropOpen && (() => {
+                        const rect = companyInputRef.current?.getBoundingClientRect();
+                        if (!rect) return null;
+                        return (
+                        <div className="ship-company-dropdown" style={{position:'fixed',top:rect.bottom+2,left:rect.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,0.12)',minWidth:380,maxHeight:320,overflowY:'auto'}}>
+                          {/* 직접 입력 */}
+                          <div style={{padding:'8px 12px',cursor:'pointer',borderBottom:'1px solid #F0F1F3',display:'flex',alignItems:'center',gap:8}}
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => { setCompanyDropOpen(false); setRecipientQuery(''); }}>
+                            <span style={{fontSize:11,fontWeight:600,color:'#185FA5'}}>✏️ 직접 입력</span>
+                            <span style={{fontSize:11,color:'#9BA3B2'}}>"{newRow.receiver_name}" 그대로 사용</span>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
+                          {/* AS 발송 대기 */}
+                          {hasAS && (
+                            <>
+                              <div style={{padding:'6px 12px',background:'#F8F9FB',borderBottom:'1px solid #F0F1F3'}}>
+                                <span style={{fontSize:10,fontWeight:700,color:'#5A6070'}}>📦 발송 대기 {pendingShip.length}건</span>
+                              </div>
+                              {pendingShip.slice(0,5).map(ar => (
+                                <div key={ar.id} style={{padding:'8px 12px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,borderBottom:'1px solid #F8F9FB'}}
+                                  onMouseDown={e => e.preventDefault()}
+                                  onClick={() => {
+                                    setNewRow(p => ({...p, receiver_name: ar.customer_name || '', receiver_phone: ar.customer_phone || '', contents: ar.model || '', as_record_id: ar.id }));
+                                    setRecipientQuery(''); setCompanyDropOpen(false);
+                                  }}>
+                                  <div style={{flex:1,minWidth:0}}>
+                                    <div style={{display:'flex',alignItems:'center',gap:6}}>
+                                      <span style={{fontSize:12,fontWeight:600,color:'#1A1D23'}}>{ar.customer_name || '-'}</span>
+                                      {ar.model && <span style={{display:'inline-flex',padding:'1px 6px',borderRadius:4,fontSize:10,fontWeight:600,background:'#E6F1FB',color:'#0C447C'}}>{ar.model}</span>}
+                                    </div>
+                                    <div style={{fontSize:11,color:'#5A6070'}}>{ar.customer_phone || '-'}</div>
+                                  </div>
+                                  <div style={{textAlign:'right',flexShrink:0}}>
+                                    <div style={{fontSize:10,color:'#5A6070',maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ar.repair_result || ar.symptom || '-'}</div>
+                                    <div style={{fontSize:10,color:'#9BA3B2'}}>{fmtDate(ar.receipt_date)}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </>
+                          )}
+                          {/* 거래처 목록 */}
+                          {hasComp && (
+                            <>
+                              <div style={{padding:'6px 12px',background:'#F8F9FB',borderBottom:'1px solid #F0F1F3'}}>
+                                <span style={{fontSize:10,fontWeight:700,color:'#5A6070'}}>🏢 거래처 {matchedCompanies.length}건</span>
+                              </div>
+                              {matchedCompanies.slice(0,5).map(comp => (
+                                <div key={comp.id} style={{padding:'8px 12px',cursor:'pointer',display:'flex',alignItems:'center',gap:8,borderBottom:'1px solid #F8F9FB'}}
+                                  onMouseDown={e => e.preventDefault()}
+                                  onClick={() => {
+                                    setNewRow(p => ({...p, receiver_name: comp.contact_person || comp.company_name || '', receiver_phone: comp.phone || '', receiver_address: comp.address || '', as_record_id: null }));
+                                    setRecipientQuery(''); setCompanyDropOpen(false);
+                                    // 다음 필드로 포커스
+                                    setTimeout(() => { const next = document.querySelector('.as-new-row td:nth-child(4) input'); if (next) next.focus(); }, 50);
+                                  }}>
+                                  <div style={{width:28,height:28,borderRadius:6,background:'#185FA5',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:11,fontWeight:700,flexShrink:0}}>{(comp.company_name || '?')[0]}</div>
+                                  <div style={{flex:1,minWidth:0}}>
+                                    <div style={{display:'flex',alignItems:'center',gap:6}}>
+                                      <span style={{fontSize:12,fontWeight:600,color:'#1A1D23'}}>{comp.company_name}</span>
+                                      {comp.contact_person && <span style={{fontSize:11,color:'#5A6070'}}>{comp.contact_person}</span>}
+                                    </div>
+                                    <div style={{fontSize:11,color:'#9BA3B2',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{comp.phone || '-'} · {comp.address ? comp.address.slice(0,25)+(comp.address.length>25?'…':'') : '주소 없음'}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </>
+                          )}
+                          {!hasAS && !hasComp && (
+                            <div style={{padding:'12px',textAlign:'center',fontSize:11,color:'#9BA3B2'}}>검색 결과 없음</div>
+                          )}
+                        </div>);
+                      })()}
+                    </>);
+                  })()
                 ) : c.type === 'select' ? (
                   <div className="badge-expand-panel" onClick={e => e.stopPropagation()}>
                     {(() => { const [nbg,nc] = newRow[c.key] ? getShipBadgeColor(c.key, newRow[c.key]) : ['#F4F6FA','#9BA3B2']; return (
