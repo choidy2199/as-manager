@@ -2315,9 +2315,15 @@ function CompaniesTab({ companies, setCompanies, onReload }) {
   const [newRow, setNewRow] = useState({ company_name: '', phone: '', contact_person: '', address: '', invoice_type: '', memo: '' });
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState('');
-  const [invoiceDropdown, setInvoiceDropdown] = useState(null); // company id
+  const [invoiceDropdown, setInvoiceDropdown] = useState(null);
   const [invoiceDropPos, setInvoiceDropPos] = useState(null);
   const tableRef = useRef(null);
+
+  // 수정/저장 모드
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [pendingEdits, setPendingEdits] = useState({}); // { [id]: { field: newValue, ... } }
+  const [pendingDeletes, setPendingDeletes] = useState(new Set());
+  const [saveMsg, setSaveMsg] = useState(false);
 
   // 컬럼 리사이즈
   const DEFAULT_WIDTHS = { _no: 50, company_name: 160, phone: 130, contact_person: 100, address: 280, invoice_type: 100, memo: 160, _delete: 60 };
@@ -2326,7 +2332,6 @@ function CompaniesTab({ companies, setCompanies, onReload }) {
     try { const s = localStorage.getItem('companies-col-widths'); return s ? { ...DEFAULT_WIDTHS, ...JSON.parse(s) } : DEFAULT_WIDTHS; } catch { return DEFAULT_WIDTHS; }
   });
   const getColWidth = (k) => colWidths[k] || DEFAULT_WIDTHS[k] || 100;
-  const resizeRef = useRef(null);
   const startResize = (idx, key, e) => {
     e.preventDefault(); e.stopPropagation();
     const startX = e.clientX; const startW = getColWidth(key);
@@ -2357,22 +2362,25 @@ function CompaniesTab({ companies, setCompanies, onReload }) {
   const invoiceCount = companies.filter(c => c.invoice_type === '월말' || c.invoice_type === '계산서').length;
   const normalCount = companies.length - invoiceCount;
 
-  // 인라인 편집 시작
-  const startEdit = (id, field, val) => { setEditCell({ id, field }); setEditValue(val || ''); };
-  const commitEdit = async () => {
+  // 편집된 값 가져오기 (pendingEdits 반영)
+  const getDisplayVal = (c, field) => {
+    if (pendingEdits[c.id] && pendingEdits[c.id][field] !== undefined) return pendingEdits[c.id][field];
+    return c[field];
+  };
+
+  // 인라인 편집 시작 (수정 모드에서만)
+  const startEdit = (id, field, val) => { if (!isEditMode) return; setEditCell({ id, field }); setEditValue(val || ''); };
+  const commitEdit = () => {
     if (!editCell) return;
     const { id, field } = editCell;
-    const { error } = await supabase.from('companies').update({ [field]: editValue || null }).eq('id', id);
-    if (error) { alert('저장 실패: ' + error.message); }
-    else { setCompanies(prev => prev.map(c => c.id === id ? { ...c, [field]: editValue || null } : c)); }
+    // pendingEdits에 저장 (Supabase에 바로 저장하지 않음)
+    setPendingEdits(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [field]: editValue || null } }));
     setEditCell(null);
   };
 
-  // 계산서구분 저장
-  const saveInvoiceType = async (id, val) => {
-    const { error } = await supabase.from('companies').update({ invoice_type: val }).eq('id', id);
-    if (error) { alert('저장 실패: ' + error.message); }
-    else { setCompanies(prev => prev.map(c => c.id === id ? { ...c, invoice_type: val } : c)); }
+  // 계산서구분 저장 (pendingEdits에)
+  const saveInvoiceType = (id, val) => {
+    setPendingEdits(prev => ({ ...prev, [id]: { ...(prev[id] || {}), invoice_type: val } }));
     setInvoiceDropdown(null); setInvoiceDropPos(null);
   };
 
@@ -2384,7 +2392,7 @@ function CompaniesTab({ companies, setCompanies, onReload }) {
     return () => { clearTimeout(timer); document.removeEventListener('click', h); };
   }, [invoiceDropdown]);
 
-  // 새 거래처 저장
+  // 새 거래처 저장 (독립 — 수정 모드와 무관)
   const handleNewSave = async () => {
     if (!newRow.company_name?.trim()) { alert('거래처명을 입력하세요.'); return; }
     const { data, error } = await supabase.from('companies').insert({
@@ -2401,25 +2409,60 @@ function CompaniesTab({ companies, setCompanies, onReload }) {
     setShowNewRow(false);
   };
 
-  // 삭제
-  const handleDelete = async (c) => {
-    if (!confirm(`"${c.company_name}"을(를) 삭제하시겠습니까?`)) return;
-    const { error } = await supabase.from('companies').delete().eq('id', c.id);
-    if (error) { alert('삭제 실패: ' + error.message); return; }
-    setCompanies(prev => prev.filter(x => x.id !== c.id));
+  // "저장" 버튼 — 일괄 반영
+  const handleBulkSave = async () => {
+    try {
+      // 수정사항 반영
+      const editIds = Object.keys(pendingEdits);
+      for (const id of editIds) {
+        if (pendingDeletes.has(id)) continue; // 삭제 예정이면 수정 스킵
+        const { error } = await supabase.from('companies').update(pendingEdits[id]).eq('id', id);
+        if (error) throw new Error(`수정 실패 (${id}): ${error.message}`);
+      }
+      // 삭제 반영
+      for (const id of pendingDeletes) {
+        const { error } = await supabase.from('companies').delete().eq('id', id);
+        if (error) throw new Error(`삭제 실패 (${id}): ${error.message}`);
+      }
+      // 로컬 state 갱신
+      setCompanies(prev => {
+        let next = prev.filter(c => !pendingDeletes.has(c.id));
+        next = next.map(c => pendingEdits[c.id] ? { ...c, ...pendingEdits[c.id] } : c);
+        return next;
+      });
+      setPendingEdits({}); setPendingDeletes(new Set()); setEditCell(null); setIsEditMode(false);
+      setSaveMsg(true); setTimeout(() => setSaveMsg(false), 2000);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  // "취소" 버튼
+  const handleCancel = () => {
+    setPendingEdits({}); setPendingDeletes(new Set()); setEditCell(null); setIsEditMode(false);
   };
 
   const empty = <span className="empty-dot">●</span>;
 
   const renderCell = (c, col, rowIdx) => {
+    const isDel = pendingDeletes.has(c.id);
     if (col.key === '_no') return <span style={{fontSize:13,fontWeight:400,color:'#5A6070',fontFamily:'Pretendard,sans-serif'}}>{rowIdx + 1}</span>;
-    if (col.key === '_delete') return <button style={{background:'#FCEBEB',color:'#CC2222',border:'none',borderRadius:4,padding:'3px 8px',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'Pretendard,sans-serif'}} onClick={e => { e.stopPropagation(); handleDelete(c); }}>삭제</button>;
+    if (col.key === '_delete') {
+      if (!isEditMode) return null;
+      if (isDel) return <button style={{background:'#EAECF2',color:'#5A6070',border:'none',borderRadius:4,padding:'3px 8px',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'Pretendard,sans-serif'}} onClick={e => { e.stopPropagation(); setPendingDeletes(prev => { const n = new Set(prev); n.delete(c.id); return n; }); }}>복원</button>;
+      return <button style={{background:'#FCEBEB',color:'#CC2222',border:'none',borderRadius:4,padding:'3px 8px',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'Pretendard,sans-serif'}} onClick={e => { e.stopPropagation(); setPendingDeletes(prev => new Set(prev).add(c.id)); }}>삭제</button>;
+    }
 
-    const val = c[col.key];
+    const val = getDisplayVal(c, col.key);
     const isEditing = editCell?.id === c.id && editCell?.field === col.key;
 
     // 계산서구분 — 뱃지 드롭다운
     if (col.key === 'invoice_type') {
+      if (!isEditMode) {
+        const [bg, tc] = INVOICE_BADGE[val] || ['#F4F6FA', '#9BA3B2'];
+        if (!val) return empty;
+        return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',fontFamily:'Pretendard,sans-serif',background:bg,color:tc}}>{val}</span>;
+      }
       const isOpen = invoiceDropdown === c.id;
       const [bg, tc] = INVOICE_BADGE[val] || ['#F4F6FA', '#9BA3B2'];
       return (
@@ -2472,7 +2515,21 @@ function CompaniesTab({ companies, setCompanies, onReload }) {
           <input className="input as-filter-search" placeholder="거래처명, 담당자, 연락처 검색..." value={search} onChange={e => setSearch(e.target.value)} autoComplete="off" />
         </div>
         <span style={{fontSize:12,color:'#5A6070',fontWeight:500,fontFamily:'Pretendard,sans-serif'}}>전체 {companies.length}건</span>
-        <button className="btn-primary" style={{fontSize:11,padding:'4px 12px',marginLeft:'auto'}} onClick={() => setShowNewRow(true)}>+ 새 거래처</button>
+        <div style={{display:'flex',alignItems:'center',gap:6,marginLeft:'auto'}}>
+          {!isEditMode ? (
+            <>
+              <button className="btn-primary" style={{fontSize:11,padding:'4px 12px'}} onClick={() => { setShowNewRow(true); }}>+ 새 거래처</button>
+              <button style={{background:'#FAEEDA',color:'#854F0B',border:'none',borderRadius:4,padding:'4px 12px',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif'}} onClick={() => { setIsEditMode(true); setShowNewRow(false); }}>수정</button>
+            </>
+          ) : (
+            <>
+              <button style={{background:'#1D9E75',color:'#fff',border:'none',borderRadius:4,padding:'4px 12px',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif'}} onClick={handleBulkSave}>저장</button>
+              <button style={{background:'#EAECF2',color:'#5A6070',border:'none',borderRadius:4,padding:'4px 12px',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif'}} onClick={handleCancel}>취소</button>
+              <span style={{fontSize:11,color:'#EF9F27',fontWeight:600,fontFamily:'Pretendard,sans-serif',marginLeft:8}}>수정 모드 — 셀을 클릭하여 편집하세요</span>
+            </>
+          )}
+          {saveMsg && <span style={{fontSize:11,color:'#1D9E75',fontWeight:600,fontFamily:'Pretendard,sans-serif',marginLeft:8}}>저장 완료</span>}
+        </div>
       </div>
 
       <div className="section" style={{display:'flex',flexDirection:'column',overflow:'hidden',height:'calc(100vh - 160px)'}}>
@@ -2498,8 +2555,8 @@ function CompaniesTab({ companies, setCompanies, onReload }) {
               </tr>
             </thead>
             <tbody>
-              {showNewRow && (
-                <tr className="as-new-row">
+              {showNewRow && !isEditMode && (
+                <tr className="as-new-row" style={{background:'#E6F1FB'}}>
                   {COLS.map(c => (
                     <td key={c.key} style={{...(c.key === 'invoice_type' ? {overflow:'visible',position:'relative'} : {})}}>
                       {c.key === '_no' ? <span style={{fontSize:11,color:'#9BA3B2'}}>new</span>
@@ -2533,20 +2590,24 @@ function CompaniesTab({ companies, setCompanies, onReload }) {
                   ))}
                 </tr>
               )}
-              {filtered.map((c, i) => (
-                <tr key={c.id} className="as-data-row" style={i % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
+              {filtered.map((c, i) => {
+                const isDel = pendingDeletes.has(c.id);
+                return (
+                <tr key={c.id} className="as-data-row" style={{background: isDel ? '#FCEBEB' : (i % 2 === 1 ? '#FAFBFC' : undefined), ...(isDel ? {opacity:0.6} : {})}}>
                   {COLS.map(col => (
                     <td key={col.key}
-                      style={{...(col.align === 'left' ? {textAlign:'left'} : {}), ...(col.type === 'select' ? {overflow:'visible',position:'relative'} : {}), ...(col.type === 'action' ? {cursor:'default'} : {})}}
+                      style={{...(col.align === 'left' ? {textAlign:'left'} : {}), ...(col.type === 'select' ? {overflow:'visible',position:'relative'} : {}), ...(col.type === 'action' ? {cursor:'default'} : {}), ...(isDel ? {textDecoration:'line-through'} : {})}}
                       onClick={() => {
+                        if (!isEditMode || isDel) return;
                         if (col.key === '_no' || col.key === '_delete' || col.type === 'select' || col.type === 'action') return;
-                        startEdit(c.id, col.key, c[col.key] || '');
+                        startEdit(c.id, col.key, getDisplayVal(c, col.key) || '');
                       }}>
                       {renderCell(c, col, i)}
                     </td>
                   ))}
                 </tr>
-              ))}
+                );
+              })}
               {filtered.length === 0 && (
                 <tr><td colSpan={COLS.length} className="empty">거래처가 없습니다</td></tr>
               )}
