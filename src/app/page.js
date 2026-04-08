@@ -546,8 +546,7 @@ export default function Home() {
                   confirmMap={confirmMap}
                   onOpenCustomer={(name, phone, company) => setCustomerPopup({ name, phone, company })}
                   onAddShip={async (r) => {
-                    const dm = (r.model || r.repair_result) ? `${r.model || ''} / ${r.repair_result || ''}` : '';
-                    await addShip({ shipDate: today(), carrier: null, trackingNo: null, senderName: '선불', receiverName: r.customer_name || r.company_name || '', receiverPhone: r.customer_phone, receiverAddress: null, contents: r.model || null, memo: null, asRecordId: r.id, deliveryMessage: dm || null });
+                    await addShip({ shipDate: today(), carrier: null, trackingNo: null, senderName: '선불', receiverName: r.customer_name || r.company_name || '', receiverPhone: r.customer_phone, receiverAddress: null, contents: r.model || null, memo: null, asRecordId: r.id, deliveryMessage: r.repair_result || null });
                     alert('택배발송에 입력되었습니다');
                   }}
                 />
