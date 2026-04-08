@@ -59,7 +59,9 @@ export default function Home() {
     const mode = localStorage.getItem('as_date_filter_mode') || 'month';
     if (mode === 'all') return '';
     if (mode === 'custom') { const saved = localStorage.getItem('as_date_to'); return (saved && saved >= today()) ? saved : today(); }
-    return today();
+    if (mode === 'today') return today();
+    // month: 해당월 말일
+    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' })); const y=d.getFullYear(), m=d.getMonth()+1; const lastDay=new Date(y,m,0).getDate(); return y+'-'+String(m).padStart(2,'0')+'-'+String(lastDay).padStart(2,'0');
   });
   const [dateAll, setDateAll] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -124,7 +126,9 @@ export default function Home() {
     const mode = localStorage.getItem('ship_date_filter_mode') || 'month';
     if (mode === 'all') return '';
     if (mode === 'custom') { const saved = localStorage.getItem('ship_date_to'); return (saved && saved >= today()) ? saved : today(); }
-    return today();
+    if (mode === 'today') return today();
+    // month: 해당월 말일
+    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' })); const y=d.getFullYear(), m=d.getMonth()+1; const lastDay=new Date(y,m,0).getDate(); return y+'-'+String(m).padStart(2,'0')+'-'+String(lastDay).padStart(2,'0');
   });
   const [shipDateAll, setShipDateAll] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -466,7 +470,7 @@ export default function Home() {
                 {(() => { const active = {height:32,padding:'0 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#185FA5',color:'#fff'}; const inactive = {...active,background:'#E6F1FB',color:'#0C447C'}; return (
                 <div style={{display:'flex',gap:4,marginLeft:4}}>
                   <button onClick={() => { setDateAll(false); setDateFrom(today()); setDateTo(today()); setDateFilterMode('today'); localStorage.setItem('as_date_filter_mode','today'); }} style={dateFilterMode==='today'?active:inactive}>오늘</button>
-                  <button onClick={() => { setDateAll(false); const d=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'})); setDateFrom(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'); setDateTo(today()); setDateFilterMode('month'); localStorage.setItem('as_date_filter_mode','month'); }} style={dateFilterMode==='month'?active:inactive}>이번 달</button>
+                  <button onClick={() => { setDateAll(false); const d=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'})); const y=d.getFullYear(), m=d.getMonth()+1; setDateFrom(y+'-'+String(m).padStart(2,'0')+'-01'); const lastDay=new Date(y,m,0).getDate(); setDateTo(y+'-'+String(m).padStart(2,'0')+'-'+String(lastDay).padStart(2,'0')); setDateFilterMode('month'); localStorage.setItem('as_date_filter_mode','month'); }} style={dateFilterMode==='month'?active:inactive}>이번 달</button>
                   <button onClick={() => { setDateAll(true); setDateFilterMode('all'); localStorage.setItem('as_date_filter_mode','all'); }} style={dateFilterMode==='all'?active:inactive}>전체</button>
                 </div>); })()}
               </div>
@@ -597,7 +601,7 @@ export default function Home() {
                 {(() => { const active = {height:32,padding:'0 10px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#185FA5',color:'#fff'}; const inactive = {...active,background:'#E6F1FB',color:'#0C447C'}; return (
                 <div style={{display:'flex',gap:4,marginLeft:4}}>
                   <button onClick={() => { setShipDateAll(false); setShipDateFrom(today()); setShipDateTo(today()); setShipDateFilterMode('today'); localStorage.setItem('ship_date_filter_mode','today'); }} style={shipDateFilterMode==='today'?active:inactive}>오늘</button>
-                  <button onClick={() => { setShipDateAll(false); const d=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'})); setShipDateFrom(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'); setShipDateTo(today()); setShipDateFilterMode('month'); localStorage.setItem('ship_date_filter_mode','month'); }} style={shipDateFilterMode==='month'?active:inactive}>이번 달</button>
+                  <button onClick={() => { setShipDateAll(false); const d=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'})); const y=d.getFullYear(), m=d.getMonth()+1; setShipDateFrom(y+'-'+String(m).padStart(2,'0')+'-01'); const lastDay=new Date(y,m,0).getDate(); setShipDateTo(y+'-'+String(m).padStart(2,'0')+'-'+String(lastDay).padStart(2,'0')); setShipDateFilterMode('month'); localStorage.setItem('ship_date_filter_mode','month'); }} style={shipDateFilterMode==='month'?active:inactive}>이번 달</button>
                   <button onClick={() => { setShipDateAll(true); setShipDateFilterMode('all'); localStorage.setItem('ship_date_filter_mode','all'); }} style={shipDateFilterMode==='all'?active:inactive}>전체</button>
                 </div>); })()}
               </div>
