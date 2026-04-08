@@ -1819,6 +1819,18 @@ function CustomerPopup({ customer, onClose, onConfirmSent }) {
     loadAll();
   }, [name, phone]);
 
+  // Realtime: 새 문자 수신 시 즉시 반영
+  useEffect(() => {
+    if (!phone) return;
+    const normalPhone = toLocal(phone);
+    const ch = supabase.channel('cp-sms-' + normalPhone)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sms_messages', filter: `phone=eq.${normalPhone}` }, (payload) => {
+        setSmsMessages(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new]);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [phone]);
+
   useEffect(() => {
     setTimeout(() => { if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight; }, 50);
   }, [smsMessages]);
@@ -3162,6 +3174,43 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
       onUnreadChange(count || 0);
     };
     load();
+  }, [selected, onUnreadChange]);
+
+  // Realtime: 새 문자 수신 시 즉시 반영
+  useEffect(() => {
+    const ch = supabase.channel('sms-popup-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sms_messages' }, (payload) => {
+        const m = payload.new;
+        if (!m.phone) return;
+        // 현재 선택된 대화면 말풍선에 추가 (중복 방지)
+        if (m.phone === selected) {
+          setMessages(prev => prev.some(x => x.id === m.id) ? prev : [...prev, m]);
+          // 수신 메시지면 즉시 읽음 처리
+          if (m.direction === 'incoming' && !m.read) {
+            supabase.from('sms_messages').update({ read: true }).eq('id', m.id).then(() => {});
+          }
+        }
+        // 좌측 대화 목록 업데이트
+        setCustomers(prev => {
+          const exists = prev.find(c => c.phone === m.phone);
+          if (exists) {
+            return prev.map(c => c.phone === m.phone ? {
+              ...c,
+              latest: m.sent_at > (c.latest || '') ? m.sent_at : c.latest,
+              latestText: m.sent_at > (c.latest || '') ? m.content : c.latestText,
+              unread: m.direction === 'incoming' && m.phone !== selected ? c.unread + 1 : c.unread,
+            } : c).sort((a,b) => (b.latest||'') > (a.latest||'') ? 1 : -1);
+          } else {
+            return [{ phone: m.phone, name: m.phone, unread: m.direction === 'incoming' ? 1 : 0, latest: m.sent_at, latestText: m.content }, ...prev];
+          }
+        });
+        // 전체 읽지않음 카운트 업데이트
+        if (m.direction === 'incoming' && m.phone !== selected) {
+          supabase.from('sms_messages').select('*', { count: 'exact', head: true }).eq('direction', 'incoming').eq('read', false).then(({ count }) => onUnreadChange(count || 0));
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
   }, [selected, onUnreadChange]);
 
   useEffect(() => { setTimeout(() => { if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight; }, 50); }, [messages]);
