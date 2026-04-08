@@ -1824,9 +1824,10 @@ function CustomerPopup({ customer, onClose, onConfirmSent }) {
     const normalPhone = toLocal(phone);
     const ch = supabase.channel('cp-sms-' + normalPhone + '-' + Date.now())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sms_messages', filter: `phone=eq.${normalPhone}` }, (payload) => {
+        console.log('[Realtime CP]', { phone: payload.new.phone, id: payload.new.id });
         setSmsMessages(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new]);
       })
-      .subscribe();
+      .subscribe((status) => { console.log('[Realtime CP] subscribe status:', status); });
     return () => { supabase.removeChannel(ch); };
   }, [phone]);
 
@@ -3180,14 +3181,22 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
   useEffect(() => { selectedRef.current = selected; }, [selected]);
 
   useEffect(() => {
-    const ch = supabase.channel('sms-popup-rt-' + Date.now())
+    const chName = 'sms-popup-rt-' + Date.now();
+    const ch = supabase.channel(chName)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sms_messages' }, (payload) => {
         const m = payload.new;
         if (!m.phone) return;
         const cur = selectedRef.current;
+        const mPhone = toLocal(m.phone);
+        const curPhone = cur ? toLocal(cur) : null;
+        console.log('[Realtime SMS]', { mPhone, curPhone, match: mPhone === curPhone, id: m.id, dir: m.direction });
         // 현재 선택된 대화면 말풍선에 추가 (중복 방지)
-        if (m.phone === cur) {
-          setMessages(prev => prev.some(x => x.id === m.id) ? prev : [...prev, m]);
+        if (curPhone && mPhone === curPhone) {
+          setMessages(prev => {
+            if (prev.some(x => x.id === m.id)) return prev;
+            console.log('[Realtime SMS] Adding to messages, prev count:', prev.length);
+            return [...prev, m];
+          });
           // 수신 메시지면 즉시 읽음 처리
           if (m.direction === 'incoming' && !m.read) {
             supabase.from('sms_messages').update({ read: true }).eq('id', m.id).then(() => {});
@@ -3195,24 +3204,24 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
         }
         // 좌측 대화 목록 업데이트
         setCustomers(prev => {
-          const exists = prev.find(c => c.phone === m.phone);
+          const exists = prev.find(c => toLocal(c.phone) === mPhone);
           if (exists) {
-            return prev.map(c => c.phone === m.phone ? {
+            return prev.map(c => toLocal(c.phone) === mPhone ? {
               ...c,
               latest: m.sent_at > (c.latest || '') ? m.sent_at : c.latest,
               latestText: m.sent_at > (c.latest || '') ? m.content : c.latestText,
-              unread: m.direction === 'incoming' && m.phone !== cur ? c.unread + 1 : c.unread,
+              unread: m.direction === 'incoming' && mPhone !== curPhone ? c.unread + 1 : c.unread,
             } : c).sort((a,b) => (b.latest||'') > (a.latest||'') ? 1 : -1);
           } else {
-            return [{ phone: m.phone, name: m.phone, unread: m.direction === 'incoming' ? 1 : 0, latest: m.sent_at, latestText: m.content }, ...prev];
+            return [{ phone: mPhone, name: mPhone, unread: m.direction === 'incoming' ? 1 : 0, latest: m.sent_at, latestText: m.content }, ...prev];
           }
         });
         // 전체 읽지않음 카운트 업데이트
-        if (m.direction === 'incoming' && m.phone !== cur) {
+        if (m.direction === 'incoming' && mPhone !== curPhone) {
           supabase.from('sms_messages').select('*', { count: 'exact', head: true }).eq('direction', 'incoming').eq('read', false).then(({ count }) => onUnreadChange(count || 0));
         }
       })
-      .subscribe();
+      .subscribe((status) => { console.log('[Realtime SMS] subscribe status:', status); });
     return () => { supabase.removeChannel(ch); };
   }, [onUnreadChange]);
 
