@@ -278,6 +278,7 @@ export default function Home() {
       receiver_address: d.receiverAddress, contents: d.contents, memo: d.memo,
     };
     if (d.asRecordId) row.as_record_id = d.asRecordId;
+    if (d.deliveryMessage) row.delivery_message = d.deliveryMessage;
     const { error } = await supabase.from('ship_records').insert(row);
     if (error) { console.error('Ship insert error:', error); alert('택배 등록 실패: ' + error.message); }
     loadData();
@@ -545,7 +546,8 @@ export default function Home() {
                   confirmMap={confirmMap}
                   onOpenCustomer={(name, phone, company) => setCustomerPopup({ name, phone, company })}
                   onAddShip={async (r) => {
-                    await addShip({ shipDate: today(), carrier: null, trackingNo: null, senderName: '선불', receiverName: r.customer_name || r.company_name || '', receiverPhone: r.customer_phone, receiverAddress: null, contents: r.model || null, memo: null, asRecordId: r.id });
+                    const dm = (r.model || r.repair_result) ? `${r.model || ''} / ${r.repair_result || ''}` : '';
+                    await addShip({ shipDate: today(), carrier: null, trackingNo: null, senderName: '선불', receiverName: r.customer_name || r.company_name || '', receiverPhone: r.customer_phone, receiverAddress: null, contents: r.model || null, memo: null, asRecordId: r.id, deliveryMessage: dm || null });
                     alert('택배발송에 입력되었습니다');
                   }}
                 />
