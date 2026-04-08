@@ -15,22 +15,30 @@ function toLocal(phone) {
 export async function POST(request) {
   try {
     const body = await request.json();
+    console.log('[SMS Webhook] received:', JSON.stringify(body).substring(0, 500));
     const phone = body.data?.contact || body.data?.from || '';
     const content = body.data?.content || body.data?.body || '';
-    const sentAt = body.data?.received_at || new Date().toISOString();
+    const sentAt = body.data?.timestamp || body.data?.received_at || new Date().toISOString();
     const localPhone = toLocal(phone);
 
+    console.log('[SMS Webhook] parsed:', { phone, localPhone, contentLen: content.length, sentAt });
+
     if (localPhone && content) {
-      await supabase.from('sms_messages').insert({
+      const { error } = await supabase.from('sms_messages').insert({
         phone: localPhone,
         direction: 'incoming',
         content: content,
         sent_at: sentAt,
       });
+      if (error) console.error('[SMS Webhook] DB insert error:', error);
+      else console.log('[SMS Webhook] saved incoming from', localPhone);
+    } else {
+      console.warn('[SMS Webhook] skipped: no phone or content');
     }
 
     return Response.json({ success: true });
   } catch (e) {
+    console.error('[SMS Webhook] error:', e);
     return Response.json({ success: false, error: e.message }, { status: 500 });
   }
 }

@@ -174,7 +174,7 @@ export default function Home() {
     if (asRes.data) {
       setAsRecords(asRes.data);
       // 견적 안내 발송 여부 일괄 조회 (phone 기준, message_type에 '견적' 포함)
-      const phones = [...new Set(asRes.data.map(r => r.customer_phone).filter(Boolean))];
+      const phones = [...new Set(asRes.data.map(r => toLocal(r.customer_phone)).filter(Boolean))];
       if (phones.length > 0) {
         const { data: smsConf } = await supabase.from('sms_messages').select('phone').eq('direction', 'outgoing').ilike('message_type', '%견적%').in('phone', phones);
         const map = {};
@@ -211,7 +211,7 @@ export default function Home() {
   /* ── 자동 문자 발송 유틸 ── */
   const sendAutoSMS = async (type, record) => {
     try {
-      const phone = record.customer_phone;
+      const phone = toLocal(record.customer_phone);
       if (!phone) return;
       // 중복 발송 방지: 같은 as_record_id + 같은 type
       const tag = type === 'intake' ? '입고' : '출고';
@@ -1056,7 +1056,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     }
     // 확인 컬럼
     if (col.key === '_confirm') {
-      if (confirmMap && r.customer_phone && confirmMap[r.customer_phone]) return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',background:'#FCEBEB',color:'#791F1F',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',fontFamily:'Pretendard,sans-serif'}}>발송완료</span>;
+      if (confirmMap && r.customer_phone && confirmMap[toLocal(r.customer_phone)]) return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',background:'#FCEBEB',color:'#791F1F',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',fontFamily:'Pretendard,sans-serif'}}>발송완료</span>;
       return empty;
     }
     // 입고일
@@ -1799,9 +1799,9 @@ function CustomerPopup({ customer, onClose, onConfirmSent }) {
       const { data: asData } = await q;
       if (asData) setRecords(asData);
 
-      // 문자 내역
+      // 문자 내역 (전화번호 정규화하여 조회)
       if (phone) {
-        const { data: smsData } = await supabase.from('sms_messages').select('*').eq('phone', phone).order('sent_at', { ascending: true });
+        const { data: smsData } = await supabase.from('sms_messages').select('*').eq('phone', toLocal(phone)).order('sent_at', { ascending: true });
         if (smsData) setSmsMessages(smsData);
       }
       setLoading(false);
@@ -1885,11 +1885,12 @@ function CustomerPopup({ customer, onClose, onConfirmSent }) {
       const result = await res.json();
       if (result.error) { alert('문자 발송 실패: ' + result.error); setIsSending(false); return; }
     } catch (e) { alert('문자 발송 실패: ' + e.message); setIsSending(false); return; }
-    const msg = { phone, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString(), ...(selectedClipTitle ? { message_type: selectedClipTitle } : {}) };
+    const normalPhone = toLocal(phone);
+    const msg = { phone: normalPhone, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString(), ...(selectedClipTitle ? { message_type: selectedClipTitle } : {}) };
     const { data } = await supabase.from('sms_messages').insert(msg).select();
     if (data) setSmsMessages(prev => [...prev, ...data]);
     // 견적 클립보드 발송 시 confirmMap 즉시 업데이트
-    if (selectedClipTitle && selectedClipTitle.includes('견적') && onConfirmSent) onConfirmSent(phone);
+    if (selectedClipTitle && selectedClipTitle.includes('견적') && onConfirmSent) onConfirmSent(normalPhone);
     setMsgInput('');
     setSelectedClipTitle(null);
     if (textareaRef.current) { textareaRef.current.style.height = '54px'; }
@@ -3121,8 +3122,8 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
       // 고객명 매칭 (as_records에서)
       const { data: asData } = await supabase.from('as_records').select('customer_name,customer_phone').not('customer_phone', 'is', null);
       const nameMap = {};
-      (asData||[]).forEach(r => { if (r.customer_phone && r.customer_name) nameMap[r.customer_phone] = r.customer_name; });
-      Object.values(grouped).forEach(c => { c.name = nameMap[c.phone] || c.phone; });
+      (asData||[]).forEach(r => { if (r.customer_phone && r.customer_name) nameMap[toLocal(r.customer_phone)] = r.customer_name; });
+      Object.values(grouped).forEach(c => { c.name = nameMap[toLocal(c.phone)] || c.phone; });
       const list = Object.values(grouped).sort((a,b) => (b.latest||'') > (a.latest||'') ? 1 : -1);
       setCustomers(list);
     };
@@ -3157,10 +3158,11 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
       const result = await res.json();
       if (result.error) { alert('발송 실패: ' + result.error); setIsSending(false); return; }
     } catch (e) { alert('발송 실패: ' + e.message); setIsSending(false); return; }
-    const msg = { phone: selected, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString(), read: true, ...(selectedClipTitle ? { message_type: selectedClipTitle } : {}) };
+    const normalPhone = toLocal(selected);
+    const msg = { phone: normalPhone, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString(), read: true, ...(selectedClipTitle ? { message_type: selectedClipTitle } : {}) };
     const { data } = await supabase.from('sms_messages').insert(msg).select();
     if (data) setMessages(prev => [...prev, ...data]);
-    if (selectedClipTitle && selectedClipTitle.includes('견적') && onConfirmSent) onConfirmSent(selected);
+    if (selectedClipTitle && selectedClipTitle.includes('견적') && onConfirmSent) onConfirmSent(normalPhone);
     setMsgInput('');
     setSelectedClipTitle(null);
     if (textareaRef.current) textareaRef.current.style.height = '72px';
