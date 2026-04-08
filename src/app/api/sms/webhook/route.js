@@ -16,6 +16,13 @@ export async function POST(request) {
   try {
     const body = await request.json();
     console.log('[SMS Webhook] received:', JSON.stringify(body).substring(0, 500));
+
+    // 수신 메시지만 저장 (발신/배달완료/실패 등은 무시)
+    if (body.type && body.type !== 'message.phone.received') {
+      console.log('[SMS Webhook] skipped non-receive event:', body.type);
+      return Response.json({ success: true });
+    }
+
     const phone = body.data?.contact || body.data?.from || '';
     const content = body.data?.content || body.data?.body || '';
     const sentAt = body.data?.timestamp || body.data?.received_at || new Date().toISOString();
@@ -24,7 +31,7 @@ export async function POST(request) {
     // MMS 이미지 URL 추출 (httpSMS 향후 MMS 지원 대비 + 타 서비스 호환)
     const mediaUrl = body.data?.media_url || body.data?.media?.[0]?.url || body.data?.attachments?.[0]?.url || null;
 
-    console.log('[SMS Webhook] parsed:', { phone, localPhone, contentLen: content.length, sentAt, hasMedia: !!mediaUrl });
+    console.log('[SMS Webhook] parsed:', { type: body.type, phone, localPhone, contentLen: content.length, sentAt, hasMedia: !!mediaUrl });
 
     if (localPhone && (content || mediaUrl)) {
       const row = {
