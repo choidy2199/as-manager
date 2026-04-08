@@ -904,6 +904,16 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   const handleNewRowSave = async () => {
     const row = { ...newRow };
     row.repair_cost = parseInt(String(row.repair_cost).replace(/,/g,'')) || 0;
+    // 거래처/성함 분리 저장: "거래처 / 성함" → company_name + customer_name
+    if (row.company_name && row.company_name.includes('/')) {
+      const parts = row.company_name.split('/').map(s => s.trim());
+      row.company_name = parts[0] || '';
+      if (parts[1]) row.customer_name = parts[1];
+    } else if (row.company_name && !row.customer_name) {
+      // "/" 없이 이름만 입력 → 일반소비자 (customer_name으로 이동)
+      row.customer_name = row.company_name;
+      row.company_name = '';
+    }
     Object.keys(row).forEach(k => { if (row[k] === '') row[k] = null; });
     // 필수값 강제 설정
     row.receipt_date = row.receipt_date || today();
@@ -1210,7 +1220,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
             <div style={{position:'fixed',top:companyDropPos.top,left:companyDropPos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,width:240,maxHeight:300,overflowY:'auto',boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}}>
               {/* 일반 소비자 */}
               <div style={{padding:'8px 12px',background:'#FAFBFC',borderBottom:'1px solid #DDE1EB',cursor:'pointer',display:'flex',alignItems:'center',gap:8}}
-                onClick={() => { setNewRow(p => ({...p, company_name: searchPart, customer_name: searchPart, invoice_type: '없음(일반소매)', customer_phone: ''})); setCompanyQuery(searchPart + ' / '); setCompanyDropOpen(false); setTimeout(() => companyInputRef.current?.focus(), 50); }}>
+                onClick={() => { setNewRow(p => ({...p, company_name: '', customer_name: searchPart, invoice_type: '없음(일반소매)', customer_phone: ''})); setCompanyQuery(searchPart); setCompanyDropOpen(false); }}>
                 <span style={{width:8,height:8,borderRadius:'50%',background:'#1D9E75',flexShrink:0}}></span>
                 <span style={{fontSize:12,fontWeight:500,color:'#0F6E56',fontFamily:'Pretendard,sans-serif'}}>일반 소비자</span>
               </div>
