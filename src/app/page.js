@@ -852,6 +852,13 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     if (field === 'intake_carrier' && value === '방문') {
       await onSaveField(id, 'shipping_fee', '0');
     }
+    // 출고 택배 선택해제("") 시 출고 관련 3필드 비움
+    if (field === 'release_carrier' && value === '') {
+      await onSaveField(id, 'release_date', null);
+      await onSaveField(id, 'tracking_number', '');
+      onReload();
+      return;
+    }
     // 출고 택배 "방문" 선택 시 출고일+운송장 자동 설정
     if (field === 'release_carrier' && value === '방문') {
       await onSaveField(id, 'release_date', today());
@@ -1023,6 +1030,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         </span>
         {isOpen && badgePos && (
           <div style={{position:'fixed',top:badgePos.top,left:badgePos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,minWidth:80,maxHeight:(col.key==='model'||col.key==='release_carrier')?300:200,overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
+            {col.key === 'release_carrier' && <div style={{display:'flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif',background:'#F4F6FA',color:'#9BA3B2',marginBottom:2,border:!dbVal?'2px solid #9BA3B2':'2px solid transparent',whiteSpace:'nowrap'}} onClick={() => saveBadge(r.id, col.key, '')}>—</div>}
             {col.opts.map(o => {
               const ov = col.toDb ? col.toDb(o) : o;
               const [obg,oc] = getBadgeColor(col.key, ov);
