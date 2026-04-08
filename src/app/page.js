@@ -1822,7 +1822,7 @@ function CustomerPopup({ customer, onClose, onConfirmSent }) {
   useEffect(() => {
     if (!phone) return;
     const normalPhone = toLocal(phone);
-    const ch = supabase.channel('cp-sms-' + normalPhone)
+    const ch = supabase.channel('cp-sms-' + normalPhone + '-' + Date.now())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sms_messages', filter: `phone=eq.${normalPhone}` }, (payload) => {
         setSmsMessages(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new]);
       })
@@ -3176,13 +3176,17 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
   }, [selected, onUnreadChange]);
 
   // Realtime: 새 문자 수신 시 즉시 반영
+  const selectedRef = useRef(selected);
+  useEffect(() => { selectedRef.current = selected; }, [selected]);
+
   useEffect(() => {
-    const ch = supabase.channel('sms-popup-realtime')
+    const ch = supabase.channel('sms-popup-rt-' + Date.now())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sms_messages' }, (payload) => {
         const m = payload.new;
         if (!m.phone) return;
+        const cur = selectedRef.current;
         // 현재 선택된 대화면 말풍선에 추가 (중복 방지)
-        if (m.phone === selected) {
+        if (m.phone === cur) {
           setMessages(prev => prev.some(x => x.id === m.id) ? prev : [...prev, m]);
           // 수신 메시지면 즉시 읽음 처리
           if (m.direction === 'incoming' && !m.read) {
@@ -3197,20 +3201,20 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
               ...c,
               latest: m.sent_at > (c.latest || '') ? m.sent_at : c.latest,
               latestText: m.sent_at > (c.latest || '') ? m.content : c.latestText,
-              unread: m.direction === 'incoming' && m.phone !== selected ? c.unread + 1 : c.unread,
+              unread: m.direction === 'incoming' && m.phone !== cur ? c.unread + 1 : c.unread,
             } : c).sort((a,b) => (b.latest||'') > (a.latest||'') ? 1 : -1);
           } else {
             return [{ phone: m.phone, name: m.phone, unread: m.direction === 'incoming' ? 1 : 0, latest: m.sent_at, latestText: m.content }, ...prev];
           }
         });
         // 전체 읽지않음 카운트 업데이트
-        if (m.direction === 'incoming' && m.phone !== selected) {
+        if (m.direction === 'incoming' && m.phone !== cur) {
           supabase.from('sms_messages').select('*', { count: 'exact', head: true }).eq('direction', 'incoming').eq('read', false).then(({ count }) => onUnreadChange(count || 0));
         }
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [selected, onUnreadChange]);
+  }, [onUnreadChange]);
 
   useEffect(() => { setTimeout(() => { if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight; }, 50); }, [messages]);
 
