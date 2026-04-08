@@ -857,6 +857,17 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         sendAutoSMS('release', { ...row, release_carrier: '방문', release_date: today(), tracking_number: '방문' });
       }
     }
+    // 구분 → 부품판매 선택 시 모델명 자동 설정
+    if (field === 'record_type' && value === 'parts_sale') {
+      await onSaveField(id, 'model', '부품판매');
+    }
+    // 구분 → 부품판매에서 다른 값으로 변경 시 모델명 초기화
+    if (field === 'record_type' && value !== 'parts_sale') {
+      const row = records.find(r => r.id === id);
+      if (row && row.record_type === 'parts_sale') {
+        await onSaveField(id, 'model', '');
+      }
+    }
     onReload();
   };
 
@@ -950,7 +961,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'_msg', label:'msg', w:30, type:'action', isMsgCol: true },
     { key:'_confirm', label:'확인', w:50, type:'action' },
     { key:'customer_phone', label:'연락처', w:115, type:'text' },
-    { key:'model', label:'모델명', w:100, type:'select', opts: (() => { const list = [...new Set((products||[]).map(p=>p.model).filter(Boolean))].sort(); if (!list.includes('기타')) list.push('기타'); return list; })() },
+    { key:'model', label:'모델명', w:100, type:'select', opts: (() => { const list = [...new Set((products||[]).map(p=>p.model).filter(Boolean))].sort(); if (!list.includes('부품판매')) list.unshift('부품판매'); if (!list.includes('기타')) list.push('기타'); return list; })() },
     { key:'symptom', label:'증상', w:180, type:'text' },
     { key:'memo', label:'비고', w:100, type:'memo', groupEnd: true, groupBorderColor: '#B5D4F4', groupBorderColorBody: '#E6F1FB' },
     // 초록 그룹
@@ -990,6 +1001,12 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   const renderBadgeExpand = (r, col) => {
     const dbVal = r[col.key];
     const displayVal = col.fromDb ? col.fromDb(dbVal) : dbVal;
+    // 부품판매: 모델명 읽기 전용
+    if (col.key === 'model' && r.record_type === 'parts_sale') {
+      const modelVal = r.model || '부품판매';
+      const [bg2, c2] = getBadgeColor(col.key, modelVal);
+      return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:'Pretendard,sans-serif',background:bg2,color:c2,cursor:'default'}}>{modelVal}</span>;
+    }
     const isOpen = badgeOpen?.id === r.id && badgeOpen?.field === col.key;
     const [bg, c] = getBadgeColor(col.key, dbVal || displayVal);
     const empty = <span className="empty-dot">●</span>;
@@ -1159,6 +1176,11 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   const renderNewCell = (col) => {
     const val = col.key === 'company_name' ? newRow.company_name : newRow[col.key] ?? '';
     if (col.type === 'select') {
+      // 부품판매: 모델명 읽기 전용
+      if (col.key === 'model' && newRow.record_type === 'parts_sale') {
+        const [bg, c] = getBadgeColor(col.key, '부품판매');
+        return <span style={{display:'inline-flex',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color:c,cursor:'default'}}>부품판매</span>;
+      }
       // val이 이미 DB값일 수 있으므로(emptyRow/선택 시 DB값 저장), fromDb로 변환 가능하면 그대로 사용
       const dbVal = col.toDb && col.fromDb ? (col.fromDb(val) !== val ? val : col.toDb(val)) : (col.toDb ? col.toDb(val) : val);
       const displayVal = col.fromDb ? col.fromDb(dbVal) : dbVal;
@@ -1176,7 +1198,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
                 const ov = col.toDb ? col.toDb(o) : o;
                 const [obg,oc] = getBadgeColor(col.key, ov);
                 return <div key={o} style={{padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer',background:obg,color:oc,marginBottom:2,whiteSpace:'nowrap',border:dbVal===ov?`2px solid ${oc}`:'2px solid transparent'}}
-                  onClick={() => { setNewRow(p => { const next = {...p, [col.key]: ov}; if (col.key === 'intake_carrier' && ov === '방문') next.shipping_fee = '0'; if (col.key === 'release_carrier' && ov === '방문') { next.release_date = today(); next.tracking_number = '방문'; } return next; }); setNewBadgeOpen(null); setNewBadgePos(null); if (col.key === 'record_type' && ov === 'product_sale') { setProductPickerSearch(''); setProductPickerOpen(true); } }}>{getBadgeLabel(col, ov)}</div>;
+                  onClick={() => { setNewRow(p => { const next = {...p, [col.key]: ov}; if (col.key === 'intake_carrier' && ov === '방문') next.shipping_fee = '0'; if (col.key === 'release_carrier' && ov === '방문') { next.release_date = today(); next.tracking_number = '방문'; } if (col.key === 'record_type' && ov === 'parts_sale') next.model = '부품판매'; if (col.key === 'record_type' && ov !== 'parts_sale' && p.record_type === 'parts_sale') next.model = ''; return next; }); setNewBadgeOpen(null); setNewBadgePos(null); if (col.key === 'record_type' && ov === 'product_sale') { setProductPickerSearch(''); setProductPickerOpen(true); } }}>{getBadgeLabel(col, ov)}</div>;
               })}
             </div>
           )}
