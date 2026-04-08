@@ -1420,6 +1420,9 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
   const [recipientQuery, setRecipientQuery] = useState('');
   const [companyDropOpen, setCompanyDropOpen] = useState(false);
   const [companyDropPos, setCompanyDropPos] = useState(null);
+  const [calendarOpen, setCalendarOpen] = useState(null); // {id, pos:{top,left}}
+  const [calendarMonth, setCalendarMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
+  const [calendarSelected, setCalendarSelected] = useState(today());
   const companyInputRef = useRef(null);
   const SHIP_CARRIERS = ['롯데','CJ','한진','경동','로젠','우체국','대신택배','대신화물','경동화물'];
   const tableRef = useRef(null);
@@ -1593,7 +1596,8 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
     // 읽기전용
     if (col.type === 'readonly') {
       if (!val) return <span className="empty-dot">●</span>;
-      if (col.key === 'ship_date') return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,background:'#5A6070',color:'#FFFFFF',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',fontFamily:'Pretendard,sans-serif'}}>{fmtDate(val)}</span>;
+      if (col.key === 'ship_date') return <span style={{display:'inline-flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,background:'#5A6070',color:'#FFFFFF',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',fontFamily:'Pretendard,sans-serif',cursor:'pointer'}}
+        onClick={e => { e.stopPropagation(); const rect = e.currentTarget.getBoundingClientRect(); const top = rect.bottom + 4; const left = rect.left; const popH = 320; const flipUp = top + popH > window.innerHeight; setCalendarOpen({ id: r.id, pos: { top: flipUp ? rect.top - popH - 4 : top, left } }); setCalendarSelected(val || today()); const d = new Date(val || today()); setCalendarMonth({ year: d.getFullYear(), month: d.getMonth() }); }}>{fmtDate(val)}</span>;
       return <span style={{fontSize:13,fontWeight:400,color:'#1A1D23',fontFamily:'Pretendard,sans-serif'}}>{val}</span>;
     }
     // 뱃지 선택
@@ -1620,7 +1624,7 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
 
   const noTracking = (r) => !r.tracking_no;
 
-  return (
+  return (<>
     <table className="as-table" ref={tableRef} style={{width: COLS.reduce((s,c) => s + getColWidth(c.key), 0)}}>
       <colgroup>{COLS.map(c => <col key={c.key} style={{width: getColWidth(c.key)}} />)}</colgroup>
       <thead>
@@ -1780,7 +1784,44 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
         {sorted.length === 0 && <tr><td colSpan={COLS.length} className="empty">택배 발송 내역이 없습니다</td></tr>}
       </tbody>
     </table>
-  );
+    {calendarOpen && calendarOpen.pos && (() => {
+      const todayStr = today();
+      const { year, month } = calendarMonth;
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const daysInPrev = new Date(year, month, 0).getDate();
+      const cells = [];
+      for (let i = 0; i < firstDay; i++) cells.push({ day: daysInPrev - firstDay + 1 + i, cur: false, date: (() => { const d = new Date(year, month - 1, daysInPrev - firstDay + 1 + i); return d.toISOString().slice(0,10); })() });
+      for (let i = 1; i <= daysInMonth; i++) cells.push({ day: i, cur: true, date: `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}` });
+      const rem = (7 - cells.length % 7) % 7;
+      for (let i = 1; i <= rem; i++) cells.push({ day: i, cur: false, date: (() => { const d = new Date(year, month + 1, i); return d.toISOString().slice(0,10); })() });
+      const monthLabel = `${year}년 ${month + 1}월`;
+      const prevMonth = () => setCalendarMonth(p => p.month === 0 ? { year: p.year - 1, month: 11 } : { ...p, month: p.month - 1 });
+      const nextMonth = () => setCalendarMonth(p => p.month === 11 ? { year: p.year + 1, month: 0 } : { ...p, month: p.month + 1 });
+      return (
+        <div style={{position:'fixed',top:calendarOpen.pos.top,left:calendarOpen.pos.left,zIndex:9999,background:'#fff',border:'0.5px solid #DDE1EB',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,0.1)',width:260,padding:12,fontFamily:'Pretendard,sans-serif'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+            <button onClick={prevMonth} style={{width:26,height:26,border:'0.5px solid #DDE1EB',borderRadius:4,background:'#fff',cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center'}}>◀</button>
+            <span style={{fontSize:13,fontWeight:600,color:'#1A1D23'}}>{monthLabel}</span>
+            <button onClick={nextMonth} style={{width:26,height:26,border:'0.5px solid #DDE1EB',borderRadius:4,background:'#fff',cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center'}}>▶</button>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,textAlign:'center',marginBottom:4}}>
+            {['일','월','화','수','목','금','토'].map(d => <div key={d} style={{fontSize:11,fontWeight:500,color:'#9BA3B2',padding:'4px 0'}}>{d}</div>)}
+            {cells.map((cell, idx) => {
+              const isToday = cell.date === todayStr;
+              const isSel = cell.date === calendarSelected;
+              return <div key={idx} onClick={() => { setCalendarSelected(cell.date); if (!cell.cur) { const d = new Date(cell.date); setCalendarMonth({ year: d.getFullYear(), month: d.getMonth() }); } }} style={{width:32,height:32,lineHeight:'32px',borderRadius:6,fontSize:12,cursor:'pointer',margin:'0 auto',color: isSel ? '#fff' : cell.cur ? '#1A1D23' : '#9BA3B2',background: isSel ? '#185FA5' : 'transparent',border: isToday && !isSel ? '1.5px solid #185FA5' : '1.5px solid transparent',fontWeight: isToday || isSel ? 600 : 400}}
+                onMouseEnter={e => { if (!isSel) e.currentTarget.style.background='#E6F1FB'; }} onMouseLeave={e => { if (!isSel) e.currentTarget.style.background='transparent'; }}>{cell.day}</div>;
+            })}
+          </div>
+          <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:8}}>
+            <button onClick={() => setCalendarOpen(null)} style={{background:'transparent',color:'#5A6070',border:'0.5px solid #DDE1EB',borderRadius:6,padding:'7px 16px',fontSize:12,fontWeight:600,cursor:'pointer'}}>취소</button>
+            <button onClick={async () => { await onSave(calendarOpen.id, 'ship_date', calendarSelected); setCalendarOpen(null); }} style={{background:'#185FA5',color:'#fff',border:'none',borderRadius:6,padding:'7px 16px',fontSize:12,fontWeight:600,cursor:'pointer'}}>저장</button>
+          </div>
+        </div>
+      );
+    })()}
+  </>);
 }
 
 
