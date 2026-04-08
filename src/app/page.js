@@ -1905,18 +1905,21 @@ function CustomerPopup({ customer, onClose, onConfirmSent }) {
     try {
       const res = await fetch('/api/sms/send', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to: phone, content: msgInput.trim() }) });
       const result = await res.json();
-      if (result.error) { alert('문자 발송 실패: ' + result.error); setIsSending(false); return; }
-    } catch (e) { alert('문자 발송 실패: ' + e.message); setIsSending(false); return; }
-    const normalPhone = toLocal(phone);
-    const msg = { phone: normalPhone, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString(), ...(selectedClipTitle ? { message_type: selectedClipTitle } : {}) };
-    const { data } = await supabase.from('sms_messages').insert(msg).select();
-    if (data) setSmsMessages(prev => [...prev, ...data]);
-    // 견적 클립보드 발송 시 confirmMap 즉시 업데이트
-    if (selectedClipTitle && selectedClipTitle.includes('견적') && onConfirmSent) onConfirmSent(normalPhone);
-    setMsgInput('');
-    setSelectedClipTitle(null);
-    if (textareaRef.current) { textareaRef.current.style.height = '54px'; }
-    setIsSending(false);
+      if (result.error) { alert('문자 발송 실패: ' + result.error); return; }
+      const normalPhone = toLocal(phone);
+      const msg = { phone: normalPhone, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString(), ...(selectedClipTitle ? { message_type: selectedClipTitle } : {}) };
+      const { data } = await supabase.from('sms_messages').insert(msg).select();
+      if (data) setSmsMessages(prev => [...prev, ...data]);
+      if (selectedClipTitle && selectedClipTitle.includes('견적') && onConfirmSent) onConfirmSent(normalPhone);
+      setMsgInput('');
+      setSelectedClipTitle(null);
+      if (textareaRef.current) { textareaRef.current.style.height = '54px'; }
+    } catch (e) {
+      console.error('[CP Send Error]', e);
+      alert('문자 전송에 실패했습니다.');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const fmtDateFull = (d) => {
@@ -3179,10 +3182,11 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
   // Realtime: 새 문자 수신 시 즉시 반영
   const selectedRef = useRef(selected);
   useEffect(() => { selectedRef.current = selected; }, [selected]);
+  const onUnreadChangeRef = useRef(onUnreadChange);
+  useEffect(() => { onUnreadChangeRef.current = onUnreadChange; }, [onUnreadChange]);
 
   useEffect(() => {
-    const chName = 'sms-popup-rt-' + Date.now();
-    const ch = supabase.channel(chName)
+    const ch = supabase.channel('sms-popup-rt-' + Date.now())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sms_messages' }, (payload) => {
         const m = payload.new;
         if (!m.phone) return;
@@ -3194,10 +3198,8 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
         if (curPhone && mPhone === curPhone) {
           setMessages(prev => {
             if (prev.some(x => x.id === m.id)) return prev;
-            console.log('[Realtime SMS] Adding to messages, prev count:', prev.length);
             return [...prev, m];
           });
-          // 수신 메시지면 즉시 읽음 처리
           if (m.direction === 'incoming' && !m.read) {
             supabase.from('sms_messages').update({ read: true }).eq('id', m.id).then(() => {});
           }
@@ -3218,12 +3220,14 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
         });
         // 전체 읽지않음 카운트 업데이트
         if (m.direction === 'incoming' && mPhone !== curPhone) {
-          supabase.from('sms_messages').select('*', { count: 'exact', head: true }).eq('direction', 'incoming').eq('read', false).then(({ count }) => onUnreadChange(count || 0));
+          supabase.from('sms_messages').select('*', { count: 'exact', head: true }).eq('direction', 'incoming').eq('read', false).then(({ count }) => {
+            if (onUnreadChangeRef.current) onUnreadChangeRef.current(count || 0);
+          });
         }
       })
-      .subscribe((status) => { console.log('[Realtime SMS] subscribe status:', status); });
+      .subscribe((status) => { console.log('[Realtime SMS] subscribe:', status); });
     return () => { supabase.removeChannel(ch); };
-  }, [onUnreadChange]);
+  }, []);
 
   useEffect(() => { setTimeout(() => { if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight; }, 50); }, [messages]);
 
@@ -3235,18 +3239,22 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
     try {
       const res = await fetch('/api/sms/send', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to: selected, content: msgInput.trim() }) });
       const result = await res.json();
-      if (result.error) { alert('발송 실패: ' + result.error); setIsSending(false); return; }
-    } catch (e) { alert('발송 실패: ' + e.message); setIsSending(false); return; }
-    const normalPhone = toLocal(selected);
-    const msg = { phone: normalPhone, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString(), read: true, ...(selectedClipTitle ? { message_type: selectedClipTitle } : {}) };
-    const { data } = await supabase.from('sms_messages').insert(msg).select();
-    if (data) setMessages(prev => [...prev, ...data]);
-    if (selectedClipTitle && selectedClipTitle.includes('견적') && onConfirmSent) onConfirmSent(normalPhone);
-    setMsgInput('');
-    setSelectedClipTitle(null);
-    if (textareaRef.current) textareaRef.current.style.height = '72px';
-    setCustomers(prev => prev.map(c => c.phone === selected ? { ...c, latest: new Date().toISOString(), latestText: msgInput.trim() } : c));
-    setIsSending(false);
+      if (result.error) { alert('발송 실패: ' + result.error); return; }
+      const normalPhone = toLocal(selected);
+      const msg = { phone: normalPhone, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString(), read: true, ...(selectedClipTitle ? { message_type: selectedClipTitle } : {}) };
+      const { data } = await supabase.from('sms_messages').insert(msg).select();
+      if (data) setMessages(prev => [...prev, ...data]);
+      if (selectedClipTitle && selectedClipTitle.includes('견적') && onConfirmSent) onConfirmSent(normalPhone);
+      setMsgInput('');
+      setSelectedClipTitle(null);
+      if (textareaRef.current) textareaRef.current.style.height = '72px';
+      setCustomers(prev => prev.map(c => c.phone === selected ? { ...c, latest: new Date().toISOString(), latestText: msgInput.trim() } : c));
+    } catch (e) {
+      console.error('[SMS Send Error]', e);
+      alert('문자 전송에 실패했습니다.');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const timeAgo = (t) => {
