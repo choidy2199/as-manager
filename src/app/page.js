@@ -1418,8 +1418,6 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [newRow, setNewRow] = useState({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선불', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
-  const [sortKey, setSortKey] = useState('ship_date');
-  const [sortAsc, setSortAsc] = useState(false);
   const [recipientQuery, setRecipientQuery] = useState('');
   const [companyDropOpen, setCompanyDropOpen] = useState(false);
   const [companyDropPos, setCompanyDropPos] = useState(null);
@@ -1469,11 +1467,16 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
   };
 
   const sorted = [...records].sort((a, b) => {
-    const va = a[sortKey] || '', vb = b[sortKey] || '';
-    return sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+    // 1. 운송장번호 미입력 → 최상위
+    const aEmpty = !a.tracking_no;
+    const bEmpty = !b.tracking_no;
+    if (aEmpty !== bEmpty) return aEmpty ? -1 : 1;
+    // 2. 같은 그룹 내에서는 날짜 역순(최신순), 동일 날짜면 created_at 역순
+    const da = a.ship_date || '', db = b.ship_date || '';
+    if (da !== db) return da < db ? 1 : -1;
+    const ca = a.created_at || '', cb = b.created_at || '';
+    return ca < cb ? 1 : -1;
   });
-
-  const toggleSort = (key) => { if (sortKey === key) setSortAsc(!sortAsc); else { setSortKey(key); setSortAsc(true); } };
 
   const [shipBadgeOpen, setShipBadgeOpen] = useState(null);
   const [shipBadgePos, setShipBadgePos] = useState(null); // {top, left}
@@ -1624,8 +1627,8 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
       <thead>
         <tr className="as-col-header">
           {COLS.map((c, idx) => (
-            <th key={c.key} style={{background:'#EAECF2',cursor:'pointer',fontSize:12,fontWeight:600,color:'#5A6070',textAlign:'center',fontFamily:'Pretendard,sans-serif'}} onClick={() => toggleSort(c.key)}>
-              {c.label}{sortKey === c.key ? (sortAsc ? ' ↑' : ' ↓') : ''}
+            <th key={c.key} style={{background:'#EAECF2',fontSize:12,fontWeight:600,color:'#5A6070',textAlign:'center',fontFamily:'Pretendard,sans-serif'}}>
+              {c.label}
               <span className="col-resize-handle" onMouseDown={e => startResize(idx, c.key, e)} />
             </th>
           ))}
