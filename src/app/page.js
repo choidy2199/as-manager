@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
 /* ── 상수 ── */
-const MODELS = ["DC660","DC661","DC662","DC886","DC990X1","DC990K","DC990S","DC991","DC992","DC993","DC995","DC998","KOL-30AD","KOL-A20","DA25","DAC990X1","DW30AD","FVC-20C","기타"];
 const BRANDS = ["콜라보","마끼다","디월트","프레레","기타"];
 const STATUS_LIST = ["접수","부품대기","수리중","완료","수리X","폐기"];
 const RECORD_TYPES = ["AS 수리","제품 판매","부품 판매"];
@@ -951,7 +950,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     { key:'_msg', label:'msg', w:30, type:'action', isMsgCol: true },
     { key:'_confirm', label:'확인', w:50, type:'action' },
     { key:'customer_phone', label:'연락처', w:115, type:'text' },
-    { key:'model', label:'모델명', w:100, type:'select', opts: MODELS },
+    { key:'model', label:'모델명', w:100, type:'select', opts: (() => { const list = [...new Set((products||[]).map(p=>p.model).filter(Boolean))].sort(); if (!list.includes('기타')) list.push('기타'); return list; })() },
     { key:'symptom', label:'증상', w:180, type:'text' },
     { key:'memo', label:'비고', w:100, type:'memo', groupEnd: true, groupBorderColor: '#B5D4F4', groupBorderColorBody: '#E6F1FB' },
     // 초록 그룹
