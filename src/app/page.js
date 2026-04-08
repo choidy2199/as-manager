@@ -302,7 +302,7 @@ export default function Home() {
   /* ── 택배 엑셀 출력 ── */
   const exportShipExcel = (data, label) => {
     const headers = ['수령자명','수령자HP','수령자주소','품목명','수량','배송메시지','선불/착불','택배사'];
-    const rows = data.map(r => [r.receiver_name||'',r.receiver_phone||'',r.receiver_address||'',r.contents||'','1',r.memo||'',r.sender_name||'선불',r.carrier||'']);
+    const rows = data.map(r => [r.receiver_name||'',r.receiver_phone||'',r.receiver_address||'',r.contents||'','1',r.delivery_message||'',r.sender_name||'선불',r.carrier||'']);
     let csv = '\uFEFF' + headers.join(',') + '\n' + rows.map(r => r.map(c => `"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -1416,7 +1416,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, showNewRow, onHideNewRow, saveASField, sendAutoSMS }) {
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState('');
-  const [newRow, setNewRow] = useState({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선불', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
+  const [newRow, setNewRow] = useState({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선불', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', delivery_message: '', as_record_id: null });
   const [recipientQuery, setRecipientQuery] = useState('');
   const [companyDropOpen, setCompanyDropOpen] = useState(false);
   const [companyDropPos, setCompanyDropPos] = useState(null);
@@ -1435,7 +1435,7 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
     { key:'receiver_address', label:'수령자주소', w:180, type:'text' },
     { key:'contents', label:'품목명', w:90, type:'readonly-badge' },
     { key:'_qty', label:'수량', w:45, type:'static', value:'1' },
-    { key:'memo', label:'배송메시지', w:120, type:'text' },
+    { key:'delivery_message', label:'배송메시지', w:120, type:'text' },
     { key:'sender_name', label:'선불/착불', w:80, type:'select', opts: ['선불','착불'] },
     { key:'_origin', label:'출고처', w:50, type:'static', value:'AS' },
     { key:'carrier', label:'택배사', w:100, type:'select', opts: SHIP_CARRIERS },
@@ -1443,7 +1443,7 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
     { key:'_delete', label:'', w:45, type:'action' },
   ];
 
-  const DEFAULT_SHIP_WIDTHS = { ship_date:90, receiver_name:90, receiver_phone:110, receiver_address:180, contents:90, _qty:45, memo:120, sender_name:80, _origin:50, carrier:100, tracking_no:140, _delete:45 };
+  const DEFAULT_SHIP_WIDTHS = { ship_date:90, receiver_name:90, receiver_phone:110, receiver_address:180, contents:90, _qty:45, delivery_message:120, sender_name:80, _origin:50, carrier:100, tracking_no:140, _delete:45 };
   const getColWidth = (key) => savedWidthsRef.current[key] || DEFAULT_SHIP_WIDTHS[key] || 80;
 
   const startResize = (colIdx, colKey, e) => {
@@ -1543,8 +1543,8 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
     const row = { ...newRow };
     Object.keys(row).forEach(k => { if (row[k] === '') row[k] = null; });
     row.ship_date = row.ship_date || today();
-    await onAdd({ shipDate: row.ship_date, carrier: row.carrier, trackingNo: row.tracking_no, senderName: row.sender_name, receiverName: row.receiver_name, receiverPhone: row.receiver_phone, receiverAddress: row.receiver_address, contents: row.contents, memo: row.memo, asRecordId: row.as_record_id });
-    setNewRow({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선불', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', memo: '', as_record_id: null });
+    await onAdd({ shipDate: row.ship_date, carrier: row.carrier, trackingNo: row.tracking_no, senderName: row.sender_name, receiverName: row.receiver_name, receiverPhone: row.receiver_phone, receiverAddress: row.receiver_address, contents: row.contents, memo: row.memo, deliveryMessage: row.delivery_message, asRecordId: row.as_record_id });
+    setNewRow({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선불', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', delivery_message: '', as_record_id: null });
     setRecipientQuery('');
     onHideNewRow();
   };
