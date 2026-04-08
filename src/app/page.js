@@ -830,15 +830,15 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
     };
   }
 
-  // 뱃지 펼침 바깥 클릭/스크롤 닫기 (모델명은 바깥 클릭/스크롤로 안 닫힘)
+  // 뱃지 펼침 바깥 클릭/스크롤 닫기 (모델명/출고택배는 긴 목록이므로 바깥 클릭/스크롤로 안 닫힘)
   useEffect(() => {
     if (!badgeOpen) return;
-    const isModel = badgeOpen.field === 'model';
+    const isLongList = badgeOpen.field === 'model' || badgeOpen.field === 'release_carrier';
     const handler = (e) => { if (!e.target.closest('.badge-expand-panel')) { setBadgeOpen(null); setBadgePos(null); } };
     const escHandler = (e) => { if (e.key === 'Escape') { setBadgeOpen(null); setBadgePos(null); } };
     const scrollHandler = () => { setBadgeOpen(null); setBadgePos(null); };
     const timer = setTimeout(() => {
-      if (!isModel) { document.addEventListener('click', handler); document.addEventListener('scroll', scrollHandler, true); }
+      if (!isLongList) { document.addEventListener('click', handler); document.addEventListener('scroll', scrollHandler, true); }
       document.addEventListener('keydown', escHandler);
     }, 0);
     return () => { clearTimeout(timer); document.removeEventListener('click', handler); document.removeEventListener('keydown', escHandler); document.removeEventListener('scroll', scrollHandler, true); };
@@ -1022,7 +1022,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
           {displayVal ? getBadgeLabel(col, dbVal) : '—'}
         </span>
         {isOpen && badgePos && (
-          <div style={{position:'fixed',top:badgePos.top,left:badgePos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,minWidth:80,maxHeight:col.key==='model'?300:200,overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
+          <div style={{position:'fixed',top:badgePos.top,left:badgePos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,minWidth:80,maxHeight:(col.key==='model'||col.key==='release_carrier')?300:200,overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
             {col.opts.map(o => {
               const ov = col.toDb ? col.toDb(o) : o;
               const [obg,oc] = getBadgeColor(col.key, ov);
