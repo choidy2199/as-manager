@@ -1822,12 +1822,15 @@ function CustomerPopup({ customer, onClose, onConfirmSent }) {
   useEffect(() => {
     if (!phone) return;
     const normalPhone = toLocal(phone);
-    const ch = supabase.channel('cp-sms-' + normalPhone + '-' + Date.now())
+    const chName = 'cp-sms-realtime';
+    // 기존 동일 채널 정리
+    const existing = supabase.getChannels().find(c => c.topic === 'realtime:' + chName);
+    if (existing) supabase.removeChannel(existing);
+    const ch = supabase.channel(chName)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sms_messages', filter: `phone=eq.${normalPhone}` }, (payload) => {
-        console.log('[Realtime CP]', { phone: payload.new.phone, id: payload.new.id });
         setSmsMessages(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new]);
       })
-      .subscribe((status) => { console.log('[Realtime CP] subscribe status:', status); });
+      .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [phone]);
 
@@ -3186,14 +3189,17 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
   useEffect(() => { onUnreadChangeRef.current = onUnreadChange; }, [onUnreadChange]);
 
   useEffect(() => {
-    const ch = supabase.channel('sms-popup-rt-' + Date.now())
+    const chName = 'sms-popup-realtime';
+    // 기존 동일 채널 정리
+    const existing = supabase.getChannels().find(c => c.topic === 'realtime:' + chName);
+    if (existing) supabase.removeChannel(existing);
+    const ch = supabase.channel(chName)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sms_messages' }, (payload) => {
         const m = payload.new;
         if (!m.phone) return;
         const cur = selectedRef.current;
         const mPhone = toLocal(m.phone);
         const curPhone = cur ? toLocal(cur) : null;
-        console.log('[Realtime SMS]', { mPhone, curPhone, match: mPhone === curPhone, id: m.id, dir: m.direction });
         // 현재 선택된 대화면 말풍선에 추가 (중복 방지)
         if (curPhone && mPhone === curPhone) {
           setMessages(prev => {
@@ -3225,7 +3231,7 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
           });
         }
       })
-      .subscribe((status) => { console.log('[Realtime SMS] subscribe:', status); });
+      .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, []);
 
