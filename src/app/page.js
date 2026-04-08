@@ -1756,6 +1756,7 @@ function CustomerPopup({ customer, onClose, onConfirmSent }) {
   const [smsMessages, setSmsMessages] = useState([]);
   const [msgInput, setMsgInput] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
   const chatRef = useRef(null);
   const [clipboards, setClipboards] = useState([]);
   const [clipModal, setClipModal] = useState(false);
@@ -1877,12 +1878,13 @@ function CustomerPopup({ customer, onClose, onConfirmSent }) {
   }, []);
 
   const handleSend = async () => {
-    if (!msgInput.trim() || !phone) return;
+    if (!msgInput.trim() || !phone || isSending) return;
+    setIsSending(true);
     try {
       const res = await fetch('/api/sms/send', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to: phone, content: msgInput.trim() }) });
       const result = await res.json();
-      if (result.error) { alert('문자 발송 실패: ' + result.error); return; }
-    } catch (e) { alert('문자 발송 실패: ' + e.message); return; }
+      if (result.error) { alert('문자 발송 실패: ' + result.error); setIsSending(false); return; }
+    } catch (e) { alert('문자 발송 실패: ' + e.message); setIsSending(false); return; }
     const msg = { phone, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString(), ...(selectedClipTitle ? { message_type: selectedClipTitle } : {}) };
     const { data } = await supabase.from('sms_messages').insert(msg).select();
     if (data) setSmsMessages(prev => [...prev, ...data]);
@@ -1891,6 +1893,7 @@ function CustomerPopup({ customer, onClose, onConfirmSent }) {
     setMsgInput('');
     setSelectedClipTitle(null);
     if (textareaRef.current) { textareaRef.current.style.height = '54px'; }
+    setIsSending(false);
   };
 
   const fmtDateFull = (d) => {
@@ -1993,7 +1996,7 @@ function CustomerPopup({ customer, onClose, onConfirmSent }) {
               <div className="cp-chat-hint">*Shift+Enter = 텍스트 줄바꿈됩니다</div>
               <div className="cp-chat-input">
                 <textarea ref={textareaRef} rows={3} value={msgInput} onChange={e => { setMsgInput(e.target.value); autoResizeTextarea(); }} placeholder="문자 입력..." onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} />
-                <button className="btn-primary cp-send-btn" onClick={handleSend}>전송</button>
+                <button className="btn-primary cp-send-btn" onClick={handleSend} disabled={isSending}>{isSending ? '전송 중...' : '전송'}</button>
               </div>
             </div>
           </div>
@@ -3028,6 +3031,7 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
   const [messages, setMessages] = useState([]);
   const [msgInput, setMsgInput] = useState('');
   const [searchQ, setSearchQ] = useState('');
+  const [isSending, setIsSending] = useState(false);
   const chatRef = useRef(null);
   const textareaRef = useRef(null);
   const popupRef = useRef(null);
@@ -3146,12 +3150,13 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
   useEffect(() => { const esc = (e) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', esc); return () => document.removeEventListener('keydown', esc); }, [onClose]);
 
   const handleSend = async () => {
-    if (!msgInput.trim() || !selected) return;
+    if (!msgInput.trim() || !selected || isSending) return;
+    setIsSending(true);
     try {
       const res = await fetch('/api/sms/send', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to: selected, content: msgInput.trim() }) });
       const result = await res.json();
-      if (result.error) { alert('발송 실패: ' + result.error); return; }
-    } catch (e) { alert('발송 실패: ' + e.message); return; }
+      if (result.error) { alert('발송 실패: ' + result.error); setIsSending(false); return; }
+    } catch (e) { alert('발송 실패: ' + e.message); setIsSending(false); return; }
     const msg = { phone: selected, content: msgInput.trim(), direction: 'outgoing', sent_at: new Date().toISOString(), read: true, ...(selectedClipTitle ? { message_type: selectedClipTitle } : {}) };
     const { data } = await supabase.from('sms_messages').insert(msg).select();
     if (data) setMessages(prev => [...prev, ...data]);
@@ -3160,6 +3165,7 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
     setSelectedClipTitle(null);
     if (textareaRef.current) textareaRef.current.style.height = '72px';
     setCustomers(prev => prev.map(c => c.phone === selected ? { ...c, latest: new Date().toISOString(), latestText: msgInput.trim() } : c));
+    setIsSending(false);
   };
 
   const timeAgo = (t) => {
@@ -3263,7 +3269,7 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
                 <div style={{padding:'0 12px 2px',fontSize:11,color:'#CC2222'}}>*Shift+Enter = 텍스트 줄바꿈됩니다</div>
                 <div className="cp-chat-input">
                   <textarea ref={textareaRef} rows={3} value={msgInput} onChange={e => { setMsgInput(e.target.value); autoResizeTextarea(); }} placeholder="메시지 입력..." onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} />
-                  <button className="btn-primary cp-send-btn" onClick={handleSend}>전송</button>
+                  <button className="btn-primary cp-send-btn" onClick={handleSend} disabled={isSending}>{isSending ? '전송 중...' : '전송'}</button>
                 </div>
               </div>
             </>
