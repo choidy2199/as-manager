@@ -21,19 +21,24 @@ export async function POST(request) {
     const sentAt = body.data?.timestamp || body.data?.received_at || new Date().toISOString();
     const localPhone = toLocal(phone);
 
-    console.log('[SMS Webhook] parsed:', { phone, localPhone, contentLen: content.length, sentAt });
+    // MMS 이미지 URL 추출 (httpSMS 향후 MMS 지원 대비 + 타 서비스 호환)
+    const mediaUrl = body.data?.media_url || body.data?.media?.[0]?.url || body.data?.attachments?.[0]?.url || null;
 
-    if (localPhone && content) {
-      const { error } = await supabase.from('sms_messages').insert({
+    console.log('[SMS Webhook] parsed:', { phone, localPhone, contentLen: content.length, sentAt, hasMedia: !!mediaUrl });
+
+    if (localPhone && (content || mediaUrl)) {
+      const row = {
         phone: localPhone,
         direction: 'incoming',
-        content: content,
+        content: content || '',
         sent_at: sentAt,
-      });
+      };
+      if (mediaUrl) row.media_url = mediaUrl;
+      const { error } = await supabase.from('sms_messages').insert(row);
       if (error) console.error('[SMS Webhook] DB insert error:', error);
       else console.log('[SMS Webhook] saved incoming from', localPhone);
     } else {
-      console.warn('[SMS Webhook] skipped: no phone or content');
+      console.warn('[SMS Webhook] skipped: no phone or content/media');
     }
 
     return Response.json({ success: true });

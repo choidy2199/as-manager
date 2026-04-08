@@ -1987,7 +1987,15 @@ function CustomerPopup({ customer, onClose, onConfirmSent }) {
                 const isOut = msg.direction === 'outgoing';
                 return (
                   <div key={msg.id} className={`cp-bubble ${isOut ? 'cp-bubble-out' : 'cp-bubble-in'}`}>
-                    <div className="cp-bubble-text">{msg.content}</div>
+                    {msg.media_url && (
+                      <div style={{marginBottom: msg.content ? 6 : 0}}>
+                        <img src={msg.media_url} alt="MMS 이미지" style={{maxWidth:240,borderRadius:8,cursor:'pointer',display:'block'}}
+                          onClick={() => window.open(msg.media_url, '_blank')}
+                          onError={e => { e.target.style.display='none'; e.target.nextSibling && (e.target.nextSibling.style.display='block'); }}
+                        /><span style={{display:'none',fontSize:11,color:'#9BA3B2'}}>이미지를 불러올 수 없습니다</span>
+                      </div>
+                    )}
+                    {msg.content && <div className="cp-bubble-text">{msg.content}</div>}
                     <div className="cp-bubble-time">{new Date(msg.sent_at).toLocaleString('ko-KR', {hour:'2-digit',minute:'2-digit'})}</div>
                   </div>
                 );
@@ -3243,7 +3251,17 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
                   return (
                     <div key={m.id} style={{display:'flex',justifyContent:isOut?'flex-end':'flex-start',marginBottom:6}}>
                       <div style={{maxWidth:'75%'}}>
-                        <div style={{padding:'10px 14px',borderRadius: isOut ? '14px 14px 4px 14px' : '14px 14px 14px 4px', background:isOut?'#185FA5':'#fff',color:isOut?'#fff':'#1A1D23',fontSize:14,lineHeight:1.5,border:isOut?'none':'0.5px solid #DDE1EB'}}>{m.content}</div>
+                        <div style={{padding:'10px 14px',borderRadius: isOut ? '14px 14px 4px 14px' : '14px 14px 14px 4px', background:isOut?'#185FA5':'#fff',color:isOut?'#fff':'#1A1D23',fontSize:14,lineHeight:1.5,border:isOut?'none':'0.5px solid #DDE1EB'}}>
+                          {m.media_url && (
+                            <div style={{marginBottom: m.content ? 6 : 0}}>
+                              <img src={m.media_url} alt="MMS 이미지" style={{maxWidth:240,borderRadius:8,cursor:'pointer',display:'block'}}
+                                onClick={() => window.open(m.media_url, '_blank')}
+                                onError={e => { e.target.style.display='none'; e.target.nextSibling && (e.target.nextSibling.style.display='block'); }}
+                              /><span style={{display:'none',fontSize:11,color:isOut?'rgba(255,255,255,0.6)':'#9BA3B2'}}>이미지를 불러올 수 없습니다</span>
+                            </div>
+                          )}
+                          {m.content}
+                        </div>
                         <div style={{fontSize:11,color:'#9BA3B2',marginTop:2,textAlign:isOut?'right':'left'}}>{new Date(m.sent_at).toLocaleString('ko-KR',{hour:'2-digit',minute:'2-digit'})}</div>
                       </div>
                     </div>
