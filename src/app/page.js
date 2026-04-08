@@ -259,8 +259,8 @@ export default function Home() {
     if (error) { alert('저장 실패: ' + error.message); console.error('addNewAS error:', error); return; }
     if (data) setAsRecords(prev => [data, ...prev]);
     loadData();
-    // 입고 알림 자동 발송: 연락처+성함/거래처+모델명 모두 있을 때
-    if (data && data.customer_phone && (data.customer_name || data.company_name) && data.model) {
+    // 입고 알림 자동 발송: AS수리일 때만 + 연락처+성함/거래처+모델명 모두 있을 때
+    if (data && data.record_type === 'as_repair' && data.customer_phone && (data.customer_name || data.company_name) && data.model) {
       sendAutoSMS('intake', data);
     }
   };
