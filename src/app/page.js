@@ -561,7 +561,7 @@ export default function Home() {
 
         {/* ═══ 택배발송 ═══ */}
         {tab === 'ship' && (() => {
-          const SHIP_CARRIERS = ['롯데','CJ','한진','경동','로젠','우체국','대신택배','대신화물','경동화물'];
+          const SHIP_CARRIERS = ['롯데','CJ','한진','경동','로젠','우체국','대신택배','대신화물','경동화물','퀵'];
           const filtered = shipRecords.filter(r => {
             const ms = !shipSearch || [r.receiver_name, r.receiver_phone, r.contents].some(f => f?.toLowerCase().includes(shipSearch.toLowerCase()));
             const mc = shipCarrierFilter === '전체' || r.carrier === shipCarrierFilter;
@@ -833,15 +833,14 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   // 뱃지 펼침 바깥 클릭/스크롤 닫기 (모델명/출고택배는 긴 목록이므로 바깥 클릭/스크롤로 안 닫힘)
   useEffect(() => {
     if (!badgeOpen) return;
-    const isLongList = badgeOpen.field === 'model' || badgeOpen.field === 'release_carrier';
+    const isLongList = badgeOpen.field === 'model' || badgeOpen.field === 'release_carrier' || badgeOpen.field === 'intake_carrier';
     const handler = (e) => { if (!e.target.closest('.badge-expand-panel')) { setBadgeOpen(null); setBadgePos(null); } };
     const escHandler = (e) => { if (e.key === 'Escape') { setBadgeOpen(null); setBadgePos(null); } };
-    const scrollHandler = () => { setBadgeOpen(null); setBadgePos(null); };
     const timer = setTimeout(() => {
-      if (!isLongList) { document.addEventListener('click', handler); document.addEventListener('scroll', scrollHandler, true); }
+      document.addEventListener('mousedown', handler);
       document.addEventListener('keydown', escHandler);
     }, 0);
-    return () => { clearTimeout(timer); document.removeEventListener('click', handler); document.removeEventListener('keydown', escHandler); document.removeEventListener('scroll', scrollHandler, true); };
+    return () => { clearTimeout(timer); document.removeEventListener('mousedown', handler); document.removeEventListener('keydown', escHandler); };
   }, [badgeOpen]);
 
   // 뱃지 선택 → 즉시 저장
@@ -992,7 +991,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
   ];
 
   // 뱃지 색상 매핑
-  const CARRIER_COLORS = { '롯데':['#185FA5','#FFFFFF'],'롯데택배':['#185FA5','#FFFFFF'],'CJ':['#1D9E75','#FFFFFF'],'CJ대한통운':['#1D9E75','#FFFFFF'],'한진':['#534AB7','#FFFFFF'],'한진택배':['#534AB7','#FFFFFF'],'경동':['#854F0B','#FFFFFF'],'경동택배':['#854F0B','#FFFFFF'],'경동화물':['#854F0B','#FFFFFF'],'대신화물':['#D85A30','#FFFFFF'],'대신택배':['#D85A30','#FFFFFF'],'로젠':['#CC2222','#FFFFFF'],'로젠택배':['#CC2222','#FFFFFF'],'우체국':['#EF9F27','#FFFFFF'],'방문':['#5A6070','#FFFFFF'],'용차':['#5A6070','#FFFFFF'],'퀵':['#5A6070','#FFFFFF'],'매장':['#5A6070','#FFFFFF'] };
+  const CARRIER_COLORS = { '롯데':['#185FA5','#FFFFFF'],'롯데택배':['#185FA5','#FFFFFF'],'CJ':['#1D9E75','#FFFFFF'],'CJ대한통운':['#1D9E75','#FFFFFF'],'한진':['#534AB7','#FFFFFF'],'한진택배':['#534AB7','#FFFFFF'],'경동':['#854F0B','#FFFFFF'],'경동택배':['#854F0B','#FFFFFF'],'경동화물':['#854F0B','#FFFFFF'],'대신화물':['#D85A30','#FFFFFF'],'대신택배':['#D85A30','#FFFFFF'],'로젠':['#CC2222','#FFFFFF'],'로젠택배':['#CC2222','#FFFFFF'],'우체국':['#EF9F27','#FFFFFF'],'방문':['#5A6070','#FFFFFF'],'용차':['#5A6070','#FFFFFF'],'퀵':['#6B7280','#FFFFFF'],'매장':['#5A6070','#FFFFFF'] };
   const BADGE_COLORS = {
     record_type: { as_repair:['#E6F1FB','#0C447C'], product_sale:['#E1F5EE','#085041'], parts_sale:['#FAEEDA','#412402'] },
     brand: { '콜라보':['#E6F1FB','#0C447C'],'마끼다':['#E1F5EE','#085041'],'디월트':['#FAEEDA','#412402'],'프레레':['#EEEDFE','#26215C'],'기타':['#F1EFE8','#2C2C2A'] },
@@ -1029,7 +1028,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
           {displayVal ? getBadgeLabel(col, dbVal) : '—'}
         </span>
         {isOpen && badgePos && (
-          <div style={{position:'fixed',top:badgePos.top,left:badgePos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,minWidth:80,maxHeight:(col.key==='model'||col.key==='release_carrier')?300:200,overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
+          <div onMouseDown={e => e.stopPropagation()} style={{position:'fixed',top:badgePos.top,left:badgePos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,minWidth:80,maxHeight:(col.key==='model'||col.key==='release_carrier'||col.key==='intake_carrier')?300:200,overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
             {col.key === 'release_carrier' && <div style={{display:'flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif',background:'#F4F6FA',color:'#9BA3B2',marginBottom:2,border:!dbVal?'2px solid #9BA3B2':'2px solid transparent',whiteSpace:'nowrap'}} onClick={() => saveBadge(r.id, col.key, '')}>—</div>}
             {col.opts.map(o => {
               const ov = col.toDb ? col.toDb(o) : o;
@@ -1436,7 +1435,7 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
   const [calendarMonth, setCalendarMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
   const [calendarSelected, setCalendarSelected] = useState(today());
   const companyInputRef = useRef(null);
-  const SHIP_CARRIERS = ['롯데','CJ','한진','경동','로젠','우체국','대신택배','대신화물','경동화물'];
+  const SHIP_CARRIERS = ['롯데','CJ','한진','경동','로젠','우체국','대신택배','대신화물','경동화물','퀵'];
   const tableRef = useRef(null);
   const savedWidthsRef = useRef((() => {
     if (typeof window === 'undefined') return {};
@@ -1503,8 +1502,8 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
     const h = (e) => { if (!e.target.closest('.badge-expand-panel')) { setShipBadgeOpen(null); setNewShipBadgeOpen(null); } };
     const esc = (e) => { if (e.key === 'Escape') { setShipBadgeOpen(null); setNewShipBadgeOpen(null); } };
     // setTimeout으로 다음 틱에 리스너 등록 — 현재 클릭 이벤트와 충돌 방지
-    const timer = setTimeout(() => { document.addEventListener('click', h); document.addEventListener('keydown', esc); }, 0);
-    return () => { clearTimeout(timer); document.removeEventListener('click', h); document.removeEventListener('keydown', esc); };
+    const timer = setTimeout(() => { document.addEventListener('mousedown', h); document.addEventListener('keydown', esc); }, 0);
+    return () => { clearTimeout(timer); document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
   }, [shipBadgeOpen, newShipBadgeOpen]);
 
   // 거래처 자동완성 드롭다운 바깥 클릭 시 닫기
@@ -1567,7 +1566,7 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
   const SHIP_BADGE_COLORS = { '선택':['#FCEBEB','#CC2222'], '선불':['#E1F5EE','#085041'], '착불':['#FAEEDA','#854F0B'] };
   const SHIP_BADGE_BORDERS = { '선택':'#CC2222', '선불':'#1D9E75', '착불':'#EF9F27' };
   const SHIP_BADGE_DOTS = { '선택':'#CC2222', '선불':'#1D9E75', '착불':'#EF9F27' };
-  const SHIP_CARRIER_COLORS = { '롯데':['#185FA5','#FFFFFF'],'롯데택배':['#185FA5','#FFFFFF'],'CJ':['#1D9E75','#FFFFFF'],'CJ대한통운':['#1D9E75','#FFFFFF'],'한진':['#534AB7','#FFFFFF'],'한진택배':['#534AB7','#FFFFFF'],'경동':['#854F0B','#FFFFFF'],'경동택배':['#854F0B','#FFFFFF'],'경동화물':['#854F0B','#FFFFFF'],'대신화물':['#D85A30','#FFFFFF'],'대신택배':['#D85A30','#FFFFFF'],'로젠':['#CC2222','#FFFFFF'],'로젠택배':['#CC2222','#FFFFFF'],'우체국':['#EF9F27','#FFFFFF'],'방문':['#5A6070','#FFFFFF'],'용차':['#5A6070','#FFFFFF'],'퀵':['#5A6070','#FFFFFF'],'매장':['#5A6070','#FFFFFF'] };
+  const SHIP_CARRIER_COLORS = { '롯데':['#185FA5','#FFFFFF'],'롯데택배':['#185FA5','#FFFFFF'],'CJ':['#1D9E75','#FFFFFF'],'CJ대한통운':['#1D9E75','#FFFFFF'],'한진':['#534AB7','#FFFFFF'],'한진택배':['#534AB7','#FFFFFF'],'경동':['#854F0B','#FFFFFF'],'경동택배':['#854F0B','#FFFFFF'],'경동화물':['#854F0B','#FFFFFF'],'대신화물':['#D85A30','#FFFFFF'],'대신택배':['#D85A30','#FFFFFF'],'로젠':['#CC2222','#FFFFFF'],'로젠택배':['#CC2222','#FFFFFF'],'우체국':['#EF9F27','#FFFFFF'],'방문':['#5A6070','#FFFFFF'],'용차':['#5A6070','#FFFFFF'],'퀵':['#6B7280','#FFFFFF'],'매장':['#5A6070','#FFFFFF'] };
   const getShipBadgeColor = (key, v) => {
     if (key === 'sender_name' && SHIP_BADGE_COLORS[v]) return SHIP_BADGE_COLORS[v];
     if (key === 'carrier' && SHIP_CARRIER_COLORS[v]) return SHIP_CARRIER_COLORS[v];
@@ -1610,7 +1609,7 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
           {dbVal || '—'}
         </span>
         {isOpen && shipBadgePos && (
-          <div style={{position:'fixed',top:shipBadgePos.top,left:shipBadgePos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,minWidth:80,maxHeight:200,overflowY:'auto'}}>
+          <div onMouseDown={e => e.stopPropagation()} style={{position:'fixed',top:shipBadgePos.top,left:shipBadgePos.left,zIndex:9999,background:'#fff',border:'1px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.1)',padding:4,minWidth:80,maxHeight:300,overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
             {col.opts.map(o => {
               const [obg,oc] = getShipBadgeColor(col.key, o);
               return <div key={o} style={{display:'flex',justifyContent:'center',alignItems:'center',padding:'4px 8px',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'Pretendard,sans-serif',background:obg,color:oc,marginBottom:2,border:dbVal===o?`2px solid ${oc}`:'2px solid transparent',whiteSpace:'nowrap'}}
