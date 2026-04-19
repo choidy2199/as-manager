@@ -36,6 +36,7 @@ CREATE TABLE ship_records (
   receiver_address TEXT,
   contents TEXT,
   memo TEXT,
+  quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 1),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 

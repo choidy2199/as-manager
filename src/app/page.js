@@ -283,6 +283,7 @@ export default function Home() {
     };
     if (d.asRecordId) row.as_record_id = d.asRecordId;
     if (d.deliveryMessage) row.delivery_message = d.deliveryMessage;
+    if (Number.isFinite(d.quantity) && d.quantity >= 1) row.quantity = d.quantity;
     const { error } = await supabase.from('ship_records').insert(row);
     if (error) { console.error('Ship insert error:', error); alert('택배 등록 실패: ' + error.message); }
     loadData();
@@ -1427,7 +1428,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, showNewRow, onHideNewRow, saveASField, sendAutoSMS }) {
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState('');
-  const [newRow, setNewRow] = useState({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선택', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', delivery_message: '', as_record_id: null });
+  const [newRow, setNewRow] = useState({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선택', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', delivery_message: '', as_record_id: null, quantity: 1 });
   const [recipientQuery, setRecipientQuery] = useState('');
   const [companyDropOpen, setCompanyDropOpen] = useState(false);
   const [companyDropPos, setCompanyDropPos] = useState(null);
@@ -1448,7 +1449,7 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
     { key:'receiver_phone', label:'수령자HP', w:110, type:'readonly' },
     { key:'receiver_address', label:'수령자주소', w:180, type:'text' },
     { key:'contents', label:'품목명', w:90, type:'readonly-badge' },
-    { key:'_qty', label:'수량', w:45, type:'static', value:'1' },
+    { key:'quantity', label:'수량', w:45, type:'number' },
     { key:'delivery_message', label:'배송메시지', w:120, type:'text' },
     { key:'sender_name', label:'선불/착불', w:80, type:'select', opts: ['선택','선불','착불'] },
     { key:'_origin', label:'출고처', w:50, type:'static', value:'AS' },
@@ -1457,7 +1458,7 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
     { key:'_delete', label:'', w:45, type:'action' },
   ];
 
-  const DEFAULT_SHIP_WIDTHS = { ship_date:90, receiver_name:90, receiver_phone:110, receiver_address:180, contents:90, _qty:45, delivery_message:120, sender_name:80, _origin:50, carrier:100, tracking_no:140, _delete:45 };
+  const DEFAULT_SHIP_WIDTHS = { ship_date:90, receiver_name:90, receiver_phone:110, receiver_address:180, contents:90, quantity:45, delivery_message:120, sender_name:80, _origin:50, carrier:100, tracking_no:140, _delete:45 };
   const getColWidth = (key) => savedWidthsRef.current[key] || DEFAULT_SHIP_WIDTHS[key] || 80;
 
   const startResize = (colIdx, colKey, e) => {
@@ -1531,6 +1532,17 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
     const { id, field } = editCell;
     const row = records.find(r => r.id === id);
     const prev = row ? (row[field] ?? '') : '';
+    // 수량 전용 검증: 정수 & 최소 1. 유효하지 않으면 저장 없이 원래 값 유지
+    if (field === 'quantity') {
+      setEditCell(null);
+      const trimmed = String(editValue ?? '').trim();
+      if (trimmed === '') return;
+      const n = parseInt(trimmed, 10);
+      if (!Number.isFinite(n) || n < 1 || String(n) !== trimmed) return;
+      const prevN = typeof prev === 'number' ? prev : parseInt(prev, 10);
+      if (n !== prevN) await onSave(id, field, n);
+      return;
+    }
     setEditCell(null);
     if (String(prev) !== String(editValue || '')) {
       await onSave(id, field, editValue || null);
@@ -1557,8 +1569,10 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
     const row = { ...newRow };
     Object.keys(row).forEach(k => { if (row[k] === '') row[k] = null; });
     row.ship_date = row.ship_date || today();
-    await onAdd({ shipDate: row.ship_date, carrier: row.carrier, trackingNo: row.tracking_no, senderName: row.sender_name, receiverName: row.receiver_name, receiverPhone: row.receiver_phone, receiverAddress: row.receiver_address, contents: row.contents, memo: row.memo, deliveryMessage: row.delivery_message, asRecordId: row.as_record_id });
-    setNewRow({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선택', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', delivery_message: '', as_record_id: null });
+    const qn = parseInt(String(row.quantity ?? '1'), 10);
+    const qty = (Number.isFinite(qn) && qn >= 1) ? qn : 1;
+    await onAdd({ shipDate: row.ship_date, carrier: row.carrier, trackingNo: row.tracking_no, senderName: row.sender_name, receiverName: row.receiver_name, receiverPhone: row.receiver_phone, receiverAddress: row.receiver_address, contents: row.contents, memo: row.memo, deliveryMessage: row.delivery_message, asRecordId: row.as_record_id, quantity: qty });
+    setNewRow({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선택', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', delivery_message: '', as_record_id: null, quantity: 1 });
     setRecipientQuery('');
     onHideNewRow();
   };
@@ -1651,10 +1665,23 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
         await onDelete(r.id);
       }}>삭제</button>;
     }
+    // 편집 모드 - 수량 (숫자 전용)
+    if (isEditing && col.key === 'quantity') {
+      return <input type="number" min="1" step="1" className="as-cell-input" value={editValue} autoFocus
+        onFocus={e => e.target.select()}
+        onChange={e => setEditValue(e.target.value)}
+        onBlur={commitEdit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
+          else if (e.key === 'Escape') { e.preventDefault(); setEditCell(null); }
+        }} />;
+    }
     // 편집 모드
     if (isEditing) {
       return <input className="as-cell-input" value={editValue} autoFocus onChange={e => setEditValue(e.target.value)} onBlur={commitEdit} onKeyDown={e => e.key === 'Enter' && commitEdit()} />;
     }
+    // 수량
+    if (col.key === 'quantity') return <span style={{fontSize:13,fontWeight:400,color:'#1A1D23',fontFamily:'Pretendard,sans-serif'}}>{val ?? 1}</span>;
     // 운송장번호
     if (col.key === 'tracking_no') return val ? <span style={{fontFamily:'Pretendard,sans-serif',fontSize:13,fontWeight:600,color:'#1A1D23'}}>{val}</span> : <span style={{fontSize:13,color:'#9BA3B2',fontFamily:'Pretendard,sans-serif'}}>미입력</span>;
     return val ? <span style={{fontSize:13,fontWeight:400,color:'#1A1D23',fontFamily:'Pretendard,sans-serif'}}>{val}</span> : empty;
@@ -1819,6 +1846,8 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
                   </div>
                 ) : c.type === 'date' ? (
                   <input type="date" className="as-cell-input" value={newRow[c.key]||''} onChange={e => setNewRow(p=>({...p,[c.key]:e.target.value}))} />
+                ) : c.type === 'number' ? (
+                  <input type="number" min="1" step="1" className="as-cell-input" value={newRow[c.key] ?? 1} onChange={e => setNewRow(p=>({...p,[c.key]: e.target.value}))} onKeyDown={e => { if (e.key==='Enter') e.preventDefault(); }} />
                 ) : (
                   <input className="as-cell-input" value={newRow[c.key]||''} placeholder={c.label} onChange={e => setNewRow(p=>({...p,[c.key]:e.target.value}))} onKeyDown={e => { if (e.key==='Enter') e.preventDefault(); }} />
                 )}
