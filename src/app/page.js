@@ -738,7 +738,7 @@ export default function Home() {
 
         {/* ═══ 설정 ═══ */}
         {tab === 'settings' && (
-          <SettingsTab asRecords={asRecords} monthFilter={monthFilter} />
+          <SettingsTab asRecords={asRecords} />
         )}
       </div>
 
@@ -2981,13 +2981,51 @@ function CompaniesTab({ companies, setCompanies, onReload }) {
 
 
 /* ═══ SETTINGS TAB ═══ */
-function SettingsTab({ asRecords, monthFilter }) {
+function SettingsTab({ asRecords }) {
   const [subTab, setSubTab] = useState('system');
   const [pwModal, setPwModal] = useState(false);
   const [pwInput, setPwInput] = useState('');
   const [pwError, setPwError] = useState('');
   const [authOk, setAuthOk] = useState(false);
-  const [settMonth, setSettMonth] = useState(monthFilter);
+  const [billDateFilterMode, setBillDateFilterMode] = useState(() => {
+    if (typeof window === 'undefined') return 'month';
+    return localStorage.getItem('bill_date_filter_mode') || 'month';
+  });
+  const [billDateFrom, setBillDateFrom] = useState(() => {
+    if (typeof window === 'undefined') return today();
+    const mode = localStorage.getItem('bill_date_filter_mode') || 'month';
+    if (mode === 'today') return today();
+    if (mode === 'week') {
+      const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+      const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day;
+      const monday = new Date(d); monday.setDate(d.getDate() + diff);
+      return monday.getFullYear() + '-' + String(monday.getMonth()+1).padStart(2,'0') + '-' + String(monday.getDate()).padStart(2,'0');
+    }
+    if (mode === 'all') return '';
+    if (mode === 'custom') return localStorage.getItem('bill_date_from') || today();
+    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-01';
+  });
+  const [billDateTo, setBillDateTo] = useState(() => {
+    if (typeof window === 'undefined') return today();
+    const mode = localStorage.getItem('bill_date_filter_mode') || 'month';
+    if (mode === 'today') return today();
+    if (mode === 'week') {
+      const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+      const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day;
+      const monday = new Date(d); monday.setDate(d.getDate() + diff);
+      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+      return sunday.getFullYear() + '-' + String(sunday.getMonth()+1).padStart(2,'0') + '-' + String(sunday.getDate()).padStart(2,'0');
+    }
+    if (mode === 'all') return '';
+    if (mode === 'custom') { const saved = localStorage.getItem('bill_date_to'); return (saved && saved >= today()) ? saved : today(); }
+    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' })); const y=d.getFullYear(), m=d.getMonth()+1; const lastDay=new Date(y,m,0).getDate();
+    return y+'-'+String(m).padStart(2,'0')+'-'+String(lastDay).padStart(2,'0');
+  });
+  const [billDateAll, setBillDateAll] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return (localStorage.getItem('bill_date_filter_mode') || 'month') === 'all';
+  });
   const [techs, setTechs] = useState([]);
   const [stg, setStg] = useState({});
   const [smsIntake, setSmsIntake] = useState('');
@@ -3036,16 +3074,63 @@ function SettingsTab({ asRecords, monthFilter }) {
     setTimeout(() => { el.focus(); el.setSelectionRange(pos + v.length, pos + v.length); }, 0);
   };
 
-  const [sy, sm] = settMonth.split('-').map(Number);
-  const sRecs = asRecords.filter(r => r.receipt_date?.startsWith(settMonth));
-  const totalRev = sRecs.reduce((s,r) => s + (r.repair_cost||0), 0);
-  const paidAmt = sRecs.filter(r => r.payment_status === '완료').reduce((s,r) => s + (r.repair_cost||0), 0);
-  const unpaidAmt = sRecs.filter(r => r.payment_status === '대기' || r.payment_status === '명세서').reduce((s,r) => s + (r.repair_cost||0), 0);
-  const freeN = sRecs.filter(r => r.payment_status === '무상').length;
+  const sRecs = asRecords.filter(r => {
+    if (billDateAll) return true;
+    if (!r.receipt_date) return false;
+    return r.receipt_date >= billDateFrom && r.receipt_date <= billDateTo;
+  });
+  const sortedRecs = [...sRecs].sort((a,b) => (b.receipt_date || '').localeCompare(a.receipt_date || ''));
+  const aggregate = (arr) => {
+    const paid = arr.filter(r => ['완료','카드','방문결제'].includes(r.payment_status));
+    const unpaid = arr.filter(r => ['대기','명세서'].includes(r.payment_status));
+    const free = arr.filter(r => r.payment_status === '무상');
+    const sum = a => a.reduce((s,r) => s + (Number(r.repair_cost)||0), 0);
+    return { count: arr.length, revenue: sum(arr), paid: sum(paid), unpaid: sum(unpaid), free: sum(free) };
+  };
+  const asStats = aggregate(sRecs.filter(r => r.record_type === 'as_repair'));
+  const productStats = aggregate(sRecs.filter(r => r.record_type === 'product_sale'));
+  const partsStats = aggregate(sRecs.filter(r => r.record_type === 'parts_sale'));
+  const totalStats = aggregate(sRecs);
+  const totalRev = totalStats.revenue;
   const B = (bg,c,t) => <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color:c}}>{t}</span>;
   const VARS = ['{입고날짜}','{출고날짜}','{모델명}','{택배사}','{운송장번호}','{고객명}','{거래처명}','{브랜드}','{AS비용}'];
-  const prevMo = () => { setSettMonth(sm===1?`${sy-1}-12`:`${sy}-${String(sm-1).padStart(2,'0')}`); };
-  const nextMo = () => { setSettMonth(sm===12?`${sy+1}-01`:`${sy}-${String(sm+1).padStart(2,'0')}`); };
+
+  const billDateLabel = (() => {
+    if (billDateAll) return '전체 기간';
+    const fmt2 = (d) => { const dt = new Date(d + 'T00:00:00'); return `${dt.getFullYear()}년 ${dt.getMonth()+1}월 ${dt.getDate()}일`; };
+    if (billDateFrom === billDateTo) return fmt2(billDateFrom);
+    const days = Math.round((new Date(billDateTo + 'T00:00:00') - new Date(billDateFrom + 'T00:00:00')) / 86400000) + 1;
+    const f = new Date(billDateFrom + 'T00:00:00'); const t = new Date(billDateTo + 'T00:00:00');
+    if (f.getFullYear() === t.getFullYear() && f.getMonth() === t.getMonth()) return `${f.getFullYear()}년 ${f.getMonth()+1}월 ${f.getDate()}일 ~ ${t.getDate()}일 (${days}일)`;
+    return `${fmt2(billDateFrom)} ~ ${fmt2(billDateTo)} (${days}일)`;
+  })();
+
+  const setBillMode = (mode) => {
+    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+    if (mode === 'today') {
+      const t = today();
+      setBillDateAll(false); setBillDateFrom(t); setBillDateTo(t); setBillDateFilterMode('today');
+      localStorage.setItem('bill_date_filter_mode','today');
+    } else if (mode === 'week') {
+      const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day;
+      const monday = new Date(d); monday.setDate(d.getDate() + diff);
+      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+      const f = monday.getFullYear() + '-' + String(monday.getMonth()+1).padStart(2,'0') + '-' + String(monday.getDate()).padStart(2,'0');
+      const tt = sunday.getFullYear() + '-' + String(sunday.getMonth()+1).padStart(2,'0') + '-' + String(sunday.getDate()).padStart(2,'0');
+      setBillDateAll(false); setBillDateFrom(f); setBillDateTo(tt); setBillDateFilterMode('week');
+      localStorage.setItem('bill_date_filter_mode','week');
+    } else if (mode === 'month') {
+      const y=d.getFullYear(), m=d.getMonth()+1; const lastDay=new Date(y,m,0).getDate();
+      setBillDateAll(false);
+      setBillDateFrom(y+'-'+String(m).padStart(2,'0')+'-01');
+      setBillDateTo(y+'-'+String(m).padStart(2,'0')+'-'+String(lastDay).padStart(2,'0'));
+      setBillDateFilterMode('month');
+      localStorage.setItem('bill_date_filter_mode','month');
+    } else if (mode === 'all') {
+      setBillDateAll(true); setBillDateFilterMode('all');
+      localStorage.setItem('bill_date_filter_mode','all');
+    }
+  };
 
   return (
     <div style={{padding:'0 4px'}}>
@@ -3073,38 +3158,78 @@ function SettingsTab({ asRecords, monthFilter }) {
 
       {subTab === 'billing' && authOk && (
         <>
-          <div style={{display:'flex',gap:12,marginBottom:16,flexWrap:'wrap'}}>
-            <div style={{flex:'1.5 1 200px',background:'#185FA5',borderRadius:8,padding:'16px 20px',color:'#fff'}}>
-              <div style={{fontSize:11,opacity:0.8}}>이번달 총 매출</div>
-              <div style={{fontSize:26,fontWeight:700}}>{totalRev.toLocaleString('ko-KR')}</div>
+          {/* 기간 필터 바 */}
+          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+            <div style={{display:'flex',alignItems:'center',height:32,border:'0.5px solid #DDE1EB',borderRadius:6,padding:'0 6px',background:'#fff'}}>
+              <input type="date" value={billDateAll ? '' : billDateFrom} onChange={e => { setBillDateAll(false); setBillDateFrom(e.target.value); setBillDateFilterMode('custom'); localStorage.setItem('bill_date_filter_mode','custom'); localStorage.setItem('bill_date_from',e.target.value); localStorage.setItem('bill_date_to',billDateTo); }} style={{fontSize:12,height:28,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
+              <span style={{color:'#9BA3B2',padding:'0 4px',fontSize:12}}>~</span>
+              <input type="date" value={billDateAll ? '' : billDateTo} onChange={e => { setBillDateAll(false); setBillDateTo(e.target.value); setBillDateFilterMode('custom'); localStorage.setItem('bill_date_filter_mode','custom'); localStorage.setItem('bill_date_from',billDateFrom); localStorage.setItem('bill_date_to',e.target.value); }} style={{fontSize:12,height:28,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
             </div>
-            <div style={{flex:'1 1 140px',background:'#E1F5EE',borderRadius:8,padding:'16px 20px'}}>
-              <div style={{fontSize:11,color:'#5A6070'}}>입금 완료</div>
-              <div style={{fontSize:22,fontWeight:700,color:'#1D9E75'}}>{paidAmt.toLocaleString('ko-KR')}</div>
-            </div>
-            <div style={{flex:'1 1 140px',background:'#FAEEDA',borderRadius:8,padding:'16px 20px'}}>
-              <div style={{fontSize:11,color:'#5A6070'}}>미수금</div>
-              <div style={{fontSize:22,fontWeight:700,color:'#EF9F27'}}>{unpaidAmt.toLocaleString('ko-KR')}</div>
-            </div>
-            <div style={{flex:'1 1 140px',background:'#F4F6FA',borderRadius:8,padding:'16px 20px'}}>
-              <div style={{fontSize:11,color:'#5A6070'}}>무상 처리</div>
-              <div style={{fontSize:22,fontWeight:700,color:'#5A6070'}}>{freeN}건</div>
-            </div>
+            {(() => { const active = {height:32,padding:'0 12px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#185FA5',color:'#fff',whiteSpace:'nowrap'}; const inactive = {...active,background:'#E6F1FB',color:'#0C447C'}; return (
+              <div style={{display:'flex',gap:4}}>
+                <button onClick={() => setBillMode('today')} style={billDateFilterMode==='today'?active:inactive}>오늘</button>
+                <button onClick={() => setBillMode('week')} style={billDateFilterMode==='week'?active:inactive}>이번주</button>
+                <button onClick={() => setBillMode('month')} style={billDateFilterMode==='month'?active:inactive}>이번달</button>
+                <button onClick={() => setBillMode('all')} style={billDateFilterMode==='all'?active:inactive}>전체</button>
+              </div>
+            ); })()}
+            <div style={{marginLeft:'auto',fontSize:12,color:'#5A6070'}}>조회 기간: <span style={{color:'#1A1D23',fontWeight:600}}>{billDateLabel}</span></div>
           </div>
+
+          {/* KPI 카드 4개 (구분별) */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4, 1fr)',gap:12,marginBottom:16}}>
+            {[
+              { name:'AS 수리', bg:'#185FA5', stats:asStats, totalCard:false },
+              { name:'제품 판매', bg:'#0C447C', stats:productStats, totalCard:false },
+              { name:'부품 판매', bg:'#5A6070', stats:partsStats, totalCard:false },
+              { name:'총 합계', bg:'#1A1D23', stats:totalStats, totalCard:true },
+            ].map(card => {
+              const stats = card.stats;
+              const cellValStyle = (n) => n === 0
+                ? {fontSize:14,fontWeight:500,color:'#9BA3B2',fontFamily:"'Pretendard', -apple-system, sans-serif"}
+                : {fontSize:14,fontWeight:700,color:'#1A1D23',fontFamily:"'Pretendard', -apple-system, sans-serif"};
+              return (
+                <div key={card.name} style={{background:'#FFFFFF',border:'1px solid #DDE1EB',borderRadius:8,overflow:'hidden'}}>
+                  <div style={{height:40,padding:'10px 16px',background:card.bg,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                    <span style={{fontSize:14,fontWeight:700,color:'#fff',fontFamily:"'Pretendard', -apple-system, sans-serif"}}>{card.name}</span>
+                    <span style={{background:'rgba(255,255,255,0.2)',color:'#fff',fontSize:11,fontWeight:500,padding:'2px 8px',borderRadius:10,whiteSpace:'nowrap'}}>{stats.count.toLocaleString('ko-KR')}건</span>
+                  </div>
+                  <div style={{padding:'16px 16px 12px',borderBottom:'1px solid #DDE1EB'}}>
+                    <div style={{fontSize:11,fontWeight:500,color:'#5A6070',marginBottom:4}}>매출</div>
+                    <div style={{display:'flex',alignItems:'baseline',gap:4}}>
+                      <span style={{fontSize:24,fontWeight:700,letterSpacing:'-0.5px',color:card.totalCard?'#185FA5':'#1A1D23',fontFamily:"'Pretendard', -apple-system, sans-serif"}}>{stats.revenue.toLocaleString('ko-KR')}</span>
+                      <span style={{fontSize:13,fontWeight:500,color:'#5A6070'}}>원</span>
+                    </div>
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr'}}>
+                    <div style={{padding:'10px 8px',textAlign:'center',borderRight:'1px solid #DDE1EB'}}>
+                      <div style={{fontSize:11,fontWeight:500,color:'#5A6070',display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:2,whiteSpace:'nowrap'}}><span style={{width:6,height:6,borderRadius:'50%',background:'#1D9E75',display:'inline-block'}}/>입금완료</div>
+                      <div style={cellValStyle(stats.paid)}>{stats.paid.toLocaleString('ko-KR')}</div>
+                    </div>
+                    <div style={{padding:'10px 8px',textAlign:'center',borderRight:'1px solid #DDE1EB'}}>
+                      <div style={{fontSize:11,fontWeight:500,color:'#5A6070',display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:2,whiteSpace:'nowrap'}}><span style={{width:6,height:6,borderRadius:'50%',background:'#EF9F27',display:'inline-block'}}/>미수금</div>
+                      <div style={cellValStyle(stats.unpaid)}>{stats.unpaid.toLocaleString('ko-KR')}</div>
+                    </div>
+                    <div style={{padding:'10px 8px',textAlign:'center'}}>
+                      <div style={{fontSize:11,fontWeight:500,color:'#5A6070',display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:2,whiteSpace:'nowrap'}}><span style={{width:6,height:6,borderRadius:'50%',background:'#9BA3B2',display:'inline-block'}}/>무상</div>
+                      <div style={cellValStyle(stats.free)}>{stats.free.toLocaleString('ko-KR')}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
           <div className="section">
             <div className="section-header">
               <span style={{fontSize:12,fontWeight:600}}>정산 내역</span>
-              <div style={{display:'flex',alignItems:'center',gap:8}}>
-                <button style={{background:'none',border:'none',color:'#fff',cursor:'pointer',fontSize:14}} onClick={prevMo}>◀</button>
-                <span style={{fontSize:12}}>{sy}년 {sm}월</span>
-                <button style={{background:'none',border:'none',color:'#fff',cursor:'pointer',fontSize:14}} onClick={nextMo}>▶</button>
-              </div>
+              <div style={{fontSize:12,color:'#fff',opacity:0.85}}>총 {sRecs.length.toLocaleString('ko-KR')}건</div>
             </div>
             <div style={{overflowX:'auto',maxHeight:'calc(100vh - 340px)'}}>
               <table className="data-table"><thead><tr>
                 {['날짜','거래처/고객','구분','모델','처리내용','AS비용','입금상태','계산서'].map(h => <th key={h}>{h}</th>)}
               </tr></thead><tbody>
-                {sRecs.map((r,i) => (
+                {sortedRecs.map((r,i) => (
                   <tr key={r.id} style={i%2===1?{background:'#FAFBFC'}:undefined}>
                     <td>{fmtDate(r.receipt_date)}</td>
                     <td>{[r.company_name,r.customer_name].filter(Boolean).join(' / ') || <span className="empty-dot">●</span>}</td>
@@ -3117,8 +3242,15 @@ function SettingsTab({ asRecords, monthFilter }) {
                   </tr>
                 ))}
                 {sRecs.length === 0 && <tr><td colSpan={8} className="empty">정산 내역이 없습니다</td></tr>}
-                {sRecs.length > 0 && <tr style={{background:'#F4F6FA',fontWeight:700}}><td colSpan={5} style={{textAlign:'right',fontSize:13}}>합계</td><td style={{textAlign:'right',color:'#185FA5',fontSize:16,fontWeight:700}}>{totalRev.toLocaleString('ko-KR')}</td><td colSpan={2}/></tr>}
-              </tbody></table>
+              </tbody>
+              {sRecs.length > 0 && <tfoot>
+                <tr style={{background:'#F4F6FA',fontWeight:700,borderTop:'2px solid #B0B8CC'}}>
+                  <td colSpan={5} style={{textAlign:'right',fontSize:13,fontWeight:700}}>합계</td>
+                  <td style={{textAlign:'right',color:'#185FA5',fontSize:14,fontWeight:700}}>{totalRev.toLocaleString('ko-KR')}</td>
+                  <td colSpan={2}/>
+                </tr>
+              </tfoot>}
+              </table>
             </div>
           </div>
         </>
