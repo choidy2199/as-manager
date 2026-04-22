@@ -3026,6 +3026,7 @@ function SettingsTab({ asRecords }) {
     if (typeof window === 'undefined') return false;
     return (localStorage.getItem('bill_date_filter_mode') || 'month') === 'all';
   });
+  const [billTypeFilter, setBillTypeFilter] = useState(null);
   const [techs, setTechs] = useState([]);
   const [stg, setStg] = useState({});
   const [smsIntake, setSmsIntake] = useState('');
@@ -3079,7 +3080,6 @@ function SettingsTab({ asRecords }) {
     if (!r.receipt_date) return false;
     return r.receipt_date >= billDateFrom && r.receipt_date <= billDateTo;
   });
-  const sortedRecs = [...sRecs].sort((a,b) => (b.receipt_date || '').localeCompare(a.receipt_date || ''));
   const aggregate = (arr) => {
     const paid = arr.filter(r => ['완료','카드','방문결제'].includes(r.payment_status));
     const unpaid = arr.filter(r => ['대기','명세서'].includes(r.payment_status));
@@ -3091,7 +3091,13 @@ function SettingsTab({ asRecords }) {
   const productStats = aggregate(sRecs.filter(r => r.record_type === 'product_sale'));
   const partsStats = aggregate(sRecs.filter(r => r.record_type === 'parts_sale'));
   const totalStats = aggregate(sRecs);
-  const totalRev = totalStats.revenue;
+  const displayRecs = billTypeFilter ? sRecs.filter(r => r.record_type === billTypeFilter) : sRecs;
+  const displayStats = aggregate(displayRecs);
+  const sortedRecs = [...displayRecs].sort((a,b) => (b.receipt_date || '').localeCompare(a.receipt_date || ''));
+  const totalRev = displayStats.revenue;
+  const typeLabels = { as_repair:'AS 수리', product_sale:'제품 판매', parts_sale:'부품 판매' };
+  const filterCountLabel = billTypeFilter ? `${typeLabels[billTypeFilter]} ${displayRecs.length.toLocaleString('ko-KR')}건` : `총 ${displayRecs.length.toLocaleString('ko-KR')}건`;
+  const onCardBadgeClick = (type) => { if (type === null) setBillTypeFilter(null); else setBillTypeFilter(prev => prev === type ? null : type); };
   const B = (bg,c,t) => <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:11,fontWeight:600,whiteSpace:'nowrap',background:bg,color:c}}>{t}</span>;
   const VARS = ['{입고날짜}','{출고날짜}','{모델명}','{택배사}','{운송장번호}','{고객명}','{거래처명}','{브랜드}','{AS비용}'];
 
@@ -3179,20 +3185,30 @@ function SettingsTab({ asRecords }) {
           {/* KPI 카드 4개 (구분별) */}
           <div style={{display:'grid',gridTemplateColumns:'repeat(4, 1fr)',gap:12,marginBottom:16}}>
             {[
-              { name:'AS 수리', bg:'#185FA5', stats:asStats, totalCard:false },
-              { name:'제품 판매', bg:'#0C447C', stats:productStats, totalCard:false },
-              { name:'부품 판매', bg:'#5A6070', stats:partsStats, totalCard:false },
-              { name:'총 합계', bg:'#1A1D23', stats:totalStats, totalCard:true },
+              { name:'AS 수리', bg:'#185FA5', stats:asStats, totalCard:false, typeKey:'as_repair' },
+              { name:'제품 판매', bg:'#0C447C', stats:productStats, totalCard:false, typeKey:'product_sale' },
+              { name:'부품 판매', bg:'#5A6070', stats:partsStats, totalCard:false, typeKey:'parts_sale' },
+              { name:'총 합계', bg:'#1A1D23', stats:totalStats, totalCard:true, typeKey:null },
             ].map(card => {
               const stats = card.stats;
+              const isSelected = !card.totalCard && billTypeFilter === card.typeKey;
               const cellValStyle = (n) => n === 0
                 ? {fontSize:14,fontWeight:500,color:'#9BA3B2',fontFamily:"'Pretendard', -apple-system, sans-serif"}
                 : {fontSize:14,fontWeight:700,color:'#1A1D23',fontFamily:"'Pretendard', -apple-system, sans-serif"};
+              const cardStyle = isSelected
+                ? {background:'#FFFFFF',border:'2px solid #185FA5',borderRadius:8,overflow:'hidden',boxShadow:'0 0 0 3px #E6F1FB',margin:0}
+                : {background:'#FFFFFF',border:'2px solid transparent',outline:'1px solid #DDE1EB',borderRadius:8,overflow:'hidden',margin:0};
               return (
-                <div key={card.name} style={{background:'#FFFFFF',border:'1px solid #DDE1EB',borderRadius:8,overflow:'hidden'}}>
+                <div key={card.name} style={cardStyle}>
                   <div style={{height:40,padding:'10px 16px',background:card.bg,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                     <span style={{fontSize:14,fontWeight:700,color:'#fff',fontFamily:"'Pretendard', -apple-system, sans-serif"}}>{card.name}</span>
-                    <span style={{background:'rgba(255,255,255,0.2)',color:'#fff',fontSize:11,fontWeight:500,padding:'2px 8px',borderRadius:10,whiteSpace:'nowrap'}}>{stats.count.toLocaleString('ko-KR')}건</span>
+                    <button
+                      type="button"
+                      onClick={() => onCardBadgeClick(card.typeKey)}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.35)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.2)'; }}
+                      style={{background:'rgba(255,255,255,0.2)',color:'#fff',fontSize:11,fontWeight:500,padding:'2px 8px',borderRadius:10,whiteSpace:'nowrap',border:'none',cursor:'pointer',fontFamily:"'Pretendard', -apple-system, sans-serif"}}
+                    >{stats.count.toLocaleString('ko-KR')}건</button>
                   </div>
                   <div style={{padding:'16px 16px 12px',borderBottom:'1px solid #DDE1EB'}}>
                     <div style={{fontSize:11,fontWeight:500,color:'#5A6070',marginBottom:4}}>매출</div>
@@ -3223,7 +3239,10 @@ function SettingsTab({ asRecords }) {
           <div className="section">
             <div className="section-header">
               <span style={{fontSize:12,fontWeight:600}}>정산 내역</span>
-              <div style={{fontSize:12,color:'#fff',opacity:0.85}}>총 {sRecs.length.toLocaleString('ko-KR')}건</div>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                {billTypeFilter && <button type="button" onClick={() => setBillTypeFilter(null)} style={{background:'rgba(255,255,255,0.18)',color:'#fff',border:'none',borderRadius:4,padding:'3px 10px',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:"'Pretendard', -apple-system, sans-serif",whiteSpace:'nowrap'}}>필터 해제 ✕</button>}
+                <div style={{fontSize:12,color:'#fff',opacity:0.85}}>{filterCountLabel}</div>
+              </div>
             </div>
             <div style={{overflowX:'auto',maxHeight:'calc(100vh - 340px)'}}>
               <table className="data-table"><thead><tr>
@@ -3241,9 +3260,9 @@ function SettingsTab({ asRecords }) {
                     <td>{r.invoice_type ? B(r.invoice_type.includes('계산서')?'#E6F1FB':'#F4F6FA',r.invoice_type.includes('계산서')?'#0C447C':'#5A6070',r.invoice_type==='없음(일반소매)'?'일반':r.invoice_type.includes('계산서')?'계산서':r.invoice_type) : <span className="empty-dot">●</span>}</td>
                   </tr>
                 ))}
-                {sRecs.length === 0 && <tr><td colSpan={8} className="empty">정산 내역이 없습니다</td></tr>}
+                {displayRecs.length === 0 && <tr><td colSpan={8} className="empty">정산 내역이 없습니다</td></tr>}
               </tbody>
-              {sRecs.length > 0 && <tfoot>
+              {displayRecs.length > 0 && <tfoot>
                 <tr style={{background:'#F4F6FA',fontWeight:700,borderTop:'2px solid #B0B8CC'}}>
                   <td colSpan={5} style={{textAlign:'right',fontSize:13,fontWeight:700}}>합계</td>
                   <td style={{textAlign:'right',color:'#185FA5',fontSize:14,fontWeight:700}}>{totalRev.toLocaleString('ko-KR')}</td>
