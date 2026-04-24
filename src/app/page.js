@@ -347,10 +347,13 @@ export default function Home() {
   /* ── 부속 필터 (기존) ── */
   const filteredParts = parts.filter(p => {
     const ms = !partsSearch || [p.code,p.name,p.spec,p.category,p.chinese_model].some(f => f?.toLowerCase().includes(partsSearch.toLowerCase()));
-    const mc = partsCatFilter === '전체' || (p.category && p.category.includes(partsCatFilter));
+    const mc = partsCatFilter === '전체' || (p.category && p.category.includes(partsCatFilter)) || (p.chinese_model && p.chinese_model.includes(partsCatFilter));
     return ms && mc;
   });
-  const partCats = ['전체', ...new Set(parts.map(p => p.category).filter(Boolean))];
+  const partCats = ['전체', ...Array.from(new Set([
+    ...parts.map(p => p.category).filter(Boolean),
+    ...parts.map(p => p.chinese_model).filter(Boolean),
+  ])).sort()];
 
   /* ── 제품 필터 ── */
   const filteredProducts = products.filter(p => {
@@ -663,9 +666,9 @@ export default function Home() {
               <div className="as-filter-row" style={{padding:'8px 12px'}}>
                 <div className="as-filter-search-wrap">
                   <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                  <input className="input as-filter-search" placeholder="부품코드, 품명, 스펙, 중국모델 검색..." value={partsSearch} onChange={e => setPartsSearch(e.target.value)} autoComplete="off" />
+                  <input className="input as-filter-search" placeholder="부품코드, 품명, 스펙, 모델명 검색..." value={partsSearch} onChange={e => setPartsSearch(e.target.value)} autoComplete="off" />
                 </div>
-                <div className="as-filter-pair"><span className="as-filter-label">구분</span>
+                <div className="as-filter-pair"><span className="as-filter-label">모델</span>
                   <select className="input as-filter-select" value={partsCatFilter} onChange={e => setPartsCatFilter(e.target.value)}>
                     {partCats.map(c => <option key={c}>{c}</option>)}
                   </select>
@@ -2307,9 +2310,9 @@ function PartsTable({ parts, setParts, onEdit }) {
   const COLS = [
     { key:'code', label:'내부코드', w:90 },
     { key:'name', label:'부품', w:280 },
-    { key:'category', label:'구분(모델)', w:120 },
-    { key:'chinese_model', label:'중국모델', w:94 },
-    { key:'chinese_name', label:'명칭(中)', w:100 },
+    { key:'category', label:'모델명(한국)', w:120 },
+    { key:'chinese_model', label:'모델명(中)', w:94 },
+    { key:'chinese_name', label:'부속이름(中)', w:100 },
     { key:'quantity', label:'수량', w:54 },
     { key:'price', label:'공임비', w:100 },
     { key:'_edit', label:'관리', w:60 },
@@ -2698,11 +2701,11 @@ function PartModal({ initial, onSave, onDelete, onClose }) {
           </div>
           <div className="form-grid">
             <div className="form-field"><label className="label">내부코드</label><input value={f.code} onChange={e => set('code', e.target.value)} className="input" placeholder="00000" /></div>
-            <div className="form-field"><label className="label">구분(모델)</label><input value={f.category} onChange={e => set('category', e.target.value)} className="input" placeholder="DC990, 공용 등" /></div>
+            <div className="form-field"><label className="label">모델명(한국)</label><input value={f.category} onChange={e => set('category', e.target.value)} className="input" placeholder="DC990, 공용 등" /></div>
           </div>
           <div className="form-grid">
-            <div className="form-field"><label className="label">중국모델</label><input value={f.chinese_model} onChange={e => set('chinese_model', e.target.value)} className="input" placeholder="예) DC990" /></div>
-            <div className="form-field"><label className="label">명칭(中)</label><input value={f.chinese_name} onChange={e => set('chinese_name', e.target.value)} className="input" placeholder="예) 电机总成" /></div>
+            <div className="form-field"><label className="label">모델명(中)</label><input value={f.chinese_model} onChange={e => set('chinese_model', e.target.value)} className="input" placeholder="예) DC990" /></div>
+            <div className="form-field"><label className="label">부속이름(中)</label><input value={f.chinese_name} onChange={e => set('chinese_name', e.target.value)} className="input" placeholder="예) 电机总成" /></div>
           </div>
           <div className="form-field"><label className="label">규격 및 품명</label><input value={f.name} onChange={e => set('name', e.target.value)} className="input" placeholder="품명 입력" /></div>
           <div className="form-field"><label className="label">스펙</label><input value={f.spec} onChange={e => set('spec', e.target.value)} className="input" placeholder="사양/규격" /></div>

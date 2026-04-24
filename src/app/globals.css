@@ -369,3 +369,14 @@ select.as-cell-input { padding-right: 2px; height: 32px; font-size: 13px; }
   .as-filter-row { flex-direction: column; }
   .as-filter-select, .as-filter-month { width: 100%; }
 }
+
+/* number input 브라우저 기본 스피너 제거 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
