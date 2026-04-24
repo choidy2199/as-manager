@@ -2410,8 +2410,6 @@ function CategoryDropdown({ categories, position, onSelect, onClear, onAddNew, o
 
 /* ═══ PARTS TABLE ═══ */
 function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, onEdit }) {
-  const [sortKey, setSortKey] = useState('code');
-  const [sortAsc, setSortAsc] = useState(true);
   const [editCell, setEditCell] = useState(null); // { id, field }
   const [editValue, setEditValue] = useState('');
   const [bigCatDropdown, setBigCatDropdown] = useState(null); // { id, top, left, width } | null
@@ -2420,13 +2418,6 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
     if (typeof window === 'undefined') return {};
     try { const v = JSON.parse(localStorage.getItem('parts_column_widths')); return (v && typeof v === 'object') ? v : {}; } catch { return {}; }
   })());
-
-  const toggleSort = (k) => { if (sortKey === k) setSortAsc(!sortAsc); else { setSortKey(k); setSortAsc(true); } };
-  const sorted = [...parts].sort((a, b) => {
-    let va = a[sortKey] ?? '', vb = b[sortKey] ?? '';
-    if (sortKey === 'price') { va = va || 0; vb = vb || 0; }
-    return sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
-  });
   const COLS = [
     { key:'code', label:'내부코드', w:90 },
     { key:'image_url', label:'사진', w:88 },
@@ -2515,14 +2506,14 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
       <colgroup>{COLS.map(c => <col key={c.key} style={{width: getW(c.key)}} />)}</colgroup>
       <thead><tr className="as-col-header">
         {COLS.map((c, idx) => (
-          <th key={c.key} style={{position:'sticky',top:0,zIndex:10,background:'#EAECF2',color:'#5A6070',fontSize:13,fontWeight:500,padding:'8px 10px',height:36,lineHeight:'20px',boxShadow:'0 1px 0 0 #DDE1EB',userSelect:'none',cursor:c.key !== '_edit' ? 'pointer' : 'default'}} onClick={() => c.key !== '_edit' && toggleSort(c.key)}>
-            {c.label}{sortKey === c.key ? (sortAsc ? ' ↑' : ' ↓') : ''}
+          <th key={c.key} style={{position:'sticky',top:0,zIndex:10,background:'#EAECF2',color:'#5A6070',fontSize:13,fontWeight:500,padding:'8px 10px',height:36,lineHeight:'20px',boxShadow:'0 1px 0 0 #DDE1EB',userSelect:'none'}}>
+            {c.label}
             <span className="col-resize-handle" onMouseDown={e => startResize(idx, c.key, e)} />
           </th>
         ))}
       </tr></thead>
       <tbody>
-        {sorted.map((p, i) => (
+        {parts.map((p, i) => (
           <tr key={p.id} className="as-data-row" style={i % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
             <td style={{textAlign:'center'}}><span style={{fontSize:13,color:'#5A6070'}}>{p.code || <span className="empty-dot">●</span>}</span></td>
             <td style={{textAlign:'center',padding:'8px 4px'}}>
@@ -2559,7 +2550,7 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
             <td style={{textAlign:'center'}}><button className="btn-text-edit" style={{fontSize:12,fontWeight:500}} onClick={() => onEdit(p)}>수정</button></td>
           </tr>
         ))}
-        {sorted.length === 0 && <tr><td colSpan={10} className="empty">부품이 없습니다</td></tr>}
+        {parts.length === 0 && <tr><td colSpan={10} className="empty">부품이 없습니다</td></tr>}
       </tbody>
     </table>
     {bigCatDropdown && (
