@@ -346,7 +346,7 @@ export default function Home() {
 
   /* ── 부속 필터 (기존) ── */
   const filteredParts = parts.filter(p => {
-    const ms = !partsSearch || [p.code,p.name,p.spec,p.category].some(f => f?.toLowerCase().includes(partsSearch.toLowerCase()));
+    const ms = !partsSearch || [p.code,p.name,p.spec,p.category,p.chinese_model].some(f => f?.toLowerCase().includes(partsSearch.toLowerCase()));
     const mc = partsCatFilter === '전체' || (p.category && p.category.includes(partsCatFilter));
     return ms && mc;
   });
@@ -663,7 +663,7 @@ export default function Home() {
               <div className="as-filter-row" style={{padding:'8px 12px'}}>
                 <div className="as-filter-search-wrap">
                   <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                  <input className="input as-filter-search" placeholder="부품코드, 품명, 스펙 검색..." value={partsSearch} onChange={e => setPartsSearch(e.target.value)} autoComplete="off" />
+                  <input className="input as-filter-search" placeholder="부품코드, 품명, 스펙, 중국모델 검색..." value={partsSearch} onChange={e => setPartsSearch(e.target.value)} autoComplete="off" />
                 </div>
                 <div className="as-filter-pair"><span className="as-filter-label">구분</span>
                   <select className="input as-filter-select" value={partsCatFilter} onChange={e => setPartsCatFilter(e.target.value)}>
@@ -680,7 +680,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="as-table-wrapper" style={{flex:1,overflow:'auto'}}>
-                  <PartsTable parts={filteredParts} onEdit={p => setModal({type:'part-edit',data:p})} />
+                  <PartsTable parts={filteredParts} setParts={setParts} onEdit={p => setModal({type:'part-edit',data:p})} />
                 </div>
               </div>
             </div>
@@ -2287,9 +2287,11 @@ function ClipboardEditModal({ clipboards, colors, textColors, onSave, onClose })
 
 
 /* ═══ PARTS TABLE ═══ */
-function PartsTable({ parts, onEdit }) {
+function PartsTable({ parts, setParts, onEdit }) {
   const [sortKey, setSortKey] = useState('code');
   const [sortAsc, setSortAsc] = useState(true);
+  const [editCell, setEditCell] = useState(null); // { id, field }
+  const [editValue, setEditValue] = useState('');
   const tableRef = useRef(null);
   const savedWidthsRef = useRef((() => {
     if (typeof window === 'undefined') return {};
@@ -2306,10 +2308,36 @@ function PartsTable({ parts, onEdit }) {
     { key:'code', label:'내부코드', w:90 },
     { key:'name', label:'부품', w:280 },
     { key:'category', label:'구분(모델)', w:120 },
+    { key:'chinese_model', label:'중국모델', w:94 },
+    { key:'chinese_name', label:'명칭(中)', w:100 },
+    { key:'quantity', label:'수량', w:54 },
     { key:'price', label:'공임비', w:100 },
     { key:'_edit', label:'관리', w:60 },
   ];
-  const DEFAULT_W = { code:90, name:280, category:120, price:100, _edit:60 };
+  const DEFAULT_W = { code:90, name:280, category:120, chinese_model:94, chinese_name:100, quantity:54, price:100, _edit:60 };
+
+  const startEdit = (id, field, value) => {
+    setEditCell({ id, field });
+    setEditValue(value == null ? '' : String(value));
+  };
+
+  const commitEdit = async () => {
+    if (!editCell) return;
+    const { id, field } = editCell;
+    let saveVal;
+    if (field === 'quantity') {
+      const trimmed = String(editValue).trim();
+      saveVal = trimmed === '' ? null : Math.max(0, parseInt(trimmed) || 0);
+    } else {
+      saveVal = editValue.trim() === '' ? null : editValue;
+    }
+    setEditCell(null);
+    setParts(prev => prev.map(p => p.id === id ? { ...p, [field]: saveVal } : p));
+    const { error } = await supabase.from('parts').update({ [field]: saveVal }).eq('id', id);
+    if (error) { alert('저장 실패: ' + error.message); }
+  };
+
+  const cancelEdit = () => { setEditCell(null); setEditValue(''); };
   const getW = (k) => savedWidthsRef.current[k] || DEFAULT_W[k] || 80;
 
   const startResize = (colIdx, colKey, e) => {
@@ -2357,11 +2385,26 @@ function PartsTable({ parts, onEdit }) {
               </div>
             </td>
             <td style={{textAlign:'center'}}>{p.category ? <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:12,fontWeight:600,background: p.category === '공용' ? '#E6F1FB' : '#F4F6FA',color: p.category === '공용' ? '#0C447C' : '#1A1D23'}}>{p.category}</span> : <span className="empty-dot">●</span>}</td>
+            <td style={{textAlign:'center',cursor:'pointer',fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)',fontSize:13,color:'#1A1D23'}} onClick={() => editCell?.id === p.id && editCell?.field === 'chinese_model' ? null : startEdit(p.id, 'chinese_model', p.chinese_model)}>
+              {editCell?.id === p.id && editCell?.field === 'chinese_model'
+                ? <input autoFocus className="input" value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={commitEdit} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center',fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)'}} />
+                : (p.chinese_model || <span className="empty-dot">●</span>)}
+            </td>
+            <td style={{textAlign:'center',cursor:'pointer',fontSize:13,color:'#1A1D23'}} onClick={() => editCell?.id === p.id && editCell?.field === 'chinese_name' ? null : startEdit(p.id, 'chinese_name', p.chinese_name)}>
+              {editCell?.id === p.id && editCell?.field === 'chinese_name'
+                ? <input autoFocus className="input" value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={commitEdit} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center'}} />
+                : (p.chinese_name || <span className="empty-dot">●</span>)}
+            </td>
+            <td style={{textAlign:'center',cursor:'pointer',fontSize:13,color:'#1A1D23'}} onClick={() => editCell?.id === p.id && editCell?.field === 'quantity' ? null : startEdit(p.id, 'quantity', p.quantity)}>
+              {editCell?.id === p.id && editCell?.field === 'quantity'
+                ? <input autoFocus type="number" min="0" className="input" value={editValue} onChange={e => setEditValue(e.target.value.replace(/[^0-9]/g,''))} onBlur={commitEdit} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center'}} />
+                : (p.quantity == null ? <span className="empty-dot">●</span> : p.quantity)}
+            </td>
             <td style={{textAlign:'right',color:'#185FA5',fontWeight:700,fontSize:15,padding:'10px 12px'}}>{p.price?.toLocaleString('ko-KR') || '0'}</td>
             <td style={{textAlign:'center'}}><button className="btn-text-edit" style={{fontSize:12,fontWeight:500}} onClick={() => onEdit(p)}>수정</button></td>
           </tr>
         ))}
-        {sorted.length === 0 && <tr><td colSpan={5} className="empty">부품이 없습니다</td></tr>}
+        {sorted.length === 0 && <tr><td colSpan={8} className="empty">부품이 없습니다</td></tr>}
       </tbody>
     </table>
   );
@@ -2586,6 +2629,8 @@ function PartModal({ initial, onSave, onDelete, onClose }) {
   const [f, setF] = useState({
     code: initial?.code || '', category: initial?.category || '', name: initial?.name || '',
     spec: initial?.spec || '', price: initial?.price?.toString() || '', image_url: initial?.image_url || '',
+    chinese_model: initial?.chinese_model || '', chinese_name: initial?.chinese_name || '',
+    quantity: initial?.quantity != null ? initial.quantity.toString() : '',
   });
   const [imgFile, setImgFile] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -2623,7 +2668,9 @@ function PartModal({ initial, onSave, onDelete, onClose }) {
         imgUrl = urlData?.publicUrl || imgUrl;
       }
     }
-    await onSave({ code: f.code || null, category: f.category || null, name: f.name || null, spec: f.spec || null, price: parseInt(String(f.price).replace(/,/g, '')) || 0, image_url: imgUrl || null });
+    const qtyTrimmed = String(f.quantity).trim();
+    const qtyVal = qtyTrimmed === '' ? null : Math.max(0, parseInt(qtyTrimmed) || 0);
+    await onSave({ code: f.code || null, category: f.category || null, name: f.name || null, spec: f.spec || null, price: parseInt(String(f.price).replace(/,/g, '')) || 0, image_url: imgUrl || null, chinese_model: f.chinese_model.trim() || null, chinese_name: f.chinese_name.trim() || null, quantity: qtyVal });
     setSaving(false);
   };
 
@@ -2653,9 +2700,16 @@ function PartModal({ initial, onSave, onDelete, onClose }) {
             <div className="form-field"><label className="label">내부코드</label><input value={f.code} onChange={e => set('code', e.target.value)} className="input" placeholder="00000" /></div>
             <div className="form-field"><label className="label">구분(모델)</label><input value={f.category} onChange={e => set('category', e.target.value)} className="input" placeholder="DC990, 공용 등" /></div>
           </div>
+          <div className="form-grid">
+            <div className="form-field"><label className="label">중국모델</label><input value={f.chinese_model} onChange={e => set('chinese_model', e.target.value)} className="input" placeholder="예) DC990" /></div>
+            <div className="form-field"><label className="label">명칭(中)</label><input value={f.chinese_name} onChange={e => set('chinese_name', e.target.value)} className="input" placeholder="예) 电机总成" /></div>
+          </div>
           <div className="form-field"><label className="label">규격 및 품명</label><input value={f.name} onChange={e => set('name', e.target.value)} className="input" placeholder="품명 입력" /></div>
           <div className="form-field"><label className="label">스펙</label><input value={f.spec} onChange={e => set('spec', e.target.value)} className="input" placeholder="사양/규격" /></div>
-          <div className="form-field"><label className="label">공임비 (원)</label><input value={f.price} onChange={e => set('price', e.target.value.replace(/[^0-9]/g,''))} className="input" placeholder="0" /></div>
+          <div className="form-grid">
+            <div className="form-field"><label className="label">수량</label><input type="number" min="0" value={f.quantity} onChange={e => set('quantity', e.target.value.replace(/[^0-9]/g,''))} className="input" placeholder="0" /></div>
+            <div className="form-field"><label className="label">공임비 (원)</label><input value={f.price} onChange={e => set('price', e.target.value.replace(/[^0-9]/g,''))} className="input" placeholder="0" /></div>
+          </div>
         </div>
         <div className="modal-footer">
           {isEdit && onDelete && <button onClick={onDelete} className="btn-danger" style={{marginRight:'auto',fontSize:12}}>삭제</button>}
