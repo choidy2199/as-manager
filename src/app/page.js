@@ -2724,7 +2724,7 @@ function ProductsTable({ products, onReload, setProducts }) {
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(); } }} />;
     }
 
-    if (col.key === 'price') return val ? <span style={{ color: '#185FA5', fontWeight: 700 }}>{val.toLocaleString('ko-KR')}</span> : empty;
+    if (col.key === 'price') return val ? <span style={{ color: '#185FA5', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{val.toLocaleString('ko-KR')}</span> : empty;
     return val || empty;
   };
 
