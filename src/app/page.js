@@ -2797,16 +2797,18 @@ function PartModal({ initial, categories, onSave, onDelete, onClose }) {
   const handleImgChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // 200x200 리사이즈
     const reader = new FileReader();
     reader.onload = (ev) => {
       const img = new Image();
       img.onload = () => {
+        const MAX = 1200;
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
         const canvas = document.createElement('canvas');
-        canvas.width = 200; canvas.height = 200;
+        canvas.width = w; canvas.height = h;
         const ctx = canvas.getContext('2d');
-        const size = Math.min(img.width, img.height);
-        ctx.drawImage(img, (img.width - size) / 2, (img.height - size) / 2, size, size, 0, 0, 200, 200);
+        ctx.drawImage(img, 0, 0, w, h);
         canvas.toBlob(blob => { setImgFile(blob); set('image_url', URL.createObjectURL(blob)); }, 'image/png');
       };
       img.src = ev.target.result;
