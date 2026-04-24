@@ -669,7 +669,7 @@ export default function Home() {
         {tab === 'parts' && (
           <div style={{display:'flex',gap:0,height:'calc(100vh - 110px)'}}>
             {/* 좌측 — 부속가격 */}
-            <div style={{flex:1,borderRight:'0.5px solid #DDE1EB',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+            <div style={{flex:7,borderRight:'0.5px solid #DDE1EB',display:'flex',flexDirection:'column',overflow:'hidden'}}>
               <div className="as-filter-row" style={{padding:'8px 12px'}}>
                 <div className="as-filter-search-wrap">
                   <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
@@ -700,7 +700,7 @@ export default function Home() {
               </div>
             </div>
             {/* 우측 — 제품가격 */}
-            <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+            <div style={{flex:3,display:'flex',flexDirection:'column',overflow:'hidden'}}>
               <div className="as-filter-row" style={{padding:'8px 12px'}}>
                 <div className="as-filter-search-wrap">
                   <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
@@ -2515,7 +2515,7 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
       <colgroup>{COLS.map(c => <col key={c.key} style={{width: getW(c.key)}} />)}</colgroup>
       <thead><tr className="as-col-header">
         {COLS.map((c, idx) => (
-          <th key={c.key} style={{background:'#F4F6FA',cursor:c.key !== '_edit' ? 'pointer' : 'default'}} onClick={() => c.key !== '_edit' && toggleSort(c.key)}>
+          <th key={c.key} style={{position:'sticky',top:0,zIndex:10,background:'#EAECF2',color:'#5A6070',fontSize:13,fontWeight:500,padding:'8px 10px',height:36,lineHeight:'20px',boxShadow:'0 1px 0 0 #DDE1EB',userSelect:'none',cursor:c.key !== '_edit' ? 'pointer' : 'default'}} onClick={() => c.key !== '_edit' && toggleSort(c.key)}>
             {c.label}{sortKey === c.key ? (sortAsc ? ' ↑' : ' ↓') : ''}
             <span className="col-resize-handle" onMouseDown={e => startResize(idx, c.key, e)} />
           </th>
@@ -2555,7 +2555,7 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
                 ? <input autoFocus type="number" min="0" className="input" value={editValue} onChange={e => setEditValue(e.target.value.replace(/[^0-9]/g,''))} onBlur={commitEdit} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center'}} />
                 : (p.quantity == null ? <span className="empty-dot">●</span> : p.quantity)}
             </td>
-            <td style={{textAlign:'right',color:'#185FA5',fontWeight:700,fontSize:15,padding:'10px 12px'}}>{p.price?.toLocaleString('ko-KR') || '0'}</td>
+            <td style={{textAlign:'center',color:'#185FA5',fontWeight:700,fontSize:13,padding:'8px 10px',fontVariantNumeric:'tabular-nums'}}>{p.price?.toLocaleString('ko-KR') || '0'}</td>
             <td style={{textAlign:'center'}}><button className="btn-text-edit" style={{fontSize:12,fontWeight:500}} onClick={() => onEdit(p)}>수정</button></td>
           </tr>
         ))}
@@ -2744,9 +2744,9 @@ function ProductsTable({ products, onReload, setProducts }) {
         {COLS.map(c => <col key={c.key} style={{ width: getW(c.key) }} />)}
       </colgroup>
       <thead><tr className="as-col-header">
-        <th style={{ width: 24, minWidth: 24, maxWidth: 24, padding: 0 }} />
+        <th style={{ width: 24, minWidth: 24, maxWidth: 24, padding: 0, position:'sticky', top:0, zIndex:10, background:'#EAECF2', boxShadow:'0 1px 0 0 #DDE1EB' }} />
         {COLS.map((c, idx) => (
-          <th key={c.key}>
+          <th key={c.key} style={{position:'sticky',top:0,zIndex:10,background:'#EAECF2',color:'#5A6070',fontSize:13,fontWeight:500,padding:'8px 10px',height:36,lineHeight:'20px',boxShadow:'0 1px 0 0 #DDE1EB',userSelect:'none'}}>
             {c.label}
             <span className="col-resize-handle" onMouseDown={e => startResize(idx + 1, c.key, e)} />
           </th>
