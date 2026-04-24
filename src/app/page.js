@@ -2826,15 +2826,18 @@ function PartModal({ initial, categories, onSave, onDelete, onClose }) {
   const handleSave = async () => {
     setSaving(true);
     let imgUrl = f.image_url;
-    // 이미지 업로드
     if (imgFile) {
       const fileName = `part_${Date.now()}.png`;
       const { data, error } = await supabase.storage.from('parts-images').upload(fileName, imgFile, { contentType: 'image/png', upsert: true });
-      if (!error && data) {
-        const { data: urlData } = supabase.storage.from('parts-images').getPublicUrl(fileName);
-        imgUrl = urlData?.publicUrl || imgUrl;
+      if (error || !data) {
+        alert('이미지 업로드 실패: ' + (error?.message || '알 수 없는 오류') + '\n저장이 중단되었습니다.');
+        setSaving(false);
+        return;
       }
+      const { data: urlData } = supabase.storage.from('parts-images').getPublicUrl(fileName);
+      imgUrl = urlData?.publicUrl || null;
     }
+    if (imgUrl && typeof imgUrl === 'string' && imgUrl.startsWith('blob:')) imgUrl = null;
     const qtyTrimmed = String(f.quantity).trim();
     const qtyVal = qtyTrimmed === '' ? null : Math.max(0, parseInt(qtyTrimmed) || 0);
     await onSave({ code: f.code || null, category: f.category || null, name: f.name || null, spec: f.spec || null, price: parseInt(String(f.price).replace(/,/g, '')) || 0, image_url: imgUrl || null, chinese_model: f.chinese_model.trim() || null, chinese_name: f.chinese_name.trim() || null, quantity: qtyVal, big_category: f.big_category || null });
