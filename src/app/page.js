@@ -846,7 +846,14 @@ export default function Home() {
                 setCart={setCart}
                 currentDraftId={currentDraftId}
                 onAddToCart={handleAddToCart}
-                onSaveDraft={async () => { const id = await saveDraft(); if (id) alert('작성중으로 저장되었습니다'); }}
+                onSaveDraft={async () => {
+                  const id = await saveDraft();
+                  if (id) {
+                    alert('작성중으로 저장되었습니다');
+                    setCart([]);
+                    setCurrentDraftId(null);
+                  }
+                }}
                 onConfirm={() => setShowConfirmModal(true)}
                 onShowHistory={() => setShowHistoryModal(true)}
                 loadOrders={loadOrders}
@@ -2456,20 +2463,10 @@ function PartsOrderTab({ parts, models, categories, onPhotoClick, cart, setCart,
   const [orderModel, setOrderModel] = useState('전체');
   const [orderBigCat, setOrderBigCat] = useState('전체');
 
-  // 진입 시 자동 복원 (마운트 1회) — currentDraftId/cart가 비어있을 때만
+  // 진입 시 발주 목록만 로드 (자동 복원 없음 — 장바구니 = 항상 빈 작업대)
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      const { orders: o } = await loadOrders();
-      if (!mounted) return;
-      if (!currentDraftId && cart.length === 0) {
-        const latest = o.find(x => x.status === 'draft');
-        if (latest) await loadDraft(latest.id);
-      }
-    })();
-    return () => { mounted = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    loadOrders();
+  }, [loadOrders]);
 
   const filtered = parts.filter(p => {
     const q = orderSearch.trim().toLowerCase();
