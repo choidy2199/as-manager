@@ -219,7 +219,7 @@ export default function Home() {
       } else { setConfirmMap({}); }
     }
     if (shipRes.data) setShipRecords(shipRes.data);
-    if (partsRes.data) setParts([...partsRes.data].sort(sortByBigCategory));
+    if (partsRes.data) setParts([...partsRes.data].sort((a, b) => (a.name || '').localeCompare(b.name || '') || (a.spec || '').localeCompare(b.spec || '')));
     if (productsRes.data) setProducts(productsRes.data);
     if (techRes.data) setTechnicians(techRes.data);
     if (compRes.data) setCompanies(compRes.data);
@@ -470,15 +470,21 @@ export default function Home() {
   /* ── 부속 필터 (기존) ── */
   const filteredParts = parts.filter(p => {
     const ms = !partsSearch || [p.code,p.name,p.spec,p.category,p.chinese_model].some(f => f?.toLowerCase().includes(partsSearch.toLowerCase()));
-    const mc = partsCatFilter === '전체' || (p.category && p.category.includes(partsCatFilter)) || (p.chinese_model && p.chinese_model.includes(partsCatFilter));
+    const partTokens = [
+      ...(p.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean),
+      ...(p.chinese_model || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean),
+    ];
+    const mc = partsCatFilter === '전체' || partTokens.includes(partsCatFilter);
     const mb = partsBigCatFilter === '전체' || p.big_category === partsBigCatFilter;
     return ms && mc && mb;
   });
   const partBigCats = ['전체', ...partCategories.map(c => c.name)];
-  const partCats = ['전체', ...Array.from(new Set([
-    ...parts.map(p => p.category).filter(Boolean),
-    ...parts.map(p => p.chinese_model).filter(Boolean),
-  ])).sort()];
+  const partCats = ['전체', ...Array.from(new Set(
+    parts.flatMap(p => [
+      ...(p.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean),
+      ...(p.chinese_model || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean),
+    ])
+  )).sort()];
 
   /* ── 제품 필터 ── */
   const filteredProducts = products.filter(p => {
@@ -797,19 +803,33 @@ export default function Home() {
             {partsSubTab === 'parts' && (
               <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
                 <div className="as-filter-row" style={{padding:'8px 12px'}}>
-                  <div className="as-filter-search-wrap">
+                  <div className="as-filter-search-wrap" style={{flex:1}}>
                     <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
                     <input className="input as-filter-search" placeholder="부품코드, 품명, 스펙, 모델명 검색..." value={partsSearch} onChange={e => setPartsSearch(e.target.value)} autoComplete="off" />
                   </div>
-                  <div className="as-filter-pair"><span className="as-filter-label">모델</span>
-                    <select className="input as-filter-select" value={partsCatFilter} onChange={e => setPartsCatFilter(e.target.value)}>
-                      {partCats.map(c => <option key={c}>{c}</option>)}
-                    </select>
+                </div>
+                <div style={{padding:'4px 12px 6px',display:'flex',alignItems:'flex-start',gap:8,flexWrap:'wrap'}}>
+                  <span style={{fontSize:11,color:'#9BA3B2',padding:'5px 4px',flexShrink:0,minWidth:40}}>대분류</span>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:4,flex:1}}>
+                    {partBigCats.map(c => {
+                      const active = partsBigCatFilter === c;
+                      return (
+                        <button key={c} onClick={() => setPartsBigCatFilter(c)}
+                          style={{padding:'4px 12px',fontSize:12,background: active ? '#185FA5' : '#fff',color: active ? '#fff' : '#5A6070',border: active ? '0.5px solid #185FA5' : '0.5px solid #DDE1EB',borderRadius:4,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'inherit',fontWeight: active ? 500 : 400}}>{c}</button>
+                      );
+                    })}
                   </div>
-                  <div className="as-filter-pair"><span className="as-filter-label">대분류</span>
-                    <select className="input as-filter-select" value={partsBigCatFilter} onChange={e => setPartsBigCatFilter(e.target.value)}>
-                      {partBigCats.map(c => <option key={c}>{c}</option>)}
-                    </select>
+                </div>
+                <div style={{padding:'0 12px 8px',display:'flex',alignItems:'flex-start',gap:8,flexWrap:'wrap',borderBottom:'0.5px solid #DDE1EB'}}>
+                  <span style={{fontSize:11,color:'#9BA3B2',padding:'5px 4px',flexShrink:0,minWidth:40}}>모델</span>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:4,flex:1}}>
+                    {partCats.map(c => {
+                      const active = partsCatFilter === c;
+                      return (
+                        <button key={c} onClick={() => setPartsCatFilter(c)}
+                          style={{padding:'4px 12px',fontSize:12,background: active ? '#185FA5' : '#fff',color: active ? '#fff' : '#5A6070',border: active ? '0.5px solid #185FA5' : '0.5px solid #DDE1EB',borderRadius:4,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'inherit',fontWeight: active ? 500 : 400}}>{c}</button>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="section" style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
@@ -3373,6 +3393,7 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
     try { const v = JSON.parse(localStorage.getItem('parts_column_widths')); return (v && typeof v === 'object') ? v : {}; } catch { return {}; }
   })());
   const COLS = [
+    { key:'no', label:'No', w:50 },
     { key:'code', label:'내부코드', w:90 },
     { key:'image_url', label:'사진', w:88 },
     { key:'name', label:'부품', w:260 },
@@ -3384,7 +3405,7 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
     { key:'price', label:'공임비', w:100 },
     { key:'_edit', label:'관리', w:60 },
   ];
-  const DEFAULT_W = { code:90, image_url:88, name:260, big_category:100, category:120, chinese_model:94, chinese_name:100, quantity:54, price:100, _edit:60 };
+  const DEFAULT_W = { no:50, code:90, image_url:88, name:260, big_category:100, category:120, chinese_model:94, chinese_name:100, quantity:54, price:100, _edit:60 };
 
   const startEdit = (id, field, value) => {
     setEditCell({ id, field });
@@ -3521,6 +3542,7 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
       <tbody>
         {parts.map((p, i) => (
           <tr key={p.id} className="as-data-row" style={i % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
+            <td style={{textAlign:'center',fontSize:12,color:'#9BA3B2',fontVariantNumeric:'tabular-nums'}}>{i + 1}</td>
             <td style={{textAlign:'center'}}><span style={{fontSize:13,color:'#5A6070'}}>{p.code || <span className="empty-dot">●</span>}</span></td>
             <td style={{textAlign:'center',padding:'8px 4px'}}>
               <PartThumbnail url={p.image_url} name={p.name} code={p.code} onClick={() => onPhotoClick && onPhotoClick({ url: p.image_url || null, name: p.name, code: p.code, partId: p.id })} />
@@ -3618,7 +3640,7 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
             </td>
           </tr>
         ))}
-        {parts.length === 0 && <tr><td colSpan={10} className="empty">부품이 없습니다</td></tr>}
+        {parts.length === 0 && <tr><td colSpan={11} className="empty">부품이 없습니다</td></tr>}
       </tbody>
     </table>
     {bigCatDropdown && (
