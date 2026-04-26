@@ -899,7 +899,23 @@ export default function Home() {
 
         {/* 부속발주 이력 모달 */}
         {showHistoryModal && (
-          <OrderHistoryModal orders={orders} orderItems={orderItems} parts={parts} onLoadDraft={loadDraft} onClose={() => setShowHistoryModal(false)} />
+          <OrderHistoryModal
+            orders={orders}
+            orderItems={orderItems}
+            parts={parts}
+            onLoadDraft={loadDraft}
+            onClose={() => setShowHistoryModal(false)}
+            onDeleteDraft={async (orderId) => {
+              if (!confirm('이 작성중 발주를 삭제하시겠습니까?\n장바구니에 불러온 상태라면 함께 비워집니다.')) return;
+              const { error } = await supabase.from('parts_orders').delete().eq('id', orderId);
+              if (error) { alert('삭제 실패: ' + error.message); return; }
+              if (currentDraftId === orderId) {
+                setCart([]);
+                setCurrentDraftId(null);
+              }
+              await loadOrders();
+            }}
+          />
         )}
 
         {/* 부품 모달 */}
@@ -2977,7 +2993,7 @@ function OrderConfirmModal({ cart, onConfirm, onClose }) {
 
 
 /* ═══ ORDER HISTORY MODAL — 발주 이력 (작성중/확정) ═══ */
-function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose }) {
+function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, onDeleteDraft }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('전체');
 
@@ -3071,7 +3087,10 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose }) 
                     <td style={{padding:'8px 10px', fontSize:12, textAlign:'right', color:'#185FA5', fontWeight:600, fontVariantNumeric:'tabular-nums'}}>{totalAmount.toLocaleString('ko-KR')}원</td>
                     <td style={{padding:'8px 10px', fontSize:12, textAlign:'center'}}>
                       {isDraft ? (
-                        <button onClick={() => onLoadDraft(o.id)} style={{padding:'4px 10px', fontSize:11, fontWeight:500, background:'#FFF4D6', color:'#8A6300', border:'0.5px solid #F0D27A', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>📥 불러오기</button>
+                        <div style={{display:'flex', gap:4, justifyContent:'center'}}>
+                          <button onClick={() => onLoadDraft(o.id)} style={{padding:'4px 10px', fontSize:11, fontWeight:500, background:'#FFF4D6', color:'#8A6300', border:'0.5px solid #F0D27A', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>📥 불러오기</button>
+                          <button onClick={() => onDeleteDraft && onDeleteDraft(o.id)} title="작성중 발주 삭제" style={{padding:'4px 8px', fontSize:11, background:'#fff', color:'#9BA3B2', border:'0.5px solid #DDE1EB', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>🗑</button>
+                        </div>
                       ) : (
                         <button onClick={() => alert('PDF 출력은 Phase 2-1b에서 구현 예정')} style={{padding:'4px 10px', fontSize:11, fontWeight:500, background:'#185FA5', color:'#fff', border:'none', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>📄 PDF</button>
                       )}
