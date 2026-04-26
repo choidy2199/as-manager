@@ -3442,7 +3442,7 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
               {editCell?.id === p.id && editCell?.field === 'category' ? (
                 <input autoFocus className="input" value={editValue}
                   onChange={e => setEditValue(e.target.value)}
-                  onBlur={commitEdit}
+                  onBlur={() => commitEdit()}
                   onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }}
                   placeholder="모델명"
                   style={{width:'100%',fontSize:12,padding:'4px 6px',textAlign:'center'}} />
@@ -3452,17 +3452,17 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
             </td>
             <td style={{textAlign:'center',cursor:'pointer',fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)',fontSize:13,color:'#1A1D23'}} onClick={() => editCell?.id === p.id && editCell?.field === 'chinese_model' ? null : startEdit(p.id, 'chinese_model', p.chinese_model)}>
               {editCell?.id === p.id && editCell?.field === 'chinese_model'
-                ? <input autoFocus className="input" value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={commitEdit} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center',fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)'}} />
+                ? <input autoFocus className="input" value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={() => commitEdit()} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center',fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)'}} />
                 : (p.chinese_model || <span className="empty-dot">●</span>)}
             </td>
             <td style={{textAlign:'center',cursor:'pointer',fontSize:13,color:'#1A1D23'}} onClick={() => editCell?.id === p.id && editCell?.field === 'chinese_name' ? null : startEdit(p.id, 'chinese_name', p.chinese_name)}>
               {editCell?.id === p.id && editCell?.field === 'chinese_name'
-                ? <input autoFocus className="input" value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={commitEdit} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center'}} />
+                ? <input autoFocus className="input" value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={() => commitEdit()} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center'}} />
                 : (p.chinese_name || <span className="empty-dot">●</span>)}
             </td>
             <td style={{textAlign:'center',cursor:'pointer',fontSize:13,color:'#1A1D23'}} onClick={() => editCell?.id === p.id && editCell?.field === 'quantity' ? null : startEdit(p.id, 'quantity', p.quantity)}>
               {editCell?.id === p.id && editCell?.field === 'quantity'
-                ? <input autoFocus type="number" min="0" className="input" value={editValue} onChange={e => setEditValue(e.target.value.replace(/[^0-9]/g,''))} onBlur={commitEdit} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center'}} />
+                ? <input autoFocus type="number" min="0" className="input" value={editValue} onChange={e => setEditValue(e.target.value.replace(/[^0-9]/g,''))} onBlur={() => commitEdit()} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center'}} />
                 : (p.quantity == null ? <span className="empty-dot">●</span> : p.quantity)}
             </td>
             <td style={{textAlign:'center',color:'#185FA5',fontWeight:700,fontSize:13,padding:'8px 10px',fontVariantNumeric:'tabular-nums'}}>{p.price?.toLocaleString('ko-KR') || '0'}</td>
