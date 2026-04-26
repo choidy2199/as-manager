@@ -3130,8 +3130,8 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
 function PartThumbnail({ url, name, code, onClick }) {
   if (!url) {
     return (
-      <div style={{width:72,height:72,display:'inline-flex',alignItems:'center',justifyContent:'center',background:'#F4F6FA',borderRadius:6,color:'#9BA3B2',fontSize:22,fontWeight:500}}>
-        {(name || code || '?').toString().charAt(0)}
+      <div onClick={onClick} title={onClick ? '클릭하여 사진 추가' : undefined} style={{width:72,height:72,display:'inline-flex',alignItems:'center',justifyContent:'center',background:'#F4F6FA',borderRadius:6,color:'#9BA3B2',fontSize:28,fontWeight:300,cursor: onClick ? 'pointer' : 'default',userSelect:'none'}}>
+        {onClick ? '+' : (name || code || '?').toString().charAt(0)}
       </div>
     );
   }
@@ -3155,8 +3155,6 @@ function PhotoLightbox({ url, name, code, partId, readOnly, onClose, onUpdate })
     document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
   }, [onClose]);
-
-  if (!url) return null;
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -3213,14 +3211,20 @@ function PhotoLightbox({ url, name, code, partId, readOnly, onClose, onUpdate })
         <span>또는 바깥 클릭으로 닫기</span>
       </div>
       <div onClick={e => e.stopPropagation()} style={{background:'#fff',borderRadius:8,padding:28,maxWidth:'90vw',maxHeight:'90vh',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
-        <img src={url} alt={name || ''} style={{maxWidth:'calc(90vw - 56px)',maxHeight:'calc(90vh - 120px)',objectFit:'contain'}} />
+        {url ? (
+          <img src={url} alt={name || ''} style={{maxWidth:'calc(90vw - 56px)',maxHeight:'calc(90vh - 120px)',objectFit:'contain'}} />
+        ) : (
+          <div style={{width:320,height:240,display:'flex',alignItems:'center',justifyContent:'center',background:'#F4F6FA',borderRadius:6,color:'#9BA3B2',fontSize:13}}>등록된 사진 없음</div>
+        )}
         <div style={{textAlign:'center',color:'#1A1D23'}}>
           <div style={{fontWeight:500,fontSize:13}}>{name || '(이름 없음)'} · 내부코드 {code || '-'}</div>
         </div>
         {canEdit && (
           <div style={{display:'flex', gap:8, justifyContent:'center', marginTop:4}}>
-            <button onClick={() => fileInputRef.current?.click()} disabled={busy} style={{padding:'7px 16px', fontSize:12, fontWeight:500, background:'#185FA5', color:'#fff', border:'none', borderRadius:6, cursor: busy?'not-allowed':'pointer', fontFamily:'inherit', opacity: busy?0.6:1}}>{busy ? '처리 중...' : '📷 사진 변경'}</button>
-            <button onClick={handleDelete} disabled={busy} style={{padding:'7px 16px', fontSize:12, fontWeight:500, background:'#FEE2E2', color:'#7a3030', border:'0.5px solid #F0B5B5', borderRadius:6, cursor: busy?'not-allowed':'pointer', fontFamily:'inherit', opacity: busy?0.6:1}}>🗑 사진 삭제</button>
+            <button onClick={() => fileInputRef.current?.click()} disabled={busy} style={{padding:'7px 16px', fontSize:12, fontWeight:500, background:'#185FA5', color:'#fff', border:'none', borderRadius:6, cursor: busy?'not-allowed':'pointer', fontFamily:'inherit', opacity: busy?0.6:1}}>{busy ? '처리 중...' : (url ? '📷 사진 변경' : '📷 사진 추가')}</button>
+            {url && (
+              <button onClick={handleDelete} disabled={busy} style={{padding:'7px 16px', fontSize:12, fontWeight:500, background:'#FEE2E2', color:'#7a3030', border:'0.5px solid #F0B5B5', borderRadius:6, cursor: busy?'not-allowed':'pointer', fontFamily:'inherit', opacity: busy?0.6:1}}>🗑 사진 삭제</button>
+            )}
             <input ref={fileInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleFileChange} />
           </div>
         )}
@@ -3315,7 +3319,7 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
     const { id, field } = editCell;
     const sourceVal = overrideValue !== undefined ? overrideValue : editValue;
     let saveVal;
-    if (field === 'quantity') {
+    if (field === 'quantity' || field === 'price') {
       const trimmed = String(sourceVal).trim();
       saveVal = trimmed === '' ? null : Math.max(0, parseInt(trimmed) || 0);
     } else if (field === 'big_category') {
@@ -3407,7 +3411,7 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
           <tr key={p.id} className="as-data-row" style={i % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
             <td style={{textAlign:'center'}}><span style={{fontSize:13,color:'#5A6070'}}>{p.code || <span className="empty-dot">●</span>}</span></td>
             <td style={{textAlign:'center',padding:'8px 4px'}}>
-              <PartThumbnail url={p.image_url} name={p.name} code={p.code} onClick={() => p.image_url && onPhotoClick && onPhotoClick({ url: p.image_url, name: p.name, code: p.code, partId: p.id })} />
+              <PartThumbnail url={p.image_url} name={p.name} code={p.code} onClick={() => onPhotoClick && onPhotoClick({ url: p.image_url || null, name: p.name, code: p.code, partId: p.id })} />
             </td>
             <td style={{textAlign:'left',padding:'10px 8px',cursor: editCell?.id === p.id && editCell?.field === 'name_spec' ? 'text' : 'pointer'}}
                 onClick={() => { if (!(editCell?.id === p.id && editCell?.field === 'name_spec')) startEditNameSpec(p.id, p.name, p.spec); }}>
@@ -3465,7 +3469,11 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
                 ? <input autoFocus type="number" min="0" className="input" value={editValue} onChange={e => setEditValue(e.target.value.replace(/[^0-9]/g,''))} onBlur={() => commitEdit()} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center'}} />
                 : (p.quantity == null ? <span className="empty-dot">●</span> : p.quantity)}
             </td>
-            <td style={{textAlign:'center',color:'#185FA5',fontWeight:700,fontSize:13,padding:'8px 10px',fontVariantNumeric:'tabular-nums'}}>{p.price?.toLocaleString('ko-KR') || '0'}</td>
+            <td style={{textAlign:'center',cursor:'pointer',color:'#185FA5',fontWeight:700,fontSize:13,padding:'8px 10px',fontVariantNumeric:'tabular-nums'}} onClick={() => editCell?.id === p.id && editCell?.field === 'price' ? null : startEdit(p.id, 'price', p.price)}>
+              {editCell?.id === p.id && editCell?.field === 'price'
+                ? <input autoFocus type="number" min="0" className="input" value={editValue} onChange={e => setEditValue(e.target.value.replace(/[^0-9]/g,''))} onBlur={() => commitEdit()} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center',color:'#185FA5',fontWeight:700}} />
+                : (p.price == null ? <span className="empty-dot">●</span> : p.price.toLocaleString('ko-KR'))}
+            </td>
             <td style={{textAlign:'center'}}><button className="btn-text-edit" style={{fontSize:12,fontWeight:500}} onClick={() => onEdit(p)}>수정</button></td>
           </tr>
         ))}
