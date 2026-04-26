@@ -3220,6 +3220,7 @@ function CategoryDropdown({ categories, position, onSelect, onClear, onAddNew, o
 function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, onEdit }) {
   const [editCell, setEditCell] = useState(null); // { id, field }
   const [editValue, setEditValue] = useState('');
+  const [editNameSpec, setEditNameSpec] = useState({ name: '', spec: '' }); // name_spec 통합 편집
   const [bigCatDropdown, setBigCatDropdown] = useState(null); // { id, top, left, width } | null
   const tableRef = useRef(null);
   const savedWidthsRef = useRef((() => {
@@ -3265,7 +3266,24 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
     if (error) { alert('저장 실패: ' + error.message); }
   };
 
-  const cancelEdit = () => { setEditCell(null); setEditValue(''); setBigCatDropdown(null); };
+  const cancelEdit = () => { setEditCell(null); setEditValue(''); setEditNameSpec({ name:'', spec:'' }); setBigCatDropdown(null); };
+
+  const startEditNameSpec = (id, name, spec) => {
+    setEditCell({ id, field: 'name_spec' });
+    setEditNameSpec({ name: name || '', spec: spec || '' });
+  };
+
+  const commitNameSpec = async () => {
+    if (!editCell || editCell.field !== 'name_spec') return;
+    const { id } = editCell;
+    const nameVal = editNameSpec.name.trim() || null;
+    const specVal = editNameSpec.spec.trim() || null;
+    setEditCell(null);
+    setEditNameSpec({ name:'', spec:'' });
+    setParts(prev => prev.map(p => p.id === id ? { ...p, name: nameVal, spec: specVal } : p));
+    const { error } = await supabase.from('parts').update({ name: nameVal, spec: specVal }).eq('id', id);
+    if (error) alert('저장 실패: ' + error.message);
+  };
 
   const openBigCatDropdown = (p, e) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -3327,18 +3345,47 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
             <td style={{textAlign:'center',padding:'8px 4px'}}>
               <PartThumbnail url={p.image_url} name={p.name} code={p.code} onClick={() => p.image_url && onPhotoClick && onPhotoClick({ url: p.image_url, name: p.name, code: p.code })} />
             </td>
-            <td style={{textAlign:'left',padding:'10px 8px'}}>
-              <div style={{minWidth:0}}>
-                <div style={{fontSize:14,fontWeight:600,color:'#1A1D23',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.name || <span className="empty-dot">●</span>}</div>
-                {p.spec && <div style={{fontSize:12,color:'#5A6070',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.spec}</div>}
-              </div>
+            <td style={{textAlign:'left',padding:'10px 8px',cursor: editCell?.id === p.id && editCell?.field === 'name_spec' ? 'text' : 'pointer'}}
+                onClick={() => { if (!(editCell?.id === p.id && editCell?.field === 'name_spec')) startEditNameSpec(p.id, p.name, p.spec); }}>
+              {editCell?.id === p.id && editCell?.field === 'name_spec' ? (
+                <div style={{display:'flex',flexDirection:'column',gap:4}}>
+                  <input autoFocus value={editNameSpec.name}
+                    onChange={e => setEditNameSpec(v => ({...v, name: e.target.value}))}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitNameSpec(); } else if (e.key === 'Escape') cancelEdit(); }}
+                    placeholder="부품명"
+                    style={{width:'100%',fontSize:13,padding:'4px 6px',fontFamily:'inherit',border:'0.5px solid #DDE1EB',borderRadius:4}} />
+                  <input value={editNameSpec.spec}
+                    onChange={e => setEditNameSpec(v => ({...v, spec: e.target.value}))}
+                    onBlur={commitNameSpec}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitNameSpec(); } else if (e.key === 'Escape') cancelEdit(); }}
+                    placeholder="규격/스펙"
+                    style={{width:'100%',fontSize:12,padding:'4px 6px',fontFamily:'inherit',border:'0.5px solid #DDE1EB',borderRadius:4,color:'#5A6070'}} />
+                </div>
+              ) : (
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:600,color:'#1A1D23',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.name || <span className="empty-dot">●</span>}</div>
+                  <div style={{fontSize:12,color:'#5A6070',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.spec || <span className="empty-dot">●</span>}</div>
+                </div>
+              )}
             </td>
             <td style={{textAlign:'center',padding:'8px 6px'}}>
               {p.big_category
                 ? <span onClick={(e) => openBigCatDropdown(p, e)} style={{display:'inline-block',padding:'3px 9px',background:'#E8EFF7',color:'#185FA5',borderRadius:999,fontSize:11,fontWeight:500,whiteSpace:'nowrap',cursor:'pointer'}}>{p.big_category}</span>
                 : <span onClick={(e) => openBigCatDropdown(p, e)} style={{display:'inline-block',padding:'3px 9px',background:'#FAFBFC',color:'#9BA3B2',borderRadius:999,fontSize:11,border:'0.5px dashed #DDE1EB',whiteSpace:'nowrap',cursor:'pointer'}}>미분류</span>}
             </td>
-            <td style={{textAlign:'center'}}>{p.category ? <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:12,fontWeight:600,background: p.category === '공용' ? '#E6F1FB' : '#F4F6FA',color: p.category === '공용' ? '#0C447C' : '#1A1D23'}}>{p.category}</span> : <span className="empty-dot">●</span>}</td>
+            <td style={{textAlign:'center',cursor:'pointer',padding:'8px 6px'}}
+                onClick={() => { if (!(editCell?.id === p.id && editCell?.field === 'category')) startEdit(p.id, 'category', p.category); }}>
+              {editCell?.id === p.id && editCell?.field === 'category' ? (
+                <input autoFocus className="input" value={editValue}
+                  onChange={e => setEditValue(e.target.value)}
+                  onBlur={commitEdit}
+                  onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }}
+                  placeholder="모델명"
+                  style={{width:'100%',fontSize:12,padding:'4px 6px',textAlign:'center'}} />
+              ) : (p.category
+                ? <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:12,fontWeight:600,background: p.category === '공용' ? '#E6F1FB' : '#F4F6FA',color: p.category === '공용' ? '#0C447C' : '#1A1D23'}}>{p.category}</span>
+                : <span className="empty-dot">●</span>)}
+            </td>
             <td style={{textAlign:'center',cursor:'pointer',fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)',fontSize:13,color:'#1A1D23'}} onClick={() => editCell?.id === p.id && editCell?.field === 'chinese_model' ? null : startEdit(p.id, 'chinese_model', p.chinese_model)}>
               {editCell?.id === p.id && editCell?.field === 'chinese_model'
                 ? <input autoFocus className="input" value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={commitEdit} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center',fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)'}} />
