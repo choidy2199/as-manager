@@ -3641,7 +3641,20 @@ function PartModal({ initial, categories, onSave, onDelete, onClose }) {
     if (imgUrl && typeof imgUrl === 'string' && imgUrl.startsWith('blob:')) imgUrl = null;
     const qtyTrimmed = String(f.quantity).trim();
     const qtyVal = qtyTrimmed === '' ? null : Math.max(0, parseInt(qtyTrimmed) || 0);
-    await onSave({ code: f.code || null, category: f.category || null, name: f.name || null, spec: f.spec || null, price: parseInt(String(f.price).replace(/,/g, '')) || 0, image_url: imgUrl || null, chinese_model: f.chinese_model.trim() || null, chinese_name: f.chinese_name.trim() || null, quantity: qtyVal, big_category: f.big_category || null });
+    const trimOrNull = (v) => { const s = String(v ?? '').trim(); return s === '' ? null : s; };
+    const intOrNull = (v) => { const s = String(v ?? '').replace(/,/g, '').trim(); if (s === '') return null; const n = parseInt(s); return isNaN(n) ? null : n; };
+    await onSave({
+      code: trimOrNull(f.code),
+      category: trimOrNull(f.category),
+      name: trimOrNull(f.name),
+      spec: trimOrNull(f.spec),
+      price: intOrNull(f.price),
+      image_url: imgUrl || null,
+      chinese_model: trimOrNull(f.chinese_model),
+      chinese_name: trimOrNull(f.chinese_name),
+      quantity: qtyVal,
+      big_category: trimOrNull(f.big_category),
+    });
     setSaving(false);
   };
 
