@@ -3559,13 +3559,13 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
                 const tokens = (p.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean);
                 if (tokens.length === 0) return <span className="empty-dot">●</span>;
                 return (
-                  <div style={{display:'flex',flexWrap:'wrap',gap:3,justifyContent:'center',alignItems:'center'}}>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:3,padding:'0 4px'}}>
                     {tokens.map((t, i) => (
-                      <span key={i} style={{display:'inline-flex',alignItems:'center',gap:2,padding:'3px 4px 3px 8px',borderRadius:4,fontSize:11,fontWeight:500,background: t === '공용' ? '#E6F1FB' : '#F4F6FA',color: t === '공용' ? '#0C447C' : '#1A1D23'}}>
-                        {t}
+                      <span key={i} style={{display:'inline-flex',alignItems:'center',justifyContent:'space-between',gap:2,padding:'3px 4px 3px 8px',borderRadius:4,fontSize:11,fontWeight:500,background:'#E8EFF7',color:'#185FA5'}}>
+                        <span style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:0}}>{t}</span>
                         <span onClick={(e) => { e.stopPropagation(); removeModelToken(p.id, t); }}
                           title="제거"
-                          style={{width:14,height:14,borderRadius:2,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'#9BA3B2',fontSize:11,cursor:'pointer',lineHeight:1}}
+                          style={{width:14,height:14,borderRadius:2,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'#9BA3B2',fontSize:11,cursor:'pointer',lineHeight:1,flexShrink:0}}
                           onMouseEnter={e => { e.currentTarget.style.background = '#FCEBEB'; e.currentTarget.style.color = '#CC2222'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#9BA3B2'; }}
                         >×</span>
@@ -3575,15 +3575,30 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
                 );
               })()}
             </td>
-            <td style={{textAlign:'center',cursor:'pointer',fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)',fontSize:13,color:'#1A1D23'}} onClick={() => editCell?.id === p.id && editCell?.field === 'chinese_model' ? null : startEdit(p.id, 'chinese_model', p.chinese_model)}>
+            <td style={{textAlign:'center',cursor:'pointer',fontSize:13,color:'#1A1D23',padding:'8px 6px'}} onClick={() => { if (editCell?.id === p.id && editCell?.field === 'chinese_model') return; startEdit(p.id, 'chinese_model', p.chinese_model || p.category); }}>
               {editCell?.id === p.id && editCell?.field === 'chinese_model'
-                ? <input autoFocus className="input" value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={() => commitEdit()} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center',fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)'}} />
-                : (p.chinese_model || <span className="empty-dot">●</span>)}
+                ? <input autoFocus className="input" value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={() => commitEdit()} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center'}} />
+                : (() => {
+                    const source = p.chinese_model || p.category;
+                    const tokens = (source || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean);
+                    if (tokens.length === 0) return <span className="empty-dot">●</span>;
+                    return (
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:3,padding:'0 4px'}}>
+                        {tokens.map((t, i) => (
+                          <span key={i} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:500,background:'#E8EFF7',color:'#185FA5',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:0}}>{t}</span>
+                        ))}
+                      </div>
+                    );
+                  })()}
             </td>
-            <td style={{textAlign:'center',cursor:'pointer',fontSize:13,color:'#1A1D23'}} onClick={() => editCell?.id === p.id && editCell?.field === 'chinese_name' ? null : startEdit(p.id, 'chinese_name', p.chinese_name)}>
+            <td style={{textAlign:'center',cursor:'pointer',fontSize:13,color:'#1A1D23'}} onClick={() => { if (editCell?.id === p.id && editCell?.field === 'chinese_name') return; startEdit(p.id, 'chinese_name', p.chinese_name || p.name); }}>
               {editCell?.id === p.id && editCell?.field === 'chinese_name'
                 ? <input autoFocus className="input" value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={() => commitEdit()} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center'}} />
-                : (p.chinese_name || <span className="empty-dot">●</span>)}
+                : (() => {
+                    const display = p.chinese_name || p.name;
+                    if (!display) return <span className="empty-dot">●</span>;
+                    return <span>{display}</span>;
+                  })()}
             </td>
             <td style={{textAlign:'center',cursor:'pointer',fontSize:13,color:'#1A1D23'}} onClick={() => editCell?.id === p.id && editCell?.field === 'quantity' ? null : startEdit(p.id, 'quantity', p.quantity)}>
               {editCell?.id === p.id && editCell?.field === 'quantity'
