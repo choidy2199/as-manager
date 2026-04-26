@@ -23,6 +23,24 @@ const toLocal = (p) => { if (!p) return ''; const d = p.replace(/[^0-9]/g, ''); 
 const recordTypeToDb = (t) => ({ 'AS 수리':'as_repair','제품 판매':'product_sale','부품 판매':'parts_sale' }[t] || 'as_repair');
 const dbToRecordType = (t) => ({ 'as_repair':'AS 수리','product_sale':'제품 판매','parts_sale':'부품 판매' }[t] || 'AS 수리');
 
+/* 발주이력 전용 대분류 정렬 (사장님 지정) — part_categories DB sort_order는 무수정 */
+const HISTORY_BIG_CAT_ORDER = {
+  '2HP-900W': 1,
+  '4HP-1,500W': 2,
+  '5HP-2,200W': 3,
+  '8HP-4,000W': 4,
+  '유무선': 5,
+  '충전': 6,
+  '금속절단기': 7,
+  '기타': 8,
+};
+const sortByBigCategory = (a, b) => {
+  const oa = HISTORY_BIG_CAT_ORDER[a.big_category] ?? 999;
+  const ob = HISTORY_BIG_CAT_ORDER[b.big_category] ?? 999;
+  if (oa !== ob) return oa - ob;
+  return (a.name || '').localeCompare(b.name || '');
+};
+
 export default function Home() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -441,6 +459,7 @@ export default function Home() {
       const part = parts.find(p => p.id === item.part_id);
       return part ? { ...part, part_id: item.part_id, quantity: item.quantity } : null;
     }).filter(Boolean);
+    cartData.sort(sortByBigCategory);
     setCart(cartData);
     setCurrentDraftId(orderId);
     setShowHistoryModal(false);
