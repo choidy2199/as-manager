@@ -145,6 +145,14 @@ export default function Home() {
   const [partLightbox, setPartLightbox] = useState(null); // { url, name, code } | null
   const [modal, setModal] = useState(null);
 
+  /* ── 부속발주 (Phase 2-1a) state ── */
+  const [cart, setCart] = useState([]); // [{ ...part fields, part_id, quantity }]
+  const [currentDraftId, setCurrentDraftId] = useState(null);
+  const [orders, setOrders] = useState([]);
+  const [orderItems, setOrderItems] = useState([]);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
   /* ── 제품가격 state ── */
   const [products, setProducts] = useState([]);
   const [productsSearch, setProductsSearch] = useState('');
@@ -349,6 +357,94 @@ export default function Home() {
   const payFree = paymentBase.filter(r => r.payment_status === '무상').length;
   const payCard = paymentBase.filter(r => r.payment_status === '카드').length;
   const payVisit = paymentBase.filter(r => r.payment_status === '방문결제').length;
+
+  /* ── 부속발주 (Phase 2-1a) 핵심 함수 ── */
+  const loadOrders = useCallback(async () => {
+    const [ordersRes, itemsRes] = await Promise.all([
+      supabase.from('parts_orders').select('*').order('created_at', { ascending: false }),
+      supabase.from('parts_order_items').select('*'),
+    ]);
+    const o = ordersRes.data || [];
+    const it = itemsRes.data || [];
+    setOrders(o);
+    setOrderItems(it);
+    return { orders: o, items: it };
+  }, []);
+
+  const handleAddToCart = useCallback((part) => {
+    setCart(prev => {
+      const idx = prev.findIndex(item => item.part_id === part.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
+        return next;
+      }
+      return [...prev, { ...part, part_id: part.id, quantity: part.quantity || 1 }];
+    });
+  }, []);
+
+  const saveDraft = useCallback(async () => {
+    if (cart.length === 0) { alert('장바구니가 비어있습니다'); return null; }
+    let orderId = currentDraftId;
+    if (!orderId) {
+      const { data, error } = await supabase.from('parts_orders').insert({ status: 'draft' }).select().single();
+      if (error) { alert('저장 실패: ' + error.message); return null; }
+      orderId = data.id;
+      setCurrentDraftId(orderId);
+    } else {
+      await supabase.from('parts_orders').update({ memo: null }).eq('id', orderId);
+    }
+    await supabase.from('parts_order_items').delete().eq('order_id', orderId);
+    const itemsToInsert = cart.map((item, idx) => ({
+      order_id: orderId,
+      part_id: item.part_id,
+      quantity: item.quantity,
+      price_snapshot: item.price || 0,
+      sort_order: idx,
+    }));
+    const { error: itemsError } = await supabase.from('parts_order_items').insert(itemsToInsert);
+    if (itemsError) { alert('저장 실패: ' + itemsError.message); return null; }
+    await loadOrders();
+    return orderId;
+  }, [cart, currentDraftId, loadOrders]);
+
+  const confirmOrder = useCallback(async () => {
+    if (cart.length === 0) { alert('장바구니가 비어있습니다'); return; }
+    const savedId = await saveDraft();
+    if (!savedId) return;
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    const dateStr = `${y}${m}${d}`;
+    const { data: existing } = await supabase
+      .from('parts_orders').select('order_no').like('order_no', `${dateStr}-%`);
+    const nextNum = (existing?.length || 0) + 1;
+    const orderNo = `${dateStr}-${String(nextNum).padStart(3, '0')}`;
+    const { error } = await supabase
+      .from('parts_orders')
+      .update({ status: 'confirmed', order_no: orderNo, order_date: `${y}-${m}-${d}` })
+      .eq('id', savedId);
+    if (error) { alert('확정 실패: ' + error.message); return; }
+    setCart([]);
+    setCurrentDraftId(null);
+    setShowConfirmModal(false);
+    await loadOrders();
+    alert(`발주 확정 완료: ${orderNo}`);
+  }, [cart, saveDraft, loadOrders]);
+
+  const loadDraft = useCallback(async (orderId) => {
+    const { data: items } = await supabase
+      .from('parts_order_items').select('*').eq('order_id', orderId).order('sort_order');
+    if (!items) return;
+    const cartData = items.map(item => {
+      const part = parts.find(p => p.id === item.part_id);
+      return part ? { ...part, part_id: item.part_id, quantity: item.quantity } : null;
+    }).filter(Boolean);
+    setCart(cartData);
+    setCurrentDraftId(orderId);
+    setShowHistoryModal(false);
+  }, [parts]);
 
   /* ── 부속 필터 (기존) ── */
   const filteredParts = parts.filter(p => {
@@ -739,9 +835,23 @@ export default function Home() {
               </div>
             )}
 
-            {/* 서브탭 본문 — 부속발주 (Phase 1: UI 골격) */}
+            {/* 서브탭 본문 — 부속발주 (Phase 2-1a) */}
             {partsSubTab === 'order' && (
-              <PartsOrderTab parts={parts} models={partCats} categories={partCategories} onPhotoClick={info => setPartLightbox(info)} />
+              <PartsOrderTab
+                parts={parts}
+                models={partCats}
+                categories={partCategories}
+                onPhotoClick={info => setPartLightbox(info)}
+                cart={cart}
+                setCart={setCart}
+                currentDraftId={currentDraftId}
+                onAddToCart={handleAddToCart}
+                onSaveDraft={async () => { const id = await saveDraft(); if (id) alert('작성중으로 저장되었습니다'); }}
+                onConfirm={() => setShowConfirmModal(true)}
+                onShowHistory={() => setShowHistoryModal(true)}
+                loadOrders={loadOrders}
+                loadDraft={loadDraft}
+              />
             )}
           </div>
         )}
@@ -2330,11 +2440,26 @@ function ClipboardEditModal({ clipboards, colors, textColors, onSave, onClose })
 }
 
 
-/* ═══ PARTS ORDER TAB — Phase 1 UI 골격 (SELECT only, DB 무변경) ═══ */
-function PartsOrderTab({ parts, models, categories, onPhotoClick }) {
+/* ═══ PARTS ORDER TAB — Phase 2-1a (장바구니 + 발주확정 + 이력) ═══ */
+function PartsOrderTab({ parts, models, categories, onPhotoClick, cart, setCart, currentDraftId, onAddToCart, onSaveDraft, onConfirm, onShowHistory, loadOrders, loadDraft }) {
   const [orderSearch, setOrderSearch] = useState('');
   const [orderModel, setOrderModel] = useState('전체');
   const [orderBigCat, setOrderBigCat] = useState('전체');
+
+  // 진입 시 자동 복원 (마운트 1회) — currentDraftId/cart가 비어있을 때만
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { orders: o } = await loadOrders();
+      if (!mounted) return;
+      if (!currentDraftId && cart.length === 0) {
+        const latest = o.find(x => x.status === 'draft');
+        if (latest) await loadDraft(latest.id);
+      }
+    })();
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtered = parts.filter(p => {
     const q = orderSearch.trim().toLowerCase();
@@ -2382,10 +2507,10 @@ function PartsOrderTab({ parts, models, categories, onPhotoClick }) {
         })}
       </div>
 
-      {/* 좌(부속목록) : 우(장바구니 placeholder) 5:5 */}
+      {/* 좌(부속목록) : 우(장바구니) 5:5 — OrderCart는 단계 3에서 교체 */}
       <div style={{flex:1, display:'flex', overflow:'hidden'}}>
         <div style={{flex:1, borderRight:'0.5px solid #DDE1EB', display:'flex', flexDirection:'column', overflow:'hidden'}}>
-          <PartsOrderTable parts={filtered} onPhotoClick={onPhotoClick} />
+          <PartsOrderTable parts={filtered} onPhotoClick={onPhotoClick} onAdd={onAddToCart} />
         </div>
         <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
           <CartPlaceholder />
@@ -2396,8 +2521,8 @@ function PartsOrderTab({ parts, models, categories, onPhotoClick }) {
 }
 
 
-/* ═══ PARTS ORDER TABLE — 10컬럼 SELECT only (Phase 1) ═══ */
-function PartsOrderTable({ parts, onPhotoClick }) {
+/* ═══ PARTS ORDER TABLE — 10컬럼 SELECT only (Phase 2-1a: 담기 활성화) ═══ */
+function PartsOrderTable({ parts, onPhotoClick, onAdd }) {
   const ALL_COLS = [
     { key:'code',          label:'내부코드',     w:90  },
     { key:'image_url',     label:'사진',         w:88  },
@@ -2495,7 +2620,7 @@ function PartsOrderTable({ parts, onPhotoClick }) {
     if (key === 'chinese_name') return p.chinese_name || <span className="empty-dot">●</span>;
     if (key === 'quantity') return p.quantity == null ? <span className="empty-dot">●</span> : p.quantity;
     if (key === 'price') return <span style={{color:'#185FA5', fontWeight:700, fontVariantNumeric:'tabular-nums'}}>{p.price?.toLocaleString('ko-KR') || '0'}</span>;
-    if (key === '_add') return <button disabled title="Phase 2에서 구현 예정" style={{padding:'4px 10px', fontSize:11, background:'#185FA5', color:'#fff', border:'none', borderRadius:4, cursor:'not-allowed', opacity:0.4, fontFamily:'inherit'}}>+ 담기</button>;
+    if (key === '_add') return <button onClick={() => onAdd && onAdd(p)} style={{padding:'4px 10px', fontSize:11, background:'#185FA5', color:'#fff', border:'none', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>+ 담기</button>;
     return null;
   };
 
