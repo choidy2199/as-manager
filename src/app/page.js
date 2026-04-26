@@ -905,11 +905,15 @@ export default function Home() {
             parts={parts}
             onLoadDraft={loadDraft}
             onClose={() => setShowHistoryModal(false)}
-            onDeleteDraft={async (orderId) => {
-              if (!confirm('이 작성중 발주를 삭제하시겠습니까?\n장바구니에 불러온 상태라면 함께 비워집니다.')) return;
-              const { error } = await supabase.from('parts_orders').delete().eq('id', orderId);
+            onDeleteOrder={async (order) => {
+              const isConfirmed = order.status === 'confirmed';
+              const message = isConfirmed
+                ? '이 확정된 발주를 삭제하시겠습니까?\n⚠️ 이미 거래처에 전달된 발주일 수 있습니다.\n삭제하면 복구할 수 없습니다.'
+                : '이 작성중 발주를 삭제하시겠습니까?\n장바구니에 불러온 상태라면 함께 비워집니다.';
+              if (!confirm(message)) return;
+              const { error } = await supabase.from('parts_orders').delete().eq('id', order.id);
               if (error) { alert('삭제 실패: ' + error.message); return; }
-              if (currentDraftId === orderId) {
+              if (currentDraftId === order.id) {
                 setCart([]);
                 setCurrentDraftId(null);
               }
@@ -2993,7 +2997,7 @@ function OrderConfirmModal({ cart, onConfirm, onClose }) {
 
 
 /* ═══ ORDER HISTORY MODAL — 발주 이력 (작성중/확정) ═══ */
-function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, onDeleteDraft }) {
+function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, onDeleteOrder }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('전체');
 
@@ -3089,10 +3093,13 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
                       {isDraft ? (
                         <div style={{display:'flex', gap:4, justifyContent:'center'}}>
                           <button onClick={() => onLoadDraft(o.id)} style={{padding:'4px 10px', fontSize:11, fontWeight:500, background:'#FFF4D6', color:'#8A6300', border:'0.5px solid #F0D27A', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>📥 불러오기</button>
-                          <button onClick={() => onDeleteDraft && onDeleteDraft(o.id)} title="작성중 발주 삭제" style={{padding:'4px 8px', fontSize:11, background:'#fff', color:'#9BA3B2', border:'0.5px solid #DDE1EB', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>🗑</button>
+                          <button onClick={() => onDeleteOrder && onDeleteOrder(o)} title="작성중 발주 삭제" style={{padding:'4px 8px', fontSize:11, background:'#fff', color:'#9BA3B2', border:'0.5px solid #DDE1EB', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>🗑</button>
                         </div>
                       ) : (
-                        <button onClick={() => alert('PDF 출력은 Phase 2-1b에서 구현 예정')} style={{padding:'4px 10px', fontSize:11, fontWeight:500, background:'#185FA5', color:'#fff', border:'none', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>📄 PDF</button>
+                        <div style={{display:'flex', gap:4, justifyContent:'center'}}>
+                          <button onClick={() => alert('PDF 출력은 Phase 2-1b에서 구현 예정')} style={{padding:'4px 10px', fontSize:11, fontWeight:500, background:'#185FA5', color:'#fff', border:'none', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>📄 PDF</button>
+                          <button onClick={() => onDeleteOrder && onDeleteOrder(o)} title="확정 발주 삭제 (주의)" style={{padding:'4px 8px', fontSize:11, background:'#FEE2E2', color:'#7a3030', border:'0.5px solid #F0B5B5', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>🗑</button>
+                        </div>
                       )}
                     </td>
                   </tr>
