@@ -888,7 +888,13 @@ export default function Home() {
             url={partLightbox.url}
             name={partLightbox.name}
             code={partLightbox.code}
+            partId={partLightbox.partId}
+            readOnly={partLightbox.readOnly}
             onClose={() => setPartLightbox(null)}
+            onUpdate={(newUrl) => {
+              if (!partLightbox?.partId) return;
+              setParts(prev => prev.map(p => p.id === partLightbox.partId ? { ...p, image_url: newUrl } : p));
+            }}
           />
         )}
 
@@ -2650,7 +2656,7 @@ function PartsOrderTable({ parts, onPhotoClick, onAdd }) {
 
   const renderCell = (p, key) => {
     if (key === 'code') return <span style={{fontSize:13, color:'#5A6070'}}>{p.code || <span className="empty-dot">●</span>}</span>;
-    if (key === 'image_url') return <PartThumbnail url={p.image_url} name={p.name} code={p.code} onClick={() => p.image_url && onPhotoClick && onPhotoClick({url:p.image_url, name:p.name, code:p.code})} />;
+    if (key === 'image_url') return <PartThumbnail url={p.image_url} name={p.name} code={p.code} onClick={() => p.image_url && onPhotoClick && onPhotoClick({url:p.image_url, name:p.name, code:p.code, partId:p.id, readOnly:true})} />;
     if (key === 'name_spec') return (
       <div style={{minWidth:0}}>
         <div style={{fontSize:13, fontWeight:500, color:'#1A1D23', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{p.name || <span className="empty-dot">●</span>}</div>
@@ -3138,7 +3144,10 @@ function PartThumbnail({ url, name, code, onClick }) {
 
 
 /* ═══ PHOTO LIGHTBOX ═══ */
-function PhotoLightbox({ url, name, code, onClose }) {
+function PhotoLightbox({ url, name, code, partId, readOnly, onClose, onUpdate }) {
+  const fileInputRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
@@ -3148,6 +3157,54 @@ function PhotoLightbox({ url, name, code, onClose }) {
   }, [onClose]);
 
   if (!url) return null;
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1200;
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(async (blob) => {
+          if (!blob) { alert('이미지 변환 실패'); return; }
+          setBusy(true);
+          const fileName = `part_${Date.now()}.png`;
+          const { error: upErr } = await supabase.storage.from('parts-images').upload(fileName, blob, { contentType: 'image/png', upsert: true });
+          if (upErr) { setBusy(false); alert('이미지 업로드 실패: ' + upErr.message); return; }
+          const { data: urlData } = supabase.storage.from('parts-images').getPublicUrl(fileName);
+          const newUrl = urlData?.publicUrl || null;
+          if (!newUrl || newUrl.startsWith('blob:')) { setBusy(false); alert('업로드 URL 생성 실패'); return; }
+          const { error } = await supabase.from('parts').update({ image_url: newUrl }).eq('id', partId);
+          if (error) { setBusy(false); alert('저장 실패: ' + error.message); return; }
+          setBusy(false);
+          if (onUpdate) onUpdate(newUrl);
+          onClose();
+        }, 'image/png');
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('사진을 삭제하시겠습니까?')) return;
+    setBusy(true);
+    const { error } = await supabase.from('parts').update({ image_url: null }).eq('id', partId);
+    if (error) { setBusy(false); alert('삭제 실패: ' + error.message); return; }
+    setBusy(false);
+    if (onUpdate) onUpdate(null);
+    onClose();
+  };
+
+  const canEdit = !readOnly && !!partId;
 
   return (
     <div onClick={onClose} style={{position:'fixed',inset:0,zIndex:10000,background:'rgba(10,12,15,0.82)',display:'flex',alignItems:'center',justifyContent:'center',padding:24}}>
@@ -3160,6 +3217,13 @@ function PhotoLightbox({ url, name, code, onClose }) {
         <div style={{textAlign:'center',color:'#1A1D23'}}>
           <div style={{fontWeight:500,fontSize:13}}>{name || '(이름 없음)'} · 내부코드 {code || '-'}</div>
         </div>
+        {canEdit && (
+          <div style={{display:'flex', gap:8, justifyContent:'center', marginTop:4}}>
+            <button onClick={() => fileInputRef.current?.click()} disabled={busy} style={{padding:'7px 16px', fontSize:12, fontWeight:500, background:'#185FA5', color:'#fff', border:'none', borderRadius:6, cursor: busy?'not-allowed':'pointer', fontFamily:'inherit', opacity: busy?0.6:1}}>{busy ? '처리 중...' : '📷 사진 변경'}</button>
+            <button onClick={handleDelete} disabled={busy} style={{padding:'7px 16px', fontSize:12, fontWeight:500, background:'#FEE2E2', color:'#7a3030', border:'0.5px solid #F0B5B5', borderRadius:6, cursor: busy?'not-allowed':'pointer', fontFamily:'inherit', opacity: busy?0.6:1}}>🗑 사진 삭제</button>
+            <input ref={fileInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleFileChange} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -3343,7 +3407,7 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
           <tr key={p.id} className="as-data-row" style={i % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
             <td style={{textAlign:'center'}}><span style={{fontSize:13,color:'#5A6070'}}>{p.code || <span className="empty-dot">●</span>}</span></td>
             <td style={{textAlign:'center',padding:'8px 4px'}}>
-              <PartThumbnail url={p.image_url} name={p.name} code={p.code} onClick={() => p.image_url && onPhotoClick && onPhotoClick({ url: p.image_url, name: p.name, code: p.code })} />
+              <PartThumbnail url={p.image_url} name={p.name} code={p.code} onClick={() => p.image_url && onPhotoClick && onPhotoClick({ url: p.image_url, name: p.name, code: p.code, partId: p.id })} />
             </td>
             <td style={{textAlign:'left',padding:'10px 8px',cursor: editCell?.id === p.id && editCell?.field === 'name_spec' ? 'text' : 'pointer'}}
                 onClick={() => { if (!(editCell?.id === p.id && editCell?.field === 'name_spec')) startEditNameSpec(p.id, p.name, p.spec); }}>
