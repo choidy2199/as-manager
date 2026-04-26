@@ -3221,7 +3221,7 @@ function PhotoLightbox({ url, name, code, partId, readOnly, onClose, onUpdate })
         </div>
         {canEdit && (
           <div style={{display:'flex', gap:8, justifyContent:'center', marginTop:4}}>
-            <button onClick={() => fileInputRef.current?.click()} disabled={busy} style={{padding:'7px 16px', fontSize:12, fontWeight:500, background:'#185FA5', color:'#fff', border:'none', borderRadius:6, cursor: busy?'not-allowed':'pointer', fontFamily:'inherit', opacity: busy?0.6:1}}>{busy ? '처리 중...' : (url ? '📷 사진 변경' : '📷 사진 추가')}</button>
+            <button onClick={() => fileInputRef.current?.click()} disabled={busy} style={{padding:'7px 16px', fontSize:12, fontWeight:500, background:'#185FA5', color:'#fff', border:'none', borderRadius:6, cursor: busy?'not-allowed':'pointer', fontFamily:'inherit', opacity: busy?0.6:1}}>{busy ? '처리 중...' : '📷 사진 변경'}</button>
             {url && (
               <button onClick={handleDelete} disabled={busy} style={{padding:'7px 16px', fontSize:12, fontWeight:500, background:'#FEE2E2', color:'#7a3030', border:'0.5px solid #F0B5B5', borderRadius:6, cursor: busy?'not-allowed':'pointer', fontFamily:'inherit', opacity: busy?0.6:1}}>🗑 사진 삭제</button>
             )}
