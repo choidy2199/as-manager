@@ -137,6 +137,7 @@ export default function Home() {
   const [showNewShipRow, setShowNewShipRow] = useState(false);
 
   /* ── 부속 기존 state ── */
+  const [partsSubTab, setPartsSubTab] = useState('parts'); // 'parts' | 'products' | 'order'
   const [partsSearch, setPartsSearch] = useState('');
   const [partsCatFilter, setPartsCatFilter] = useState('전체');
   const [partsBigCatFilter, setPartsBigCatFilter] = useState('전체');
@@ -667,64 +668,81 @@ export default function Home() {
 
         {/* ═══ 제품/부속가격 ═══ */}
         {tab === 'parts' && (
-          <div style={{display:'flex',gap:0,height:'calc(100vh - 110px)'}}>
-            {/* 좌측 — 부속가격 */}
-            <div style={{flex:7,borderRight:'0.5px solid #DDE1EB',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-              <div className="as-filter-row" style={{padding:'8px 12px'}}>
-                <div className="as-filter-search-wrap">
-                  <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                  <input className="input as-filter-search" placeholder="부품코드, 품명, 스펙, 모델명 검색..." value={partsSearch} onChange={e => setPartsSearch(e.target.value)} autoComplete="off" />
-                </div>
-                <div className="as-filter-pair"><span className="as-filter-label">모델</span>
-                  <select className="input as-filter-select" value={partsCatFilter} onChange={e => setPartsCatFilter(e.target.value)}>
-                    {partCats.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div className="as-filter-pair"><span className="as-filter-label">대분류</span>
-                  <select className="input as-filter-select" value={partsBigCatFilter} onChange={e => setPartsBigCatFilter(e.target.value)}>
-                    {partBigCats.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="section" style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
-                <div className="section-header">
-                  <span style={{fontSize:12,fontWeight:600}}>부속가격</span>
-                  <div style={{display:'flex',alignItems:'center',gap:10}}>
-                    <span style={{fontSize:12,color:'rgba(255,255,255,0.5)'}}>총 {filteredParts.length}건</span>
-                    <button className="btn-primary" style={{fontSize:11,padding:'4px 12px'}} onClick={() => setModal({type:'part-new'})}>+ 새 부품</button>
+          <div style={{display:'flex',flexDirection:'column',height:'calc(100vh - 110px)'}}>
+            {/* 서브탭 헤더 */}
+            <div style={{display:'flex',borderBottom:'0.5px solid #DDE1EB',background:'#fff',flexShrink:0}}>
+              {[['parts','부속가격'],['products','제품가격'],['order','부속발주']].map(([k,v]) => (
+                <div key={k} onClick={() => setPartsSubTab(k)} style={{padding:'9px 16px',fontSize:12,cursor:'pointer',color:partsSubTab===k?'#185FA5':'#5A6070',fontWeight:partsSubTab===k?500:400,borderBottom:partsSubTab===k?'2px solid #185FA5':'2px solid transparent',marginBottom:'-0.5px',userSelect:'none'}}>{v}</div>
+              ))}
+            </div>
+
+            {/* 서브탭 본문 — 부속가격 */}
+            {partsSubTab === 'parts' && (
+              <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                <div className="as-filter-row" style={{padding:'8px 12px'}}>
+                  <div className="as-filter-search-wrap">
+                    <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                    <input className="input as-filter-search" placeholder="부품코드, 품명, 스펙, 모델명 검색..." value={partsSearch} onChange={e => setPartsSearch(e.target.value)} autoComplete="off" />
+                  </div>
+                  <div className="as-filter-pair"><span className="as-filter-label">모델</span>
+                    <select className="input as-filter-select" value={partsCatFilter} onChange={e => setPartsCatFilter(e.target.value)}>
+                      {partCats.map(c => <option key={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div className="as-filter-pair"><span className="as-filter-label">대분류</span>
+                    <select className="input as-filter-select" value={partsBigCatFilter} onChange={e => setPartsBigCatFilter(e.target.value)}>
+                      {partBigCats.map(c => <option key={c}>{c}</option>)}
+                    </select>
                   </div>
                 </div>
-                <div className="as-table-wrapper" style={{flex:1,overflow:'auto'}}>
-                  <PartsTable parts={filteredParts} setParts={setParts} categories={partCategories} setCategories={setPartCategories} onPhotoClick={info => setPartLightbox(info)} onEdit={p => setModal({type:'part-edit',data:p})} />
-                </div>
-              </div>
-            </div>
-            {/* 우측 — 제품가격 */}
-            <div style={{flex:3,display:'flex',flexDirection:'column',overflow:'hidden'}}>
-              <div className="as-filter-row" style={{padding:'8px 12px'}}>
-                <div className="as-filter-search-wrap">
-                  <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                  <input className="input as-filter-search" placeholder="브랜드, 모델 검색..." value={productsSearch} onChange={e => setProductsSearch(e.target.value)} autoComplete="off" />
-                </div>
-              </div>
-              <div className="section" style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
-                <div className="section-header">
-                  <span style={{fontSize:12,fontWeight:600}}>제품가격</span>
-                  <div style={{display:'flex',alignItems:'center',gap:10}}>
-                    <span style={{fontSize:12,color:'rgba(255,255,255,0.5)'}}>총 {filteredProducts.length}건</span>
-                    <button className="btn-primary" style={{fontSize:11,padding:'4px 12px'}} onClick={async () => {
-                      const maxOrder = products.reduce((m, p) => Math.max(m, p.sort_order || 0), 0);
-                      const { data, error } = await supabase.from('products').insert({ brand: '', model: '', price: 0, sort_order: maxOrder + 1 }).select().single();
-                      if (error) { alert('추가 실패: ' + error.message); return; }
-                      setProducts(prev => [...prev, data]);
-                    }}>+ 제품 추가</button>
+                <div className="section" style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                  <div className="section-header">
+                    <span style={{fontSize:12,fontWeight:600}}>부속가격</span>
+                    <div style={{display:'flex',alignItems:'center',gap:10}}>
+                      <span style={{fontSize:12,color:'rgba(255,255,255,0.5)'}}>총 {filteredParts.length}건</span>
+                      <button className="btn-primary" style={{fontSize:11,padding:'4px 12px'}} onClick={() => setModal({type:'part-new'})}>+ 새 부품</button>
+                    </div>
+                  </div>
+                  <div className="as-table-wrapper" style={{flex:1,overflow:'auto'}}>
+                    <PartsTable parts={filteredParts} setParts={setParts} categories={partCategories} setCategories={setPartCategories} onPhotoClick={info => setPartLightbox(info)} onEdit={p => setModal({type:'part-edit',data:p})} />
                   </div>
                 </div>
-                <div className="as-table-wrapper" style={{flex:1,overflow:'auto'}}>
-                  <ProductsTable products={filteredProducts} onReload={() => loadData()} setProducts={setProducts} />
+              </div>
+            )}
+
+            {/* 서브탭 본문 — 제품가격 */}
+            {partsSubTab === 'products' && (
+              <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                <div className="as-filter-row" style={{padding:'8px 12px'}}>
+                  <div className="as-filter-search-wrap">
+                    <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                    <input className="input as-filter-search" placeholder="브랜드, 모델 검색..." value={productsSearch} onChange={e => setProductsSearch(e.target.value)} autoComplete="off" />
+                  </div>
+                </div>
+                <div className="section" style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                  <div className="section-header">
+                    <span style={{fontSize:12,fontWeight:600}}>제품가격</span>
+                    <div style={{display:'flex',alignItems:'center',gap:10}}>
+                      <span style={{fontSize:12,color:'rgba(255,255,255,0.5)'}}>총 {filteredProducts.length}건</span>
+                      <button className="btn-primary" style={{fontSize:11,padding:'4px 12px'}} onClick={async () => {
+                        const maxOrder = products.reduce((m, p) => Math.max(m, p.sort_order || 0), 0);
+                        const { data, error } = await supabase.from('products').insert({ brand: '', model: '', price: 0, sort_order: maxOrder + 1 }).select().single();
+                        if (error) { alert('추가 실패: ' + error.message); return; }
+                        setProducts(prev => [...prev, data]);
+                      }}>+ 제품 추가</button>
+                    </div>
+                  </div>
+                  <div className="as-table-wrapper" style={{flex:1,overflow:'auto'}}>
+                    <ProductsTable products={filteredProducts} onReload={() => loadData()} setProducts={setProducts} />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* 서브탭 본문 — 부속발주 (Phase 1: UI 골격) */}
+            {partsSubTab === 'order' && (
+              <PartsOrderTab parts={parts} models={partCats} categories={partCategories} onPhotoClick={info => setPartLightbox(info)} />
+            )}
           </div>
         )}
 
@@ -2306,6 +2324,269 @@ function ClipboardEditModal({ clipboards, colors, textColors, onSave, onClose })
             <button style={{fontSize:12,padding:'6px 16px',background:'#E8EBF0',border:'none',borderRadius:6,cursor:'pointer',fontFamily:'inherit'}} onClick={onClose}>취소</button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+/* ═══ PARTS ORDER TAB — Phase 1 UI 골격 (SELECT only, DB 무변경) ═══ */
+function PartsOrderTab({ parts, models, categories, onPhotoClick }) {
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderModel, setOrderModel] = useState('전체');
+  const [orderBigCat, setOrderBigCat] = useState('전체');
+
+  const filtered = parts.filter(p => {
+    const q = orderSearch.trim().toLowerCase();
+    if (q) {
+      const hit = (p.code || '').toLowerCase().includes(q)
+        || (p.name || '').toLowerCase().includes(q)
+        || (p.spec || '').toLowerCase().includes(q)
+        || (p.category || '').toLowerCase().includes(q)
+        || (p.chinese_model || '').toLowerCase().includes(q);
+      if (!hit) return false;
+    }
+    if (orderModel && orderModel !== '전체') {
+      if (p.category !== orderModel && p.chinese_model !== orderModel) return false;
+    }
+    if (orderBigCat === '전체') return true;
+    if (orderBigCat === '미분류') return !p.big_category;
+    return p.big_category === orderBigCat;
+  });
+
+  const pillItems = ['전체', ...(categories || []).map(c => c.name), '미분류'];
+  const modelOptions = models && models.length ? models : ['전체'];
+
+  return (
+    <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
+      {/* 필터바 */}
+      <div className="as-filter-row" style={{padding:'8px 12px'}}>
+        <div className="as-filter-search-wrap">
+          <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
+          <input className="input as-filter-search" placeholder="부품코드, 품명, 스펙, 모델명 검색..." value={orderSearch} onChange={e => setOrderSearch(e.target.value)} autoComplete="off" />
+        </div>
+        <div className="as-filter-pair"><span className="as-filter-label">모델</span>
+          <select className="input as-filter-select" value={orderModel} onChange={e => setOrderModel(e.target.value)}>
+            {modelOptions.map(m => <option key={m}>{m}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* pill 필터 (대분류) */}
+      <div style={{padding:10, background:'#F4F6FA', display:'flex', flexWrap:'wrap', gap:6, borderBottom:'0.5px solid #DDE1EB', flexShrink:0}}>
+        {pillItems.map(item => {
+          const active = orderBigCat === item;
+          return (
+            <div key={item} onClick={() => setOrderBigCat(item)} style={{padding:'6px 12px', borderRadius:999, fontSize:11, cursor:'pointer', userSelect:'none', background: active ? '#185FA5' : '#fff', color: active ? '#fff' : '#5A6070', fontWeight: active ? 500 : 400, border: active ? '0.5px solid #185FA5' : '0.5px solid #DDE1EB', whiteSpace:'nowrap'}}>{item}</div>
+          );
+        })}
+      </div>
+
+      {/* 좌(부속목록) : 우(장바구니 placeholder) 5:5 */}
+      <div style={{flex:1, display:'flex', overflow:'hidden'}}>
+        <div style={{flex:1, borderRight:'0.5px solid #DDE1EB', display:'flex', flexDirection:'column', overflow:'hidden'}}>
+          <PartsOrderTable parts={filtered} onPhotoClick={onPhotoClick} />
+        </div>
+        <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
+          <CartPlaceholder />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/* ═══ PARTS ORDER TABLE — 10컬럼 SELECT only (Phase 1) ═══ */
+function PartsOrderTable({ parts, onPhotoClick }) {
+  const ALL_COLS = [
+    { key:'code',          label:'내부코드',     w:90  },
+    { key:'image_url',     label:'사진',         w:88  },
+    { key:'name_spec',     label:'부품/스펙',    w:200 },
+    { key:'big_category',  label:'대분류',       w:120 },
+    { key:'category',      label:'모델명(한국)', w:90  },
+    { key:'chinese_model', label:'모델명(中)',   w:100 },
+    { key:'chinese_name',  label:'부속이름(中)', w:110 },
+    { key:'quantity',      label:'수량',         w:60  },
+    { key:'price',         label:'공임비',       w:90  },
+    { key:'_add',          label:'담기',         w:70  },
+  ];
+  const DEFAULT_W = Object.fromEntries(ALL_COLS.map(c => [c.key, c.w]));
+
+  const [visibleCols, setVisibleCols] = useState(() => {
+    const initial = Object.fromEntries(ALL_COLS.map(c => [c.key, true]));
+    if (typeof window === 'undefined') return initial;
+    try {
+      const v = JSON.parse(localStorage.getItem('partsOrderVisibleColumns'));
+      if (v && typeof v === 'object') {
+        return Object.fromEntries(ALL_COLS.map(c => [c.key, v[c.key] !== false]));
+      }
+    } catch {}
+    return initial;
+  });
+
+  const [showColPanel, setShowColPanel] = useState(false);
+  const [colPanelPos, setColPanelPos] = useState(null);
+  const colBtnRef = useRef(null);
+  const tableRef = useRef(null);
+  const savedWidthsRef = useRef((() => {
+    if (typeof window === 'undefined') return {};
+    try { const v = JSON.parse(localStorage.getItem('partsOrderColumnWidths')); return (v && typeof v === 'object') ? v : {}; } catch { return {}; }
+  })());
+
+  const COLS = ALL_COLS.filter(c => visibleCols[c.key]);
+  const getW = (k) => savedWidthsRef.current[k] || DEFAULT_W[k] || 80;
+
+  const startResize = (colIdx, colKey, e) => {
+    e.preventDefault(); e.stopPropagation();
+    const table = tableRef.current; if (!table) return;
+    const col = table.querySelector('colgroup').children[colIdx]; if (!col) return;
+    const startX = e.clientX;
+    const startW = col.offsetWidth || getW(colKey);
+    const startTableW = table.offsetWidth;
+    document.body.style.userSelect = 'none'; document.body.style.cursor = 'col-resize';
+    const onMove = (ev) => { ev.preventDefault(); const newW = Math.max(40, startW + ev.clientX - startX); col.style.width = newW + 'px'; table.style.width = (startTableW + (newW - startW)) + 'px'; };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = ''; document.body.style.cursor = '';
+      const finalW = parseInt(col.style.width) || startW;
+      savedWidthsRef.current = { ...savedWidthsRef.current, [colKey]: finalW };
+      localStorage.setItem('partsOrderColumnWidths', JSON.stringify(savedWidthsRef.current));
+    };
+    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+  };
+
+  const toggleCol = (key) => {
+    const visibleCount = ALL_COLS.filter(c => visibleCols[c.key]).length;
+    if (visibleCols[key] && visibleCount <= 1) return; // 마지막 1개 보호
+    const next = { ...visibleCols, [key]: !visibleCols[key] };
+    setVisibleCols(next);
+    try { localStorage.setItem('partsOrderVisibleColumns', JSON.stringify(next)); } catch {}
+  };
+
+  const openColPanel = () => {
+    if (showColPanel) { setShowColPanel(false); return; }
+    const rect = colBtnRef.current?.getBoundingClientRect();
+    if (rect) setColPanelPos({ top: rect.bottom + 4, left: Math.max(8, rect.right - 240) });
+    setShowColPanel(true);
+  };
+
+  useEffect(() => {
+    if (!showColPanel) return;
+    const onKey = (e) => { if (e.key === 'Escape') setShowColPanel(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showColPanel]);
+
+  const renderCell = (p, key) => {
+    if (key === 'code') return <span style={{fontSize:13, color:'#5A6070'}}>{p.code || <span className="empty-dot">●</span>}</span>;
+    if (key === 'image_url') return <PartThumbnail url={p.image_url} name={p.name} code={p.code} onClick={() => p.image_url && onPhotoClick && onPhotoClick({url:p.image_url, name:p.name, code:p.code})} />;
+    if (key === 'name_spec') return (
+      <div style={{minWidth:0}}>
+        <div style={{fontSize:13, fontWeight:500, color:'#1A1D23', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{p.name || <span className="empty-dot">●</span>}</div>
+        {p.spec && <div style={{fontSize:11, color:'#5A6070', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{p.spec}</div>}
+      </div>
+    );
+    if (key === 'big_category') {
+      if (p.big_category) return <span style={{display:'inline-block', padding:'2px 7px', background:'#E6F1FB', color:'#0C447C', borderRadius:999, fontSize:11, fontWeight:500, whiteSpace:'nowrap'}}>{p.big_category}</span>;
+      return <span style={{display:'inline-block', padding:'2px 7px', border:'0.5px dashed #DDE1EB', color:'#9BA3B2', borderRadius:999, fontSize:11, whiteSpace:'nowrap'}}>미분류</span>;
+    }
+    if (key === 'category') return p.category || <span className="empty-dot">●</span>;
+    if (key === 'chinese_model') return <span style={{fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)'}}>{p.chinese_model || <span className="empty-dot">●</span>}</span>;
+    if (key === 'chinese_name') return p.chinese_name || <span className="empty-dot">●</span>;
+    if (key === 'quantity') return p.quantity == null ? <span className="empty-dot">●</span> : p.quantity;
+    if (key === 'price') return <span style={{color:'#185FA5', fontWeight:700, fontVariantNumeric:'tabular-nums'}}>{p.price?.toLocaleString('ko-KR') || '0'}</span>;
+    if (key === '_add') return <button disabled title="Phase 2에서 구현 예정" style={{padding:'4px 10px', fontSize:11, background:'#185FA5', color:'#fff', border:'none', borderRadius:4, cursor:'not-allowed', opacity:0.4, fontFamily:'inherit'}}>+ 담기</button>;
+    return null;
+  };
+
+  return (
+    <>
+      <div className="section" style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
+        <div className="section-header">
+          <span style={{fontSize:12, fontWeight:600}}>부속 목록</span>
+          <div style={{display:'flex', alignItems:'center', gap:10}}>
+            <span style={{fontSize:12, color:'rgba(255,255,255,0.5)'}}>총 {parts.length}건</span>
+            <button ref={colBtnRef} onClick={openColPanel} style={{display:'inline-flex', alignItems:'center', gap:4, padding:'4px 9px', background:'transparent', border:'0.5px solid rgba(255,255,255,0.3)', color:'#fff', borderRadius:4, fontSize:11, cursor:'pointer', fontFamily:'inherit'}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              컬럼
+            </button>
+          </div>
+        </div>
+        <div className="as-table-wrapper" style={{flex:1, overflow:'auto'}}>
+          <table className="as-table" ref={tableRef} style={{width: COLS.reduce((s,c) => s + getW(c.key), 0)}}>
+            <colgroup>{COLS.map(c => <col key={c.key} style={{width: getW(c.key)}} />)}</colgroup>
+            <thead><tr className="as-col-header">
+              {COLS.map((c, idx) => (
+                <th key={c.key} style={{position:'sticky', top:0, zIndex:10, background:'#EAECF2', color:'#5A6070', fontSize:13, fontWeight:500, padding:'8px 10px', height:36, lineHeight:'20px', boxShadow:'0 1px 0 0 #DDE1EB', userSelect:'none'}}>
+                  {c.label}
+                  <span className="col-resize-handle" onMouseDown={e => startResize(idx, c.key, e)} />
+                </th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {parts.map((p, i) => (
+                <tr key={p.id} className="as-data-row" style={i % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
+                  {COLS.map(c => (
+                    <td key={c.key} style={{textAlign: c.key === 'name_spec' ? 'left' : c.key === 'price' ? 'right' : 'center', padding: c.key === 'image_url' ? '8px 4px' : c.key === 'name_spec' ? '10px 8px' : '8px 10px'}}>
+                      {renderCell(p, c.key)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              {parts.length === 0 && <tr><td colSpan={COLS.length} className="empty">부품이 없습니다</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {showColPanel && colPanelPos && (
+        <ColumnSettingsPanel allCols={ALL_COLS} visible={visibleCols} onToggle={toggleCol} position={colPanelPos} onClose={() => setShowColPanel(false)} />
+      )}
+    </>
+  );
+}
+
+
+/* ═══ COLUMN SETTINGS PANEL — 컬럼 표시/숨김 (position:fixed) ═══ */
+function ColumnSettingsPanel({ allCols, visible, onToggle, position, onClose }) {
+  const visibleCount = allCols.filter(c => visible[c.key]).length;
+  return (
+    <div style={{position:'fixed', top:position.top, left:position.left, zIndex:1000, background:'#fff', border:'0.5px solid #DDE1EB', borderRadius:8, padding:'12px 14px', boxShadow:'0 4px 12px rgba(26,29,35,0.08)', width:240}}
+      onMouseDown={e => e.stopPropagation()}
+    >
+      <div style={{fontSize:12, fontWeight:500, color:'#1A1D23', paddingBottom:8, borderBottom:'0.5px solid #DDE1EB'}}>컬럼 표시 설정</div>
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px 16px', padding:'10px 0', fontSize:11}}>
+        {allCols.map(c => {
+          const isVisible = !!visible[c.key];
+          const isLastVisible = isVisible && visibleCount <= 1;
+          return (
+            <label key={c.key} style={{display:'flex', alignItems:'center', gap:6, cursor: isLastVisible ? 'not-allowed' : 'pointer', color: isLastVisible ? '#9BA3B2' : '#1A1D23', userSelect:'none'}}>
+              <input type="checkbox" checked={isVisible} disabled={isLastVisible} onChange={() => onToggle(c.key)} style={{margin:0, cursor: isLastVisible ? 'not-allowed' : 'pointer'}} />
+              {c.label}
+            </label>
+          );
+        })}
+      </div>
+      <div style={{fontSize:11, color:'#9BA3B2', paddingTop:8, borderTop:'0.5px solid #DDE1EB'}}>최소 1개 필수 · 브라우저에 저장됨</div>
+    </div>
+  );
+}
+
+
+/* ═══ CART PLACEHOLDER — Phase 1 빈 상태 (장바구니 state 없음) ═══ */
+function CartPlaceholder() {
+  return (
+    <div className="section" style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
+      <div className="section-header">
+        <span style={{fontSize:12, fontWeight:600}}>장바구니</span>
+        <span style={{fontSize:12, color:'rgba(255,255,255,0.5)'}}>0건</span>
+      </div>
+      <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:260, padding:24, gap:12, background:'#fff'}}>
+        <div style={{width:48, height:48, borderRadius:'50%', background:'#F4F6FA', display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9BA3B2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+        </div>
+        <div style={{fontSize:12, fontWeight:500, color:'#5A6070'}}>장바구니가 비어있습니다</div>
+        <div style={{fontSize:11, color:'#9BA3B2', textAlign:'center'}}>좌측 &quot;+ 담기&quot; 클릭 시 항목이 추가됩니다</div>
+        <div style={{marginTop:8, padding:'6px 12px', background:'#F4F6FA', borderRadius:6, fontSize:11, color:'#9BA3B2'}}>Phase 2에서 실제 로직 구현</div>
       </div>
     </div>
   );
