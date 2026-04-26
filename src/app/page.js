@@ -821,7 +821,7 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="as-table-wrapper" style={{flex:1,overflow:'auto'}}>
-                    <PartsTable parts={filteredParts} setParts={setParts} categories={partCategories} setCategories={setPartCategories} onPhotoClick={info => setPartLightbox(info)} onEdit={p => setModal({type:'part-edit',data:p})} onCopy={p => setModal({type:'part-new',data:{...p, id: undefined, code: ''}})} />
+                    <PartsTable parts={filteredParts} setParts={setParts} categories={partCategories} setCategories={setPartCategories} products={products} onPhotoClick={info => setPartLightbox(info)} onEdit={p => setModal({type:'part-edit',data:p})} onCopy={p => setModal({type:'part-new',data:{...p, id: undefined, code: ''}})} />
                   </div>
                 </div>
               </div>
@@ -3286,12 +3286,87 @@ function CategoryDropdown({ categories, position, onSelect, onClear, onAddNew, o
 }
 
 
+/* ═══ MODEL SELECT DROPDOWN — 모델명(한국) 멀티 선택 ═══ */
+function ModelSelectDropdown({ part, products, position, onToggle, onClose }) {
+  const tokens = new Set((part.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean));
+
+  const sorted = [...(products || [])].sort((a, b) => {
+    const brandA = a.brand || '';
+    const brandB = b.brand || '';
+    if (brandA !== brandB) {
+      if (brandA === '콜라보') return -1;
+      if (brandB === '콜라보') return 1;
+      return brandA.localeCompare(brandB);
+    }
+    return (a.model || '').localeCompare(b.model || '');
+  });
+
+  const groupedByBrand = {};
+  sorted.forEach(p => {
+    if (!p.model) return;
+    const b = p.brand || '(브랜드 없음)';
+    if (!groupedByBrand[b]) groupedByBrand[b] = [];
+    groupedByBrand[b].push(p.model);
+  });
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const selectedCount = tokens.size;
+  const hasNoModels = Object.keys(groupedByBrand).length === 0;
+
+  return (
+    <div className="model-select-dropdown"
+      onMouseDown={e => e.stopPropagation()}
+      style={{position:'fixed',top:position.top,left:position.left,zIndex:9999,background:'#fff',border:'0.5px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.12)',width:Math.max(360,position.width),maxHeight:420,overflow:'auto'}}
+    >
+      <div style={{padding:'8px 12px',background:'#FAFBFC',borderBottom:'0.5px solid #DDE1EB',fontSize:11,color:'#5A6070',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,zIndex:1}}>
+        <span>모델 선택{selectedCount > 0 ? ` · ${selectedCount}개 선택됨` : ''}</span>
+        <span style={{color:'#9BA3B2',fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)'}}>ESC 닫기</span>
+      </div>
+      {hasNoModels ? (
+        <div style={{padding:24,textAlign:'center',fontSize:12,color:'#9BA3B2'}}>
+          제품가격에 등록된 모델이 없습니다.<br/>
+          제품가격 탭에서 먼저 모델을 등록해주세요.
+        </div>
+      ) : Object.entries(groupedByBrand).map(([brand, models]) => (
+        <div key={brand}>
+          <div style={{padding:'8px 12px 4px',fontSize:11,color:'#9BA3B2',fontWeight:500}}>{brand}</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4,padding:'0 8px 8px'}}>
+            {models.map(m => {
+              const selected = tokens.has(m);
+              return (
+                <div key={m}
+                  onClick={() => onToggle(m)}
+                  style={{padding:'6px 10px',borderRadius:4,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6,background: selected ? '#E8EFF7' : 'transparent',color: selected ? '#185FA5' : '#1A1D23',fontWeight: selected ? 500 : 400}}
+                  onMouseEnter={e => { if (!selected) e.currentTarget.style.background = '#F4F6FA'; }}
+                  onMouseLeave={e => { if (!selected) e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <span style={{width:12,height:12,borderRadius:2,flexShrink:0,display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:10,background: selected ? '#185FA5' : 'transparent',color:'#fff',border: selected ? 'none' : '1px solid #DDE1EB'}}>
+                    {selected ? '✓' : ''}
+                  </span>
+                  {m}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
 /* ═══ PARTS TABLE ═══ */
-function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, onEdit, onCopy }) {
+function PartsTable({ parts, setParts, categories, setCategories, products, onPhotoClick, onEdit, onCopy }) {
   const [editCell, setEditCell] = useState(null); // { id, field }
   const [editValue, setEditValue] = useState('');
   const [editNameSpec, setEditNameSpec] = useState({ name: '', spec: '' }); // name_spec 통합 편집
   const [bigCatDropdown, setBigCatDropdown] = useState(null); // { id, top, left, width } | null
+  const [modelDropdown, setModelDropdown] = useState(null); // { partId, top, left, width } | null
   const tableRef = useRef(null);
   const savedWidthsRef = useRef((() => {
     if (typeof window === 'undefined') return {};
@@ -3348,10 +3423,16 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
     const { id } = editCell;
     const nameVal = editNameSpec.name.trim() || null;
     const specVal = editNameSpec.spec.trim() || null;
+    const currentPart = parts.find(p => p.id === id);
+    const currentChineseName = currentPart?.chinese_name;
+    const shouldSyncCN = !currentChineseName || String(currentChineseName).trim() === '';
+    const updatePayload = shouldSyncCN
+      ? { name: nameVal, spec: specVal, chinese_name: nameVal }
+      : { name: nameVal, spec: specVal };
     setEditCell(null);
     setEditNameSpec({ name:'', spec:'' });
-    setParts(prev => prev.map(p => p.id === id ? { ...p, name: nameVal, spec: specVal } : p));
-    const { error } = await supabase.from('parts').update({ name: nameVal, spec: specVal }).eq('id', id);
+    setParts(prev => prev.map(p => p.id === id ? { ...p, ...updatePayload } : p));
+    const { error } = await supabase.from('parts').update(updatePayload).eq('id', id);
     if (error) alert('저장 실패: ' + error.message);
   };
 
@@ -3375,6 +3456,35 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
     const { error: upErr } = await supabase.from('parts').update({ big_category: newName }).eq('id', id);
     if (upErr) alert('부품 저장 실패: ' + upErr.message);
   };
+
+  const openModelDropdown = (p, e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setModelDropdown({ partId: p.id, top: rect.bottom + 4, left: rect.left, width: Math.max(360, rect.width) });
+  };
+
+  const toggleModelToken = async (partId, model) => {
+    const part = parts.find(p => p.id === partId);
+    if (!part) return;
+    const tokens = (part.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean);
+    const idx = tokens.indexOf(model);
+    if (idx >= 0) tokens.splice(idx, 1);
+    else tokens.push(model);
+    const newCategory = tokens.length > 0 ? tokens.join(',') : null;
+    setParts(prev => prev.map(p => p.id === partId ? { ...p, category: newCategory, chinese_model: newCategory } : p));
+    const { error } = await supabase.from('parts').update({ category: newCategory, chinese_model: newCategory }).eq('id', partId);
+    if (error) alert('저장 실패: ' + error.message);
+  };
+
+  const removeModelToken = async (partId, token) => {
+    const part = parts.find(p => p.id === partId);
+    if (!part) return;
+    const tokens = (part.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean).filter(t => t !== token);
+    const newCategory = tokens.length > 0 ? tokens.join(',') : null;
+    setParts(prev => prev.map(p => p.id === partId ? { ...p, category: newCategory, chinese_model: newCategory } : p));
+    const { error } = await supabase.from('parts').update({ category: newCategory, chinese_model: newCategory }).eq('id', partId);
+    if (error) alert('저장 실패: ' + error.message);
+  };
+
   const getW = (k) => savedWidthsRef.current[k] || DEFAULT_W[k] || 80;
 
   const startResize = (colIdx, colKey, e) => {
@@ -3444,17 +3554,26 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
                 : <span onClick={(e) => openBigCatDropdown(p, e)} style={{display:'inline-block',padding:'3px 9px',background:'#FAFBFC',color:'#9BA3B2',borderRadius:999,fontSize:11,border:'0.5px dashed #DDE1EB',whiteSpace:'nowrap',cursor:'pointer'}}>미분류</span>}
             </td>
             <td style={{textAlign:'center',cursor:'pointer',padding:'8px 6px'}}
-                onClick={() => { if (!(editCell?.id === p.id && editCell?.field === 'category')) startEdit(p.id, 'category', p.category); }}>
-              {editCell?.id === p.id && editCell?.field === 'category' ? (
-                <input autoFocus className="input" value={editValue}
-                  onChange={e => setEditValue(e.target.value)}
-                  onBlur={() => commitEdit()}
-                  onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }}
-                  placeholder="모델명"
-                  style={{width:'100%',fontSize:12,padding:'4px 6px',textAlign:'center'}} />
-              ) : (p.category
-                ? <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:4,fontSize:12,fontWeight:600,background: p.category === '공용' ? '#E6F1FB' : '#F4F6FA',color: p.category === '공용' ? '#0C447C' : '#1A1D23'}}>{p.category}</span>
-                : <span className="empty-dot">●</span>)}
+                onClick={(e) => openModelDropdown(p, e)}>
+              {(() => {
+                const tokens = (p.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean);
+                if (tokens.length === 0) return <span className="empty-dot">●</span>;
+                return (
+                  <div style={{display:'flex',flexWrap:'wrap',gap:3,justifyContent:'center',alignItems:'center'}}>
+                    {tokens.map((t, i) => (
+                      <span key={i} style={{display:'inline-flex',alignItems:'center',gap:2,padding:'3px 4px 3px 8px',borderRadius:4,fontSize:11,fontWeight:500,background: t === '공용' ? '#E6F1FB' : '#F4F6FA',color: t === '공용' ? '#0C447C' : '#1A1D23'}}>
+                        {t}
+                        <span onClick={(e) => { e.stopPropagation(); removeModelToken(p.id, t); }}
+                          title="제거"
+                          style={{width:14,height:14,borderRadius:2,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'#9BA3B2',fontSize:11,cursor:'pointer',lineHeight:1}}
+                          onMouseEnter={e => { e.currentTarget.style.background = '#FCEBEB'; e.currentTarget.style.color = '#CC2222'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#9BA3B2'; }}
+                        >×</span>
+                      </span>
+                    ))}
+                  </div>
+                );
+              })()}
             </td>
             <td style={{textAlign:'center',cursor:'pointer',fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)',fontSize:13,color:'#1A1D23'}} onClick={() => editCell?.id === p.id && editCell?.field === 'chinese_model' ? null : startEdit(p.id, 'chinese_model', p.chinese_model)}>
               {editCell?.id === p.id && editCell?.field === 'chinese_model'
@@ -3497,6 +3616,23 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
         onCancel={cancelEdit}
       />
     )}
+    {modelDropdown && (() => {
+      const dropPart = parts.find(p => p.id === modelDropdown.partId);
+      if (!dropPart) return null;
+      return (
+        <>
+          <div onMouseDown={() => setModelDropdown(null)}
+            style={{position:'fixed',inset:0,zIndex:9998,background:'transparent'}} />
+          <ModelSelectDropdown
+            part={dropPart}
+            products={products}
+            position={modelDropdown}
+            onToggle={(model) => toggleModelToken(modelDropdown.partId, model)}
+            onClose={() => setModelDropdown(null)}
+          />
+        </>
+      );
+    })()}
     </>
   );
 }
@@ -3808,7 +3944,7 @@ function PartModal({ initial, categories, onSave, onDelete, onClose }) {
           </div>
           <div className="form-grid">
             <div className="form-field"><label className="label">내부코드</label><input value={f.code} onChange={e => set('code', e.target.value)} className="input" placeholder="00000" /></div>
-            <div className="form-field"><label className="label">모델명(한국)</label><input value={f.category} onChange={e => set('category', e.target.value)} className="input" placeholder="DC990, 공용 등" /></div>
+            <div className="form-field"><label className="label">모델명(한국)</label><div style={{padding:'8px 10px',background:'#FAFBFC',border:'0.5px solid #DDE1EB',borderRadius:6,fontSize:11,color:'#9BA3B2',lineHeight:1.5}}>저장 후 부속가격 테이블에서 모델 선택 가능</div></div>
           </div>
           <div className="form-field">
             <label className="label">대분류</label>
@@ -3821,7 +3957,7 @@ function PartModal({ initial, categories, onSave, onDelete, onClose }) {
             <div className="form-field"><label className="label">모델명(中)</label><input value={f.chinese_model} onChange={e => set('chinese_model', e.target.value)} className="input" placeholder="예) DC990" /></div>
             <div className="form-field"><label className="label">부속이름(中)</label><input value={f.chinese_name} onChange={e => set('chinese_name', e.target.value)} className="input" placeholder="예) 电机总成" /></div>
           </div>
-          <div className="form-field"><label className="label">규격 및 품명</label><input value={f.name} onChange={e => set('name', e.target.value)} className="input" placeholder="품명 입력" /></div>
+          <div className="form-field"><label className="label">규격 및 품명</label><input value={f.name} onChange={e => setF(prev => { const v = e.target.value; const shouldSync = !prev.chinese_name || prev.chinese_name === prev.name; return { ...prev, name: v, chinese_name: shouldSync ? v : prev.chinese_name }; })} className="input" placeholder="품명 입력" /></div>
           <div className="form-field"><label className="label">스펙</label><input value={f.spec} onChange={e => set('spec', e.target.value)} className="input" placeholder="사양/규격" /></div>
           <div className="form-grid">
             <div className="form-field"><label className="label">수량</label><input type="number" min="0" value={f.quantity} onChange={e => set('quantity', e.target.value.replace(/[^0-9]/g,''))} className="input" placeholder="0" /></div>
