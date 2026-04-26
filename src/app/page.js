@@ -871,6 +871,11 @@ export default function Home() {
           <OrderConfirmModal cart={cart} onConfirm={confirmOrder} onClose={() => setShowConfirmModal(false)} />
         )}
 
+        {/* 부속발주 이력 모달 */}
+        {showHistoryModal && (
+          <OrderHistoryModal orders={orders} orderItems={orderItems} parts={parts} onLoadDraft={loadDraft} onClose={() => setShowHistoryModal(false)} />
+        )}
+
         {/* 부품 모달 */}
         {modal && (modal.type === 'part-new' || modal.type === 'part-edit') && (
           <PartModal
@@ -2948,6 +2953,124 @@ function OrderConfirmModal({ cart, onConfirm, onClose }) {
         <div style={{display:'flex', gap:8, justifyContent:'flex-end', padding:'12px 18px', borderTop:'0.5px solid #DDE1EB'}}>
           <button onClick={onClose} style={{padding:'7px 16px', fontSize:12, background:'#fff', color:'#5A6070', border:'0.5px solid #DDE1EB', borderRadius:6, cursor:'pointer', fontFamily:'inherit'}}>취소</button>
           <button onClick={onConfirm} style={{padding:'7px 16px', fontSize:12, fontWeight:500, background:'#185FA5', color:'#fff', border:'none', borderRadius:6, cursor:'pointer', fontFamily:'inherit'}}>확정</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/* ═══ ORDER HISTORY MODAL — 발주 이력 (작성중/확정) ═══ */
+function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose }) {
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('전체');
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const itemsByOrder = orderItems.reduce((acc, it) => {
+    (acc[it.order_id] = acc[it.order_id] || []).push(it);
+    return acc;
+  }, {});
+
+  const filtered = orders.filter(o => {
+    if (statusFilter === '작성중' && o.status !== 'draft') return false;
+    if (statusFilter === '확정' && o.status !== 'confirmed') return false;
+    const q = search.trim().toLowerCase();
+    if (q) {
+      const hit = (o.order_no || '').toLowerCase().includes(q);
+      if (!hit) return false;
+    }
+    return true;
+  });
+
+  const draftCount = orders.filter(o => o.status === 'draft').length;
+  const confirmedCount = orders.filter(o => o.status === 'confirmed').length;
+
+  const fmtDateMD = (iso) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const fmtDateYMD = (s) => {
+    if (!s) return '—';
+    const [y, m, d] = s.split('-');
+    return `${y}.${m}.${d}`;
+  };
+
+  return (
+    <div onClick={onClose} style={{position:'fixed', inset:0, zIndex:10001, background:'rgba(26,29,35,0.5)', display:'flex', alignItems:'center', justifyContent:'center', padding:24}}>
+      <div onClick={e => e.stopPropagation()} style={{background:'#fff', borderRadius:10, boxShadow:'0 8px 24px rgba(0,0,0,0.2)', width:'100%', maxWidth:760, maxHeight:'85vh', display:'flex', flexDirection:'column', fontFamily:'Pretendard, -apple-system, sans-serif'}}>
+        {/* 헤더 */}
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 18px', borderBottom:'0.5px solid #DDE1EB', flexShrink:0}}>
+          <div style={{fontSize:14, fontWeight:600, color:'#1A1D23'}}>
+            발주이력 <span style={{fontSize:11, fontWeight:400, color:'#9BA3B2', marginLeft:8}}>총 {orders.length}건 · 작성중 {draftCount} / 확정 {confirmedCount}</span>
+          </div>
+          <button onClick={onClose} style={{background:'none', border:'none', fontSize:18, cursor:'pointer', color:'#9BA3B2', padding:0, lineHeight:1, fontFamily:'inherit'}}>✕</button>
+        </div>
+
+        {/* 필터 바 */}
+        <div style={{padding:'10px 18px', display:'flex', gap:8, borderBottom:'0.5px solid #DDE1EB', flexShrink:0}}>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="발주번호 검색..." autoComplete="off" style={{flex:1, padding:'6px 10px', fontSize:12, border:'0.5px solid #DDE1EB', borderRadius:6, fontFamily:'inherit'}} />
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{padding:'6px 10px', fontSize:12, border:'0.5px solid #DDE1EB', borderRadius:6, background:'#fff', fontFamily:'inherit'}}>
+            <option>전체</option>
+            <option>작성중</option>
+            <option>확정</option>
+          </select>
+        </div>
+
+        {/* 리스트 */}
+        <div style={{flex:1, overflow:'auto'}}>
+          <table className="as-table" style={{width:'100%'}}>
+            <thead><tr className="as-col-header">
+              {['발주번호','날짜','상태','항목','합계','액션'].map(h => (
+                <th key={h} style={{position:'sticky', top:0, zIndex:10, background:'#EAECF2', color:'#5A6070', fontSize:12, fontWeight:500, padding:'8px 10px', height:36, lineHeight:'20px', boxShadow:'0 1px 0 0 #DDE1EB', userSelect:'none'}}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {filtered.map((o, i) => {
+                const items = itemsByOrder[o.id] || [];
+                const totalQty = items.reduce((s, it) => s + (it.quantity || 0), 0);
+                const totalAmount = items.reduce((s, it) => s + (it.quantity || 0) * (it.price_snapshot || 0), 0);
+                const isDraft = o.status === 'draft';
+                return (
+                  <tr key={o.id} style={i % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
+                    <td style={{padding:'8px 10px', fontSize:12, textAlign:'center'}}>
+                      {o.order_no
+                        ? <span style={{fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)', color:'#1A1D23'}}>{o.order_no}</span>
+                        : <span style={{color:'#9BA3B2'}}>—</span>}
+                    </td>
+                    <td style={{padding:'8px 10px', fontSize:12, textAlign:'center', color:'#5A6070'}}>
+                      {isDraft ? `${fmtDateMD(o.created_at)} 작성` : fmtDateYMD(o.order_date)}
+                    </td>
+                    <td style={{padding:'8px 10px', fontSize:12, textAlign:'center'}}>
+                      {isDraft
+                        ? <span style={{display:'inline-block', padding:'2px 8px', background:'#FFF4D6', color:'#8A6300', borderRadius:999, fontSize:11, fontWeight:500, whiteSpace:'nowrap'}}>작성중</span>
+                        : <span style={{display:'inline-block', padding:'2px 8px', background:'#E6F4EA', color:'#1A6F2E', borderRadius:999, fontSize:11, fontWeight:500, whiteSpace:'nowrap'}}>확정</span>}
+                    </td>
+                    <td style={{padding:'8px 10px', fontSize:12, textAlign:'center', color:'#5A6070'}}>{items.length}종 / {totalQty}개</td>
+                    <td style={{padding:'8px 10px', fontSize:12, textAlign:'right', color:'#185FA5', fontWeight:600, fontVariantNumeric:'tabular-nums'}}>{totalAmount.toLocaleString('ko-KR')}원</td>
+                    <td style={{padding:'8px 10px', fontSize:12, textAlign:'center'}}>
+                      {isDraft ? (
+                        <button onClick={() => onLoadDraft(o.id)} style={{padding:'4px 10px', fontSize:11, fontWeight:500, background:'#FFF4D6', color:'#8A6300', border:'0.5px solid #F0D27A', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>📥 불러오기</button>
+                      ) : (
+                        <button onClick={() => alert('PDF 출력은 Phase 2-1b에서 구현 예정')} style={{padding:'4px 10px', fontSize:11, fontWeight:500, background:'#185FA5', color:'#fff', border:'none', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>📄 PDF</button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {filtered.length === 0 && <tr><td colSpan={6} style={{padding:'40px 0', textAlign:'center', fontSize:12, color:'#9BA3B2'}}>발주 내역이 없습니다</td></tr>}
+            </tbody>
+          </table>
+        </div>
+
+        {/* 푸터 */}
+        <div style={{display:'flex', justifyContent:'flex-end', padding:'12px 18px', borderTop:'0.5px solid #DDE1EB', flexShrink:0}}>
+          <button onClick={onClose} style={{padding:'7px 16px', fontSize:12, background:'#fff', color:'#5A6070', border:'0.5px solid #DDE1EB', borderRadius:6, cursor:'pointer', fontFamily:'inherit'}}>닫기</button>
         </div>
       </div>
     </div>
