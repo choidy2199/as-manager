@@ -2686,7 +2686,7 @@ function PartsOrderTable({ parts, onPhotoClick, onAdd }) {
       </div>
     );
     if (key === 'big_category') {
-      if (p.big_category) return <span style={{display:'inline-block', padding:'2px 7px', background:'#E6F1FB', color:'#0C447C', borderRadius:999, fontSize:11, fontWeight:500, whiteSpace:'nowrap'}}>{p.big_category}</span>;
+      if (p.big_category) return <span style={{display:'inline-block', padding:'2px 7px', background:'#EDEBFE', color:'#5046B0', borderRadius:999, fontSize:11, fontWeight:500, whiteSpace:'nowrap'}}>{p.big_category}</span>;
       return <span style={{display:'inline-block', padding:'2px 7px', border:'0.5px dashed #DDE1EB', color:'#9BA3B2', borderRadius:999, fontSize:11, whiteSpace:'nowrap'}}>미분류</span>;
     }
     if (key === 'category') return p.category || <span className="empty-dot">●</span>;
@@ -3415,6 +3415,7 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
   const commitEdit = async (overrideValue) => {
     if (!editCell) return;
     const { id, field } = editCell;
+    if (field === 'name_spec') return; // 가상 필드는 commitNameSpec에서만 처리
     const sourceVal = overrideValue !== undefined ? overrideValue : editValue;
     let saveVal;
     if (field === 'quantity' || field === 'price') {
@@ -3572,7 +3573,7 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
             </td>
             <td style={{textAlign:'center',padding:'8px 6px'}}>
               {p.big_category
-                ? <span onClick={(e) => openBigCatDropdown(p, e)} style={{display:'inline-block',padding:'3px 9px',background:'#E8EFF7',color:'#185FA5',borderRadius:999,fontSize:11,fontWeight:500,whiteSpace:'nowrap',cursor:'pointer'}}>{p.big_category}</span>
+                ? <span onClick={(e) => openBigCatDropdown(p, e)} style={{display:'inline-block',padding:'3px 9px',background:'#EDEBFE',color:'#5046B0',borderRadius:999,fontSize:11,fontWeight:600,whiteSpace:'nowrap',cursor:'pointer'}}>{p.big_category}</span>
                 : <span onClick={(e) => openBigCatDropdown(p, e)} style={{display:'inline-block',padding:'3px 9px',background:'#FAFBFC',color:'#9BA3B2',borderRadius:999,fontSize:11,border:'0.5px dashed #DDE1EB',whiteSpace:'nowrap',cursor:'pointer'}}>미분류</span>}
             </td>
             <td style={{textAlign:'center',cursor:'pointer',padding:'8px 6px'}}
@@ -3607,7 +3608,7 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
                     return (
                       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:3,padding:'0 4px'}}>
                         {tokens.map((t, i) => (
-                          <span key={i} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:500,background:'#E8EFF7',color:'#185FA5',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:0}}>{t}</span>
+                          <span key={i} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:500,background:'#E0F4F0',color:'#0E7A5F',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:0}}>{t}</span>
                         ))}
                       </div>
                     );
