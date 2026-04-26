@@ -38,7 +38,9 @@ const sortByBigCategory = (a, b) => {
   const oa = HISTORY_BIG_CAT_ORDER[a.big_category] ?? 999;
   const ob = HISTORY_BIG_CAT_ORDER[b.big_category] ?? 999;
   if (oa !== ob) return oa - ob;
-  return (a.name || '').localeCompare(b.name || '');
+  const na = (a.name || '').localeCompare(b.name || '');
+  if (na !== 0) return na;
+  return (a.spec || '').localeCompare(b.spec || '');
 };
 
 export default function Home() {
@@ -217,7 +219,7 @@ export default function Home() {
       } else { setConfirmMap({}); }
     }
     if (shipRes.data) setShipRecords(shipRes.data);
-    if (partsRes.data) setParts(partsRes.data);
+    if (partsRes.data) setParts([...partsRes.data].sort(sortByBigCategory));
     if (productsRes.data) setProducts(productsRes.data);
     if (techRes.data) setTechnicians(techRes.data);
     if (compRes.data) setCompanies(compRes.data);
