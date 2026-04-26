@@ -866,6 +866,11 @@ export default function Home() {
           />
         )}
 
+        {/* 부속발주 확정 모달 */}
+        {showConfirmModal && (
+          <OrderConfirmModal cart={cart} onConfirm={confirmOrder} onClose={() => setShowConfirmModal(false)} />
+        )}
+
         {/* 부품 모달 */}
         {modal && (modal.type === 'part-new' || modal.type === 'part-edit') && (
           <PartModal
@@ -2507,13 +2512,13 @@ function PartsOrderTab({ parts, models, categories, onPhotoClick, cart, setCart,
         })}
       </div>
 
-      {/* 좌(부속목록) : 우(장바구니) 5:5 — OrderCart는 단계 3에서 교체 */}
+      {/* 좌(부속목록) : 우(장바구니) 5:5 */}
       <div style={{flex:1, display:'flex', overflow:'hidden'}}>
         <div style={{flex:1, borderRight:'0.5px solid #DDE1EB', display:'flex', flexDirection:'column', overflow:'hidden'}}>
           <PartsOrderTable parts={filtered} onPhotoClick={onPhotoClick} onAdd={onAddToCart} />
         </div>
         <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
-          <CartPlaceholder />
+          <OrderCart cart={cart} setCart={setCart} currentDraftId={currentDraftId} onSaveDraft={onSaveDraft} onConfirm={onConfirm} onShowHistory={onShowHistory} />
         </div>
       </div>
     </div>
@@ -2712,6 +2717,238 @@ function CartPlaceholder() {
         <div style={{fontSize:12, fontWeight:500, color:'#5A6070'}}>장바구니가 비어있습니다</div>
         <div style={{fontSize:11, color:'#9BA3B2', textAlign:'center'}}>좌측 &quot;+ 담기&quot; 클릭 시 항목이 추가됩니다</div>
         <div style={{marginTop:8, padding:'6px 12px', background:'#F4F6FA', borderRadius:6, fontSize:11, color:'#9BA3B2'}}>Phase 2에서 실제 로직 구현</div>
+      </div>
+    </div>
+  );
+}
+
+
+/* ═══ ORDER CART — Phase 2-1a 장바구니 ═══ */
+const CART_COLS = [
+  { key:'image_url', label:'사진',     defaultOn:true  },
+  { key:'name',      label:'부속이름',  defaultOn:true  },
+  { key:'category',  label:'모델',     defaultOn:true  },
+  { key:'spec',      label:'규격',     defaultOn:true  },
+  { key:'quantity',  label:'수량',     defaultOn:true  },
+  { key:'price',     label:'단가',     defaultOn:false },
+  { key:'subtotal',  label:'합계',     defaultOn:false },
+];
+
+function OrderCart({ cart, setCart, currentDraftId, onSaveDraft, onConfirm, onShowHistory }) {
+  const [visibleCols, setVisibleCols] = useState(() => {
+    const initial = Object.fromEntries(CART_COLS.map(c => [c.key, c.defaultOn]));
+    if (typeof window === 'undefined') return initial;
+    try {
+      const v = JSON.parse(localStorage.getItem('orderCartVisibleColumns'));
+      if (v && typeof v === 'object') {
+        return Object.fromEntries(CART_COLS.map(c => [c.key, v[c.key] !== undefined ? !!v[c.key] : c.defaultOn]));
+      }
+    } catch {}
+    return initial;
+  });
+  const [showColPanel, setShowColPanel] = useState(false);
+  const [colPanelPos, setColPanelPos] = useState(null);
+  const colBtnRef = useRef(null);
+
+  const toggleCol = (key) => {
+    const visibleCount = CART_COLS.filter(c => visibleCols[c.key]).length;
+    if (visibleCols[key] && visibleCount <= 1) return;
+    const next = { ...visibleCols, [key]: !visibleCols[key] };
+    setVisibleCols(next);
+    try { localStorage.setItem('orderCartVisibleColumns', JSON.stringify(next)); } catch {}
+  };
+
+  const openColPanel = () => {
+    if (showColPanel) { setShowColPanel(false); return; }
+    const rect = colBtnRef.current?.getBoundingClientRect();
+    if (rect) setColPanelPos({ top: rect.bottom + 4, left: Math.max(8, rect.right - 240) });
+    setShowColPanel(true);
+  };
+
+  useEffect(() => {
+    if (!showColPanel) return;
+    const onKey = (e) => { if (e.key === 'Escape') setShowColPanel(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showColPanel]);
+
+  const updateQty = (idx, newQty) => {
+    if (newQty < 1) {
+      if (!confirm('장바구니에서 제거하시겠습니까?')) return;
+      setCart(prev => prev.filter((_, i) => i !== idx));
+      return;
+    }
+    setCart(prev => prev.map((item, i) => i === idx ? { ...item, quantity: newQty } : item));
+  };
+
+  const removeItem = (idx) => {
+    setCart(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const visible = CART_COLS.filter(c => visibleCols[c.key]);
+  const totalQty = cart.reduce((s, x) => s + (x.quantity || 0), 0);
+  const totalAmount = cart.reduce((s, x) => s + (x.quantity || 0) * (x.price || 0), 0);
+  const isEmpty = cart.length === 0;
+
+  return (
+    <>
+      <div className="section" style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
+        <div className="section-header">
+          <span style={{fontSize:12, fontWeight:600}}>장바구니</span>
+          <span style={{fontSize:12, color:'rgba(255,255,255,0.5)'}}>{cart.length}건</span>
+          <div style={{marginLeft:'auto', display:'flex', gap:6}}>
+            <button ref={colBtnRef} onClick={openColPanel} style={{display:'inline-flex', alignItems:'center', gap:4, padding:'4px 9px', background:'transparent', border:'0.5px solid rgba(255,255,255,0.3)', color:'#fff', borderRadius:4, fontSize:11, cursor:'pointer', fontFamily:'inherit'}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              컬럼
+            </button>
+            <button onClick={onShowHistory} style={{display:'inline-flex', alignItems:'center', gap:4, padding:'4px 9px', background:'transparent', border:'0.5px solid rgba(255,255,255,0.3)', color:'#fff', borderRadius:4, fontSize:11, cursor:'pointer', fontFamily:'inherit'}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              이력
+            </button>
+          </div>
+        </div>
+
+        {/* 항목 리스트 */}
+        <div style={{flex:1, overflow:'auto', background:'#fff'}}>
+          {isEmpty ? (
+            <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:260, padding:24, gap:12, height:'100%'}}>
+              <div style={{width:48, height:48, borderRadius:'50%', background:'#F4F6FA', display:'flex', alignItems:'center', justifyContent:'center'}}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9BA3B2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+              </div>
+              <div style={{fontSize:12, fontWeight:500, color:'#5A6070'}}>장바구니가 비어있습니다</div>
+              <div style={{fontSize:11, color:'#9BA3B2', textAlign:'center'}}>좌측 &quot;+ 담기&quot; 클릭 시 항목이 추가됩니다</div>
+            </div>
+          ) : (
+            <table className="as-table" style={{width:'100%'}}>
+              <thead><tr className="as-col-header">
+                {visible.map(c => (
+                  <th key={c.key} style={{position:'sticky', top:0, zIndex:10, background:'#EAECF2', color:'#5A6070', fontSize:12, fontWeight:500, padding:'8px 8px', height:36, lineHeight:'20px', boxShadow:'0 1px 0 0 #DDE1EB', userSelect:'none'}}>{c.label}</th>
+                ))}
+                <th style={{position:'sticky', top:0, zIndex:10, background:'#EAECF2', boxShadow:'0 1px 0 0 #DDE1EB', width:36, padding:'8px 4px'}} />
+              </tr></thead>
+              <tbody>
+                {cart.map((item, idx) => (
+                  <tr key={item.part_id + ':' + idx} style={idx % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
+                    {visible.map(c => {
+                      const td = (content, extra={}) => (<td key={c.key} style={{padding:'6px 8px', fontSize:12, textAlign:'center', ...extra}}>{content}</td>);
+                      if (c.key === 'image_url') return td(<PartThumbnail url={item.image_url} name={item.name} code={item.code} />, {padding:'6px 4px'});
+                      if (c.key === 'name') return td(<span style={{fontSize:12, fontWeight:500, color:'#1A1D23'}}>{item.name || <span className="empty-dot">●</span>}</span>);
+                      if (c.key === 'category') return td(item.category || <span className="empty-dot">●</span>);
+                      if (c.key === 'spec') return td(<span style={{fontSize:11, color:'#5A6070'}}>{item.spec || <span className="empty-dot">●</span>}</span>);
+                      if (c.key === 'quantity') return td(
+                        <div style={{display:'inline-flex', alignItems:'center', gap:4, justifyContent:'center'}}>
+                          <button onClick={() => updateQty(idx, item.quantity - 1)} style={{width:22, height:22, fontSize:13, border:'0.5px solid #DDE1EB', background:'#fff', color:'#5A6070', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>−</button>
+                          <input type="number" min="1" value={item.quantity} onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 1) updateQty(idx, v); else if (e.target.value === '') updateQty(idx, 1); }} style={{width:42, height:22, padding:'0 4px', fontSize:12, border:'0.5px solid #DDE1EB', borderRadius:4, textAlign:'center', fontFamily:'inherit'}} />
+                          <button onClick={() => updateQty(idx, item.quantity + 1)} style={{width:22, height:22, fontSize:13, border:'0.5px solid #DDE1EB', background:'#fff', color:'#5A6070', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>+</button>
+                        </div>
+                      );
+                      if (c.key === 'price') return td(<span style={{color:'#185FA5', fontWeight:600, fontVariantNumeric:'tabular-nums'}}>{(item.price || 0).toLocaleString('ko-KR')}</span>);
+                      if (c.key === 'subtotal') return td(<span style={{color:'#185FA5', fontWeight:700, fontVariantNumeric:'tabular-nums'}}>{((item.quantity||0)*(item.price||0)).toLocaleString('ko-KR')}</span>);
+                      return td(null);
+                    })}
+                    <td style={{padding:'6px 4px', textAlign:'center', width:36}}>
+                      <button onClick={() => removeItem(idx)} title="삭제" style={{width:22, height:22, fontSize:12, border:'0.5px solid #DDE1EB', background:'#fff', color:'#9BA3B2', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* 합계 바 */}
+        {!isEmpty && (
+          <div style={{flexShrink:0, padding:'8px 12px', background:'#FAFBFC', borderTop:'0.5px solid #DDE1EB', display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:12}}>
+            <span style={{color:'#5A6070'}}>합계 {cart.length}종 · {totalQty}개</span>
+            <span style={{color:'#185FA5', fontWeight:700, fontVariantNumeric:'tabular-nums'}}>{totalAmount.toLocaleString('ko-KR')}원</span>
+          </div>
+        )}
+
+        {/* 버튼 영역 */}
+        <div style={{flexShrink:0, padding:'10px 12px', background:'#fff', borderTop:'0.5px solid #DDE1EB', display:'flex', gap:8, justifyContent:'flex-end'}}>
+          <button onClick={onSaveDraft} disabled={isEmpty} style={{padding:'7px 16px', fontSize:12, fontWeight:500, background:'#fff', color: isEmpty ? '#9BA3B2' : '#185FA5', border: isEmpty ? '0.5px solid #DDE1EB' : '0.5px solid #185FA5', borderRadius:6, cursor: isEmpty ? 'not-allowed' : 'pointer', opacity: isEmpty ? 0.5 : 1, fontFamily:'inherit'}}>💾 저장</button>
+          <button onClick={onConfirm} disabled={isEmpty} style={{padding:'7px 16px', fontSize:12, fontWeight:500, background: isEmpty ? '#DDE1EB' : '#185FA5', color:'#fff', border:'none', borderRadius:6, cursor: isEmpty ? 'not-allowed' : 'pointer', opacity: isEmpty ? 0.6 : 1, fontFamily:'inherit'}}>📤 발주확정</button>
+        </div>
+      </div>
+
+      {showColPanel && colPanelPos && (
+        <CartColumnSettingsPanel allCols={CART_COLS} visible={visibleCols} onToggle={toggleCol} position={colPanelPos} onClose={() => setShowColPanel(false)} />
+      )}
+    </>
+  );
+}
+
+
+/* ═══ CART COLUMN SETTINGS PANEL — 장바구니 컬럼 표시/숨김 ═══ */
+function CartColumnSettingsPanel({ allCols, visible, onToggle, position, onClose }) {
+  const visibleCount = allCols.filter(c => visible[c.key]).length;
+  return (
+    <div style={{position:'fixed', top:position.top, left:position.left, zIndex:1000, background:'#fff', border:'0.5px solid #DDE1EB', borderRadius:8, padding:'12px 14px', boxShadow:'0 4px 12px rgba(26,29,35,0.08)', width:240}}
+      onMouseDown={e => e.stopPropagation()}
+    >
+      <div style={{fontSize:12, fontWeight:500, color:'#1A1D23', paddingBottom:8, borderBottom:'0.5px solid #DDE1EB'}}>장바구니 컬럼 설정</div>
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px 16px', padding:'10px 0', fontSize:11}}>
+        {allCols.map(c => {
+          const isVisible = !!visible[c.key];
+          const isLastVisible = isVisible && visibleCount <= 1;
+          return (
+            <label key={c.key} style={{display:'flex', alignItems:'center', gap:6, cursor: isLastVisible ? 'not-allowed' : 'pointer', color: isLastVisible ? '#9BA3B2' : '#1A1D23', userSelect:'none'}}>
+              <input type="checkbox" checked={isVisible} disabled={isLastVisible} onChange={() => onToggle(c.key)} style={{margin:0, cursor: isLastVisible ? 'not-allowed' : 'pointer'}} />
+              {c.label}
+            </label>
+          );
+        })}
+      </div>
+      <div style={{fontSize:11, color:'#9BA3B2', paddingTop:8, borderTop:'0.5px solid #DDE1EB'}}>최소 1개 필수 · 브라우저에 저장됨</div>
+    </div>
+  );
+}
+
+
+/* ═══ ORDER CONFIRM MODAL — 발주확정 확인 모달 ═══ */
+function OrderConfirmModal({ cart, onConfirm, onClose }) {
+  const [previewOrderNo, setPreviewOrderNo] = useState('계산 중...');
+
+  useEffect(() => {
+    (async () => {
+      const today = new Date();
+      const y = today.getFullYear();
+      const m = String(today.getMonth() + 1).padStart(2, '0');
+      const d = String(today.getDate()).padStart(2, '0');
+      const dateStr = `${y}${m}${d}`;
+      const { data } = await supabase.from('parts_orders').select('order_no').like('order_no', `${dateStr}-%`);
+      const nextNum = (data?.length || 0) + 1;
+      setPreviewOrderNo(`${dateStr}-${String(nextNum).padStart(3, '0')}`);
+    })();
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const today = new Date();
+  const dateLabel = `${today.getFullYear()}년 ${today.getMonth() + 1}월 ${today.getDate()}일`;
+  const totalQty = cart.reduce((s, x) => s + (x.quantity || 0), 0);
+
+  return (
+    <div onClick={onClose} style={{position:'fixed', inset:0, zIndex:10001, background:'rgba(26,29,35,0.5)', display:'flex', alignItems:'center', justifyContent:'center', padding:24}}>
+      <div onClick={e => e.stopPropagation()} style={{background:'#fff', borderRadius:10, boxShadow:'0 8px 24px rgba(0,0,0,0.2)', width:'100%', maxWidth:380, fontFamily:'Pretendard, -apple-system, sans-serif'}}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 18px', borderBottom:'0.5px solid #DDE1EB'}}>
+          <div style={{fontSize:14, fontWeight:600, color:'#1A1D23'}}>발주확정</div>
+          <button onClick={onClose} style={{background:'none', border:'none', fontSize:18, cursor:'pointer', color:'#9BA3B2', padding:0, lineHeight:1, fontFamily:'inherit'}}>✕</button>
+        </div>
+        <div style={{padding:'18px'}}>
+          <div style={{fontSize:12, color:'#1A1D23', marginBottom:14}}>아래 내용으로 확정하시겠습니까?</div>
+          <div style={{fontSize:11, color:'#9BA3B2', marginBottom:14}}>확정 후 새 작성중 발주가 시작됩니다.</div>
+          <div style={{padding:'12px 14px', background:'#FAFBFC', border:'0.5px solid #DDE1EB', borderRadius:6, fontSize:12}}>
+            <div style={{display:'flex', justifyContent:'space-between', padding:'4px 0'}}><span style={{color:'#5A6070'}}>발주번호</span><span style={{fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)', color:'#185FA5', fontWeight:600}}>{previewOrderNo}</span></div>
+            <div style={{display:'flex', justifyContent:'space-between', padding:'4px 0'}}><span style={{color:'#5A6070'}}>발주일</span><span style={{color:'#1A1D23'}}>{dateLabel}</span></div>
+            <div style={{display:'flex', justifyContent:'space-between', padding:'4px 0'}}><span style={{color:'#5A6070'}}>항목 수</span><span style={{color:'#1A1D23'}}>{cart.length}종 / {totalQty}개</span></div>
+          </div>
+        </div>
+        <div style={{display:'flex', gap:8, justifyContent:'flex-end', padding:'12px 18px', borderTop:'0.5px solid #DDE1EB'}}>
+          <button onClick={onClose} style={{padding:'7px 16px', fontSize:12, background:'#fff', color:'#5A6070', border:'0.5px solid #DDE1EB', borderRadius:6, cursor:'pointer', fontFamily:'inherit'}}>취소</button>
+          <button onClick={onConfirm} style={{padding:'7px 16px', fontSize:12, fontWeight:500, background:'#185FA5', color:'#fff', border:'none', borderRadius:6, cursor:'pointer', fontFamily:'inherit'}}>확정</button>
+        </div>
       </div>
     </div>
   );
