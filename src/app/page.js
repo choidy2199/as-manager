@@ -819,7 +819,7 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="as-table-wrapper" style={{flex:1,overflow:'auto'}}>
-                    <PartsTable parts={filteredParts} setParts={setParts} categories={partCategories} setCategories={setPartCategories} onPhotoClick={info => setPartLightbox(info)} onEdit={p => setModal({type:'part-edit',data:p})} />
+                    <PartsTable parts={filteredParts} setParts={setParts} categories={partCategories} setCategories={setPartCategories} onPhotoClick={info => setPartLightbox(info)} onEdit={p => setModal({type:'part-edit',data:p})} onCopy={p => setModal({type:'part-new',data:{...p, id: undefined, code: ''}})} />
                   </div>
                 </div>
               </div>
@@ -3285,7 +3285,7 @@ function CategoryDropdown({ categories, position, onSelect, onClear, onAddNew, o
 
 
 /* ═══ PARTS TABLE ═══ */
-function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, onEdit }) {
+function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, onEdit, onCopy }) {
   const [editCell, setEditCell] = useState(null); // { id, field }
   const [editValue, setEditValue] = useState('');
   const [editNameSpec, setEditNameSpec] = useState({ name: '', spec: '' }); // name_spec 통합 편집
@@ -3474,7 +3474,12 @@ function PartsTable({ parts, setParts, categories, setCategories, onPhotoClick, 
                 ? <input autoFocus type="number" min="0" className="input" value={editValue} onChange={e => setEditValue(e.target.value.replace(/[^0-9]/g,''))} onBlur={() => commitEdit()} onKeyDown={e => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }} style={{width:'100%',fontSize:13,padding:'4px 6px',textAlign:'center',color:'#185FA5',fontWeight:700}} />
                 : (p.price == null ? <span className="empty-dot">●</span> : p.price.toLocaleString('ko-KR'))}
             </td>
-            <td style={{textAlign:'center'}}><button className="btn-text-edit" style={{fontSize:12,fontWeight:500}} onClick={() => onEdit(p)}>수정</button></td>
+            <td style={{textAlign:'center'}}>
+              <span style={{display:'inline-flex',gap:8,alignItems:'center'}}>
+                <button className="btn-text-edit" style={{fontSize:12,fontWeight:500}} onClick={() => onEdit(p)}>수정</button>
+                <button style={{fontSize:12,fontWeight:500,color:'#5F5E5A',background:'none',border:'none',cursor:'pointer',padding:'4px 6px',fontFamily:'inherit'}} onClick={() => onCopy && onCopy(p)}>복사</button>
+              </span>
+            </td>
           </tr>
         ))}
         {parts.length === 0 && <tr><td colSpan={10} className="empty">부품이 없습니다</td></tr>}
@@ -3709,7 +3714,7 @@ function ProductsTable({ products, onReload, setProducts }) {
 
 /* ═══ PART MODAL ═══ */
 function PartModal({ initial, categories, onSave, onDelete, onClose }) {
-  const isEdit = !!initial;
+  const isEdit = !!initial?.id;
   const [f, setF] = useState({
     code: initial?.code || '', category: initial?.category || '', name: initial?.name || '',
     spec: initial?.spec || '', price: initial?.price?.toString() || '', image_url: initial?.image_url || '',
