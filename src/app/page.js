@@ -3432,6 +3432,9 @@ function PhotoLightbox({ url, name, code, partId, readOnly, onClose, onUpdate })
 
 /* ═══ CATEGORY DROPDOWN — position:fixed, 항목 클릭으로만 닫힘 ═══ */
 /* ═══ TEMPLATE MODAL — Phase 2-1c 부속 템플릿 ═══ */
+const DEFAULT_TEMPLATE_WIDTHS = { image_url:48, name_spec:200, big_category:90, category:100, chinese_model:100, chinese_name:90, quantity:90, action:40 };
+const TEMPLATE_COL_KEYS = ['image_url','name_spec','big_category','category','chinese_model','chinese_name','quantity','action'];
+
 function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDelete, onClose }) {
   const [selectedId, setSelectedId] = useState(null);
   const [editName, setEditName] = useState('');
@@ -3439,6 +3442,31 @@ function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDe
   const [editItems, setEditItems] = useState([]);
   const [partSearch, setPartSearch] = useState('');
   const [showPartDropdown, setShowPartDropdown] = useState(false);
+  const itemTableRef = useRef(null);
+  const savedWidthsRef = useRef((() => {
+    if (typeof window === 'undefined') return {};
+    try { const v = JSON.parse(localStorage.getItem('templateModalColumnWidths')); return (v && typeof v === 'object') ? v : {}; } catch { return {}; }
+  })());
+  const getW = (k) => savedWidthsRef.current[k] || DEFAULT_TEMPLATE_WIDTHS[k] || 80;
+
+  const startResize = (colIdx, colKey, e) => {
+    e.preventDefault(); e.stopPropagation();
+    const table = itemTableRef.current; if (!table) return;
+    const col = table.querySelector('colgroup').children[colIdx]; if (!col) return;
+    const startX = e.clientX;
+    const startW = col.offsetWidth || getW(colKey);
+    const startTableW = table.offsetWidth;
+    document.body.style.userSelect = 'none'; document.body.style.cursor = 'col-resize';
+    const onMove = (ev) => { ev.preventDefault(); const newW = Math.max(40, startW + ev.clientX - startX); col.style.width = newW + 'px'; table.style.width = (startTableW + (newW - startW)) + 'px'; };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = ''; document.body.style.cursor = '';
+      const finalW = parseInt(col.style.width) || startW;
+      savedWidthsRef.current = { ...savedWidthsRef.current, [colKey]: finalW };
+      try { localStorage.setItem('templateModalColumnWidths', JSON.stringify(savedWidthsRef.current)); } catch {}
+    };
+    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+  };
 
   useEffect(() => {
     if (selectedId === null) {
@@ -3630,27 +3658,27 @@ function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDe
               {editItems.length === 0 ? (
                 <div style={{padding:32,textAlign:'center',fontSize:11,color:'#9BA3B2'}}>위 검색창에서 부속을 추가하세요</div>
               ) : (
-                <table className="as-table" style={{width:'100%',tableLayout:'fixed'}}>
+                <table ref={itemTableRef} className="as-table" style={{width: TEMPLATE_COL_KEYS.reduce((s, k) => s + getW(k), 0), tableLayout:'fixed'}}>
                   <colgroup>
-                    <col style={{width:48}} />
-                    <col />
-                    <col style={{width:90}} />
-                    <col style={{width:100}} />
-                    <col style={{width:100}} />
-                    <col style={{width:90}} />
-                    <col style={{width:90}} />
-                    <col style={{width:40}} />
+                    {TEMPLATE_COL_KEYS.map(k => <col key={k} style={{width: getW(k)}} />)}
                   </colgroup>
                   <thead>
                     <tr className="as-col-header">
-                      <th style={{textAlign:'center'}}>사진</th>
-                      <th style={{textAlign:'left'}}>부품스펙</th>
-                      <th style={{textAlign:'center'}}>대분류</th>
-                      <th style={{textAlign:'center'}}>모델명(한국)</th>
-                      <th style={{textAlign:'center'}}>모델명(中)</th>
-                      <th style={{textAlign:'center'}}>부속이름(中)</th>
-                      <th style={{textAlign:'center'}}>수량</th>
-                      <th></th>
+                      {[
+                        { key:'image_url', label:'사진', align:'center' },
+                        { key:'name_spec', label:'부품스펙', align:'left' },
+                        { key:'big_category', label:'대분류', align:'center' },
+                        { key:'category', label:'모델명(한국)', align:'center' },
+                        { key:'chinese_model', label:'모델명(中)', align:'center' },
+                        { key:'chinese_name', label:'부속이름(中)', align:'center' },
+                        { key:'quantity', label:'수량', align:'center' },
+                        { key:'action', label:'', align:'center' },
+                      ].map((c, idx) => (
+                        <th key={c.key} style={{textAlign:c.align,position:'relative'}}>
+                          {c.label}
+                          {idx < 7 && <span className="col-resize-handle" onMouseDown={e => startResize(idx, c.key, e)} />}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
