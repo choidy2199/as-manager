@@ -113,9 +113,9 @@ async function generateOrderPDF(order, orderItems, parts) {
     return {
       no: i + 1,
       image: imgBase64,
-      big_category: (part?.big_category || '').split('|').map(s => s.trim()).filter(Boolean).join(' / ') || '—',
-      model_kr: (part?.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean).join(' / ') || '—',
-      model_cn: ((part?.chinese_model || part?.category || '')).split(/[\/,]/).map(s => s.trim()).filter(Boolean).join(' / ') || '—',
+      big_category: (part?.big_category || '').split('|').map(s => s.trim()).filter(Boolean).join('\n') || '—',
+      model_kr: (part?.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean).join('\n') || '—',
+      model_cn: ((part?.chinese_model || part?.category || '')).split(/[\/,]/).map(s => s.trim()).filter(Boolean).join('\n') || '—',
       name_cn: part?.chinese_name || part?.name || '—',
       quantity: it.quantity,
     };
