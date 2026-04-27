@@ -208,11 +208,17 @@ async function generateOrderPDF(order, orderItems, parts) {
   const filename = `발주서_${order.order_no || 'draft'}_${order.order_date || ''}.pdf`.replace(/\s+/g, '');
   const pdf = pdfMake.createPdf(docDef);
 
+  // pdfmake 0.2.x: getBlob(callback) — 두 번째 인자는 options 객체로 예약되어 있어 함수 전달 불가
   return new Promise((resolve, reject) => {
-    pdf.getBlob(blob => {
-      const blobUrl = URL.createObjectURL(blob);
-      resolve({ blob, blobUrl, filename });
-    }, reject);
+    try {
+      pdf.getBlob(blob => {
+        if (!blob) { reject(new Error('Blob 생성 실패')); return; }
+        const blobUrl = URL.createObjectURL(blob);
+        resolve({ blob, blobUrl, filename });
+      });
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
