@@ -132,15 +132,15 @@ async function generateOrderPDF(order, orderItems, parts) {
       { text: '수량', style: 'th', alignment: 'center' },
     ],
     ...itemRows.map(row => [
-      { text: String(row.no), alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23' },
+      { text: String(row.no), alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 12, 0, 12] },
       row.image
         ? { image: row.image, width: 36, height: 36, alignment: 'center' }
-        : { text: '—', alignment: 'center', color: '#1A1D23', bold: true },
-      { text: row.model_kr, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23' },
-      { text: row.big_category, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23' },
-      { text: row.model_cn, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23' },
-      { text: row.name_cn, fontSize: 12, bold: true, color: '#1A1D23' },
-      { text: String(row.quantity), alignment: 'center', fontSize: 13, bold: true, color: '#1A1D23' },
+        : { text: '—', alignment: 'center', color: '#1A1D23', bold: true, margin: [0, 12, 0, 12] },
+      { text: row.model_kr, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 12, 0, 12] },
+      { text: row.big_category, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 12, 0, 12] },
+      { text: row.model_cn, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 12, 0, 12] },
+      { text: row.name_cn, fontSize: 12, bold: true, color: '#1A1D23', margin: [0, 12, 0, 12] },
+      { text: String(row.quantity), alignment: 'center', fontSize: 13, bold: true, color: '#1A1D23', margin: [0, 12, 0, 12] },
     ]),
   ];
 
