@@ -3545,14 +3545,14 @@ function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDe
 
   return (
     <div onMouseDown={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:24}}>
-      <div onMouseDown={e => e.stopPropagation()} style={{background:'#fff',borderRadius:8,width:'min(1100px,95vw)',height:'min(680px,90vh)',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 12px 32px rgba(0,0,0,0.18)'}}>
+      <div onMouseDown={e => e.stopPropagation()} style={{background:'#fff',borderRadius:8,width:'min(1280px,95vw)',height:'min(680px,90vh)',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 12px 32px rgba(0,0,0,0.18)'}}>
         <div style={{flexShrink:0,padding:'12px 16px',background:'#1A1D23',color:'#fff',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span style={{fontSize:13,fontWeight:600}}>부속 템플릿 관리</span>
           <button onClick={onClose} style={{background:'transparent',border:'0.5px solid rgba(255,255,255,0.3)',color:'#fff',padding:'4px 10px',fontSize:11,borderRadius:4,cursor:'pointer',fontFamily:'inherit'}}>닫기</button>
         </div>
 
         <div style={{flex:1,display:'flex',overflow:'hidden'}}>
-          <div style={{width:'30%',display:'flex',flexDirection:'column',borderRight:'0.5px solid #DDE1EB',background:'#FAFBFC'}}>
+          <div style={{width:'24%',display:'flex',flexDirection:'column',borderRight:'0.5px solid #DDE1EB',background:'#FAFBFC'}}>
             <div style={{flexShrink:0,padding:'8px 12px',display:'flex',gap:6,borderBottom:'0.5px solid #DDE1EB'}}>
               <button onClick={() => setSelectedId(null)} style={{flex:1,padding:'5px 10px',fontSize:11,background: selectedId === null ? '#185FA5' : '#fff',color: selectedId === null ? '#fff' : '#5A6070',border:'0.5px solid '+(selectedId === null ? '#185FA5' : '#DDE1EB'),borderRadius:4,cursor:'pointer',fontFamily:'inherit',fontWeight: selectedId === null ? 500 : 400}}>+ 새 템플릿</button>
               <button onClick={handleSaveCartAsNew} title="현재 장바구니 내용으로 새 템플릿" style={{flex:1,padding:'5px 10px',fontSize:11,background:'#fff',color:'#185FA5',border:'0.5px solid #185FA5',borderRadius:4,cursor:'pointer',fontFamily:'inherit',fontWeight:500}}>장바구니→템플릿</button>
@@ -3632,14 +3632,14 @@ function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDe
               ) : (
                 <table className="as-table" style={{width:'100%',tableLayout:'fixed'}}>
                   <colgroup>
-                    <col style={{width:50}} />
+                    <col style={{width:48}} />
                     <col />
-                    <col style={{width:80}} />
+                    <col style={{width:90}} />
+                    <col style={{width:100}} />
+                    <col style={{width:100}} />
                     <col style={{width:90}} />
                     <col style={{width:90}} />
-                    <col style={{width:80}} />
-                    <col style={{width:110}} />
-                    <col style={{width:36}} />
+                    <col style={{width:40}} />
                   </colgroup>
                   <thead>
                     <tr className="as-col-header">
