@@ -3747,12 +3747,28 @@ function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDe
 function CategoryDropdown({ categories, selectedTokens, position, onToggle, onClear, onAddNew, onCancel }) {
   const [addingNew, setAddingNew] = useState(false);
   const [newName, setNewName] = useState('');
+  const popupRef = useRef(null);
+  const [adjTop, setAdjTop] = useState(position.top);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onCancel(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onCancel]);
+
+  useEffect(() => {
+    setAdjTop(position.top);
+    if (!popupRef.current) return;
+    requestAnimationFrame(() => {
+      if (!popupRef.current) return;
+      const rect = popupRef.current.getBoundingClientRect();
+      const margin = 8;
+      const overflow = rect.bottom - (window.innerHeight - margin);
+      if (overflow > 0) {
+        setAdjTop(Math.max(margin, position.top - overflow));
+      }
+    });
+  }, [position.top, position.left]);
 
   const confirmAddNew = () => {
     const trimmed = newName.trim();
@@ -3765,7 +3781,7 @@ function CategoryDropdown({ categories, selectedTokens, position, onToggle, onCl
   const selectedCount = tokenSet.size;
 
   return (
-    <div style={{position:'fixed',top:position.top,left:position.left,zIndex:9999,background:'#fff',border:'0.5px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.12)',minWidth:Math.max(180,position.width),maxHeight:380,overflow:'auto'}}
+    <div ref={popupRef} style={{position:'fixed',top:adjTop,left:position.left,zIndex:9999,background:'#fff',border:'0.5px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.12)',minWidth:Math.max(180,position.width),maxHeight:'min(420px, calc(100vh - 16px))',overflow:'auto'}}
       onMouseDown={e => e.stopPropagation()}
     >
       <div style={{padding:'8px 12px',background:'#FAFBFC',borderBottom:'0.5px solid #DDE1EB',fontSize:11,color:'#5A6070',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,zIndex:1}}>
@@ -3810,6 +3826,8 @@ function CategoryDropdown({ categories, selectedTokens, position, onToggle, onCl
 
 /* ═══ MODEL SELECT DROPDOWN — 모델명(한국) 멀티 선택 ═══ */
 function ModelSelectDropdown({ part, products, position, onToggle, onClose }) {
+  const popupRef = useRef(null);
+  const [adjTop, setAdjTop] = useState(position.top);
   const tokens = new Set((part.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean));
 
   const sorted = [...(products || [])].sort((a, b) => {
@@ -3837,13 +3855,27 @@ function ModelSelectDropdown({ part, products, position, onToggle, onClose }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  useEffect(() => {
+    setAdjTop(position.top);
+    if (!popupRef.current) return;
+    requestAnimationFrame(() => {
+      if (!popupRef.current) return;
+      const rect = popupRef.current.getBoundingClientRect();
+      const margin = 8;
+      const overflow = rect.bottom - (window.innerHeight - margin);
+      if (overflow > 0) {
+        setAdjTop(Math.max(margin, position.top - overflow));
+      }
+    });
+  }, [position.top, position.left]);
+
   const selectedCount = tokens.size;
   const hasNoModels = Object.keys(groupedByBrand).length === 0;
 
   return (
-    <div className="model-select-dropdown"
+    <div ref={popupRef} className="model-select-dropdown"
       onMouseDown={e => e.stopPropagation()}
-      style={{position:'fixed',top:position.top,left:position.left,zIndex:9999,background:'#fff',border:'0.5px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.12)',width:Math.max(360,position.width),maxHeight:420,overflow:'auto'}}
+      style={{position:'fixed',top:adjTop,left:position.left,zIndex:9999,background:'#fff',border:'0.5px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.12)',width:Math.max(360,position.width),maxHeight:'min(420px, calc(100vh - 16px))',overflow:'auto'}}
     >
       <div style={{padding:'8px 12px',background:'#FAFBFC',borderBottom:'0.5px solid #DDE1EB',fontSize:11,color:'#5A6070',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,zIndex:1}}>
         <span>모델 선택{selectedCount > 0 ? ` · ${selectedCount}개 선택됨` : ''}</span>
@@ -3962,9 +3994,14 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
 
   const openBigCatDropdown = (p, e) => {
     const rect = e.currentTarget.getBoundingClientRect();
+    const popH = 380;
+    const margin = 8;
+    const proposedTop = rect.bottom + 4;
+    const flipUp = proposedTop + popH > window.innerHeight - margin;
+    const top = flipUp ? Math.max(margin, rect.top - popH - 4) : proposedTop;
     setEditCell({ id: p.id, field: 'big_category' });
     setEditValue(p.big_category || '');
-    setBigCatDropdown({ id: p.id, top: rect.bottom + 4, left: rect.left, width: Math.max(180, rect.width) });
+    setBigCatDropdown({ id: p.id, top, left: rect.left, width: Math.max(180, rect.width) });
   };
 
   const toggleBigCatToken = async (partId, name) => {
@@ -4022,7 +4059,12 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
 
   const openModelDropdown = (p, e) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    setModelDropdown({ partId: p.id, top: rect.bottom + 4, left: rect.left, width: Math.max(360, rect.width) });
+    const popH = 420;
+    const margin = 8;
+    const proposedTop = rect.bottom + 4;
+    const flipUp = proposedTop + popH > window.innerHeight - margin;
+    const top = flipUp ? Math.max(margin, rect.top - popH - 4) : proposedTop;
+    setModelDropdown({ partId: p.id, top, left: rect.left, width: Math.max(360, rect.width) });
   };
 
   const toggleModelToken = async (partId, model) => {
