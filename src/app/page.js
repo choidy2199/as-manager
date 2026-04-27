@@ -170,6 +170,8 @@ export default function Home() {
   /* ── 부속발주 (Phase 2-1a) state ── */
   const [cart, setCart] = useState([]); // [{ ...part fields, part_id, quantity }]
   const [currentDraftId, setCurrentDraftId] = useState(null);
+  const [templates, setTemplates] = useState([]); // [{id, name, memo, updated_at, items: [{part_id, quantity, sort_order}]}]
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [orders, setOrders] = useState([]);
   const [orderItems, setOrderItems] = useState([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -229,7 +231,23 @@ export default function Home() {
     if (loading) setLoading(false);
   }, [dateFrom, dateTo, dateAll, shipDateFrom, shipDateTo, shipDateAll]);
 
+  const loadTemplates = useCallback(async () => {
+    const [tplRes, itemRes] = await Promise.all([
+      supabase.from('parts_templates').select('*').order('updated_at', { ascending: false }),
+      supabase.from('parts_template_items').select('*').order('sort_order', { ascending: true }),
+    ]);
+    if (tplRes.data) {
+      const itemsByTpl = {};
+      (itemRes.data || []).forEach(item => {
+        if (!itemsByTpl[item.template_id]) itemsByTpl[item.template_id] = [];
+        itemsByTpl[item.template_id].push(item);
+      });
+      setTemplates(tplRes.data.map(t => ({ ...t, items: itemsByTpl[t.id] || [] })));
+    }
+  }, []);
+
   useEffect(() => { if (user) loadData(null, debouncedSearch.length >= 2); }, [user, dateFrom, dateTo, dateAll, shipDateFrom, shipDateTo, shipDateAll, loadData, debouncedSearch]);
+  useEffect(() => { if (user) loadTemplates(); }, [user, loadTemplates]);
 
   /* ── Realtime ── */
   useEffect(() => {
@@ -900,6 +918,7 @@ export default function Home() {
                 }}
                 onConfirm={() => setShowConfirmModal(true)}
                 onShowHistory={() => setShowHistoryModal(true)}
+                onShowTemplate={() => setShowTemplateModal(true)}
                 loadOrders={loadOrders}
                 loadDraft={loadDraft}
               />
@@ -950,6 +969,76 @@ export default function Home() {
               }
               await loadOrders();
             }}
+          />
+        )}
+
+        {showTemplateModal && (
+          <TemplateModal
+            templates={templates}
+            parts={parts}
+            cart={cart}
+            onApply={(items) => {
+              const itemsToAdd = items.map(it => {
+                const part = parts.find(p => p.id === it.part_id);
+                if (!part) return null;
+                return { ...part, part_id: part.id, quantity: it.quantity };
+              }).filter(Boolean);
+              setCart(prev => {
+                const next = [...prev];
+                for (const newItem of itemsToAdd) {
+                  const idx = next.findIndex(c => (c.part_id || c.id) === newItem.part_id);
+                  if (idx >= 0) next[idx] = { ...next[idx], quantity: (next[idx].quantity || 0) + newItem.quantity };
+                  else next.push(newItem);
+                }
+                return next;
+              });
+              setShowTemplateModal(false);
+            }}
+            onSave={async ({ name, memo, items }) => {
+              const { data: tpl, error: tplErr } = await supabase
+                .from('parts_templates')
+                .insert({ name, memo })
+                .select()
+                .single();
+              if (tplErr) { alert('템플릿 저장 실패: ' + tplErr.message); return null; }
+              if (items.length > 0) {
+                const newItems = items.map((it, i) => ({
+                  template_id: tpl.id,
+                  part_id: it.part_id,
+                  quantity: it.quantity,
+                  sort_order: i,
+                }));
+                const { error: itemErr } = await supabase.from('parts_template_items').insert(newItems);
+                if (itemErr) { alert('항목 저장 실패: ' + itemErr.message); return null; }
+              }
+              await loadTemplates();
+              return tpl.id;
+            }}
+            onUpdate={async (id, { name, memo, items }) => {
+              const { error: tplErr } = await supabase
+                .from('parts_templates')
+                .update({ name, memo, updated_at: new Date().toISOString() })
+                .eq('id', id);
+              if (tplErr) { alert('저장 실패: ' + tplErr.message); return; }
+              await supabase.from('parts_template_items').delete().eq('template_id', id);
+              if (items.length > 0) {
+                const newItems = items.map((it, i) => ({
+                  template_id: id,
+                  part_id: it.part_id,
+                  quantity: it.quantity,
+                  sort_order: i,
+                }));
+                const { error: itemErr } = await supabase.from('parts_template_items').insert(newItems);
+                if (itemErr) { alert('항목 저장 실패: ' + itemErr.message); return; }
+              }
+              await loadTemplates();
+            }}
+            onDelete={async (id) => {
+              const { error } = await supabase.from('parts_templates').delete().eq('id', id);
+              if (error) { alert('삭제 실패: ' + error.message); return; }
+              await loadTemplates();
+            }}
+            onClose={() => setShowTemplateModal(false)}
           />
         )}
 
@@ -2528,7 +2617,7 @@ function ClipboardEditModal({ clipboards, colors, textColors, onSave, onClose })
 
 
 /* ═══ PARTS ORDER TAB — Phase 2-1a (장바구니 + 발주확정 + 이력) ═══ */
-function PartsOrderTab({ parts, models, categories, onPhotoClick, cart, setCart, currentDraftId, onAddToCart, onSaveDraft, onConfirm, onShowHistory, loadOrders, loadDraft }) {
+function PartsOrderTab({ parts, models, categories, onPhotoClick, cart, setCart, currentDraftId, onAddToCart, onSaveDraft, onConfirm, onShowHistory, onShowTemplate, loadOrders, loadDraft }) {
   const [orderSearch, setOrderSearch] = useState('');
   const [orderModel, setOrderModel] = useState('전체');
   const [orderBigCat, setOrderBigCat] = useState('전체');
@@ -2591,7 +2680,7 @@ function PartsOrderTab({ parts, models, categories, onPhotoClick, cart, setCart,
           <PartsOrderTable parts={filtered} onPhotoClick={onPhotoClick} onAdd={onAddToCart} />
         </div>
         <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
-          <OrderCart cart={cart} setCart={setCart} currentDraftId={currentDraftId} onSaveDraft={onSaveDraft} onConfirm={onConfirm} onShowHistory={onShowHistory} />
+          <OrderCart cart={cart} setCart={setCart} currentDraftId={currentDraftId} onSaveDraft={onSaveDraft} onConfirm={onConfirm} onShowHistory={onShowHistory} onShowTemplate={onShowTemplate} />
         </div>
       </div>
     </div>
@@ -2700,9 +2789,34 @@ function PartsOrderTable({ parts, onPhotoClick, onAdd }) {
         </div>
       );
     }
-    if (key === 'category') return p.category || <span className="empty-dot">●</span>;
-    if (key === 'chinese_model') return <span style={{fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)'}}>{p.chinese_model || <span className="empty-dot">●</span>}</span>;
-    if (key === 'chinese_name') return p.chinese_name || <span className="empty-dot">●</span>;
+    if (key === 'category') {
+      const tokens = (p.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean);
+      if (tokens.length === 0) return <span className="empty-dot">●</span>;
+      return (
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:3,padding:'0 4px'}}>
+          {tokens.map((t, i) => (
+            <span key={i} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:500,background:'#E8EFF7',color:'#185FA5',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:0}}>{t}</span>
+          ))}
+        </div>
+      );
+    }
+    if (key === 'chinese_model') {
+      const source = p.chinese_model || p.category;
+      const tokens = (source || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean);
+      if (tokens.length === 0) return <span className="empty-dot">●</span>;
+      return (
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:3,padding:'0 4px'}}>
+          {tokens.map((t, i) => (
+            <span key={i} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:500,background:'#E0F4F0',color:'#0E7A5F',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:0}}>{t}</span>
+          ))}
+        </div>
+      );
+    }
+    if (key === 'chinese_name') {
+      const display = p.chinese_name || p.name;
+      if (!display) return <span className="empty-dot">●</span>;
+      return <span>{display}</span>;
+    }
     if (key === 'quantity') return p.quantity == null ? <span className="empty-dot">●</span> : p.quantity;
     if (key === 'price') return <span style={{color:'#185FA5', fontWeight:700, fontVariantNumeric:'tabular-nums'}}>{p.price?.toLocaleString('ko-KR') || '0'}</span>;
     if (key === '_add') return <button onClick={() => onAdd && onAdd(p)} style={{padding:'4px 10px', fontSize:11, background:'#185FA5', color:'#fff', border:'none', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>+ 담기</button>;
@@ -2814,7 +2928,7 @@ const CART_COLS = [
   { key:'subtotal',  label:'합계',     defaultOn:false },
 ];
 
-function OrderCart({ cart, setCart, currentDraftId, onSaveDraft, onConfirm, onShowHistory }) {
+function OrderCart({ cart, setCart, currentDraftId, onSaveDraft, onConfirm, onShowHistory, onShowTemplate }) {
   const [visibleCols, setVisibleCols] = useState(() => {
     const initial = Object.fromEntries(CART_COLS.map(c => [c.key, c.defaultOn]));
     if (typeof window === 'undefined') return initial;
@@ -2880,6 +2994,10 @@ function OrderCart({ cart, setCart, currentDraftId, onSaveDraft, onConfirm, onSh
             <button ref={colBtnRef} onClick={openColPanel} style={{display:'inline-flex', alignItems:'center', gap:4, padding:'4px 9px', background:'transparent', border:'0.5px solid rgba(255,255,255,0.3)', color:'#fff', borderRadius:4, fontSize:11, cursor:'pointer', fontFamily:'inherit'}}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
               컬럼
+            </button>
+            <button onClick={onShowTemplate} style={{display:'inline-flex', alignItems:'center', gap:4, padding:'4px 9px', background:'transparent', border:'0.5px solid rgba(255,255,255,0.3)', color:'#fff', borderRadius:4, fontSize:11, cursor:'pointer', fontFamily:'inherit'}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+              템플릿
             </button>
             <button onClick={onShowHistory} style={{display:'inline-flex', alignItems:'center', gap:4, padding:'4px 9px', background:'transparent', border:'0.5px solid rgba(255,255,255,0.3)', color:'#fff', borderRadius:4, fontSize:11, cursor:'pointer', fontFamily:'inherit'}}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
@@ -3268,6 +3386,268 @@ function PhotoLightbox({ url, name, code, partId, readOnly, onClose, onUpdate })
 
 
 /* ═══ CATEGORY DROPDOWN — position:fixed, 항목 클릭으로만 닫힘 ═══ */
+/* ═══ TEMPLATE MODAL — Phase 2-1c 부속 템플릿 ═══ */
+function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDelete, onClose }) {
+  const [selectedId, setSelectedId] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editMemo, setEditMemo] = useState('');
+  const [editItems, setEditItems] = useState([]);
+  const [partSearch, setPartSearch] = useState('');
+  const [showPartDropdown, setShowPartDropdown] = useState(false);
+
+  useEffect(() => {
+    if (selectedId === null) {
+      setEditName(''); setEditMemo(''); setEditItems([]);
+    } else {
+      const tpl = templates.find(t => t.id === selectedId);
+      if (tpl) {
+        setEditName(tpl.name || '');
+        setEditMemo(tpl.memo || '');
+        setEditItems((tpl.items || []).map(it => ({
+          part_id: it.part_id,
+          quantity: it.quantity,
+          sort_order: it.sort_order || 0,
+        })));
+      }
+    }
+  }, [selectedId, templates]);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const isNewMode = selectedId === null;
+  const isDirty = (() => {
+    if (isNewMode) return editName.trim() || editItems.length > 0;
+    const tpl = templates.find(t => t.id === selectedId);
+    if (!tpl) return false;
+    if (editName !== (tpl.name || '')) return true;
+    if (editMemo !== (tpl.memo || '')) return true;
+    if (editItems.length !== (tpl.items || []).length) return true;
+    for (let i = 0; i < editItems.length; i++) {
+      const a = editItems[i];
+      const b = tpl.items[i];
+      if (a.part_id !== b.part_id || a.quantity !== b.quantity) return true;
+    }
+    return false;
+  })();
+
+  const partsById = (() => {
+    const m = {};
+    parts.forEach(p => { m[p.id] = p; });
+    return m;
+  })();
+
+  const filteredParts = parts.filter(p => {
+    if (!partSearch) return true;
+    const q = partSearch.toLowerCase();
+    return [p.code, p.name, p.spec, p.category].some(f => f?.toLowerCase().includes(q));
+  });
+
+  const addItem = (part) => {
+    const idx = editItems.findIndex(it => it.part_id === part.id);
+    if (idx >= 0) {
+      setEditItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: it.quantity + 1 } : it));
+    } else {
+      setEditItems(prev => [...prev, { part_id: part.id, quantity: 1, sort_order: prev.length }]);
+    }
+    setShowPartDropdown(false);
+    setPartSearch('');
+  };
+
+  const updateItemQty = (idx, newQty) => {
+    if (newQty < 1) {
+      setEditItems(prev => prev.filter((_, i) => i !== idx));
+      return;
+    }
+    setEditItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: newQty } : it));
+  };
+
+  const removeItem = (idx) => {
+    setEditItems(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSave = async () => {
+    if (!editName.trim()) { alert('템플릿 이름을 입력하세요'); return; }
+    if (editItems.length === 0) { alert('최소 1개의 부품을 추가하세요'); return; }
+    if (isNewMode) {
+      const newId = await onSave({ name: editName.trim(), memo: editMemo.trim() || null, items: editItems });
+      if (newId) setSelectedId(newId);
+    } else {
+      await onUpdate(selectedId, { name: editName.trim(), memo: editMemo.trim() || null, items: editItems });
+    }
+  };
+
+  const handleApply = () => {
+    if (selectedId === null) { alert('적용할 템플릿을 선택하세요'); return; }
+    if (editItems.length === 0) { alert('항목이 없습니다'); return; }
+    onApply(editItems);
+  };
+
+  const handleSaveCartAsNew = () => {
+    if (cart.length === 0) { alert('장바구니가 비어있습니다'); return; }
+    setSelectedId(null);
+    setEditName('');
+    setEditMemo('');
+    setEditItems(cart.map((c, i) => ({
+      part_id: c.part_id || c.id,
+      quantity: c.quantity || 1,
+      sort_order: i,
+    })));
+  };
+
+  return (
+    <div onMouseDown={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:24}}>
+      <div onMouseDown={e => e.stopPropagation()} style={{background:'#fff',borderRadius:8,width:'min(960px,95vw)',height:'min(680px,90vh)',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 12px 32px rgba(0,0,0,0.18)'}}>
+        <div style={{flexShrink:0,padding:'12px 16px',background:'#1A1D23',color:'#fff',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <span style={{fontSize:13,fontWeight:600}}>부속 템플릿 관리</span>
+          <button onClick={onClose} style={{background:'transparent',border:'0.5px solid rgba(255,255,255,0.3)',color:'#fff',padding:'4px 10px',fontSize:11,borderRadius:4,cursor:'pointer',fontFamily:'inherit'}}>닫기</button>
+        </div>
+
+        <div style={{flex:1,display:'flex',overflow:'hidden'}}>
+          <div style={{width:'38%',display:'flex',flexDirection:'column',borderRight:'0.5px solid #DDE1EB',background:'#FAFBFC'}}>
+            <div style={{flexShrink:0,padding:'8px 12px',display:'flex',gap:6,borderBottom:'0.5px solid #DDE1EB'}}>
+              <button onClick={() => setSelectedId(null)} style={{flex:1,padding:'5px 10px',fontSize:11,background: selectedId === null ? '#185FA5' : '#fff',color: selectedId === null ? '#fff' : '#5A6070',border:'0.5px solid '+(selectedId === null ? '#185FA5' : '#DDE1EB'),borderRadius:4,cursor:'pointer',fontFamily:'inherit',fontWeight: selectedId === null ? 500 : 400}}>+ 새 템플릿</button>
+              <button onClick={handleSaveCartAsNew} title="현재 장바구니 내용으로 새 템플릿" style={{flex:1,padding:'5px 10px',fontSize:11,background:'#fff',color:'#185FA5',border:'0.5px solid #185FA5',borderRadius:4,cursor:'pointer',fontFamily:'inherit',fontWeight:500}}>장바구니→템플릿</button>
+            </div>
+            <div style={{flex:1,overflow:'auto'}}>
+              {templates.length === 0 ? (
+                <div style={{padding:24,textAlign:'center',fontSize:12,color:'#9BA3B2'}}>저장된 템플릿이 없습니다</div>
+              ) : templates.map(t => {
+                const active = selectedId === t.id;
+                return (
+                  <div key={t.id} onClick={() => setSelectedId(t.id)}
+                    style={{padding:'10px 12px',cursor:'pointer',borderBottom:'0.5px solid #F0F2F7',background: active ? '#E8EFF7' : 'transparent',display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:active ? 600 : 500,color: active ? '#185FA5' : '#1A1D23',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{t.name}</div>
+                      <div style={{fontSize:10,color:'#9BA3B2',marginTop:2}}>{(t.items || []).length}종</div>
+                    </div>
+                    <button onClick={(e) => { e.stopPropagation(); if (confirm(`"${t.name}" 템플릿을 삭제하시겠습니까?`)) onDelete(t.id); }}
+                      title="삭제"
+                      style={{padding:'2px 6px',fontSize:11,background:'#fff',color:'#9BA3B2',border:'0.5px solid #DDE1EB',borderRadius:3,cursor:'pointer',fontFamily:'inherit',flexShrink:0}}
+                    >🗑</button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+            <div style={{flexShrink:0,padding:'12px 16px',borderBottom:'0.5px solid #DDE1EB',background:'#fff'}}>
+              <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}>
+                <label style={{fontSize:11,color:'#5A6070',width:48,flexShrink:0}}>이름</label>
+                <input value={editName} onChange={e => setEditName(e.target.value)} placeholder="예) 콜라보 기본 세트"
+                  style={{flex:1,padding:'5px 8px',fontSize:12,border:'0.5px solid #DDE1EB',borderRadius:4,fontFamily:'inherit'}}
+                />
+              </div>
+              <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                <label style={{fontSize:11,color:'#5A6070',width:48,flexShrink:0}}>메모</label>
+                <input value={editMemo} onChange={e => setEditMemo(e.target.value)} placeholder="(선택사항)"
+                  style={{flex:1,padding:'5px 8px',fontSize:12,border:'0.5px solid #DDE1EB',borderRadius:4,fontFamily:'inherit'}}
+                />
+              </div>
+            </div>
+
+            <div style={{flexShrink:0,padding:'8px 16px',borderBottom:'0.5px solid #DDE1EB',background:'#FAFBFC',position:'relative'}}>
+              <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                <span style={{fontSize:11,color:'#5A6070',flexShrink:0}}>부속 추가</span>
+                <input value={partSearch} onChange={e => { setPartSearch(e.target.value); setShowPartDropdown(true); }}
+                  onFocus={() => setShowPartDropdown(true)}
+                  placeholder="부품코드/품명 검색..."
+                  style={{flex:1,padding:'5px 8px',fontSize:12,border:'0.5px solid #DDE1EB',borderRadius:4,fontFamily:'inherit'}}
+                />
+              </div>
+              {showPartDropdown && (
+                <>
+                  <div onMouseDown={() => setShowPartDropdown(false)} style={{position:'fixed',inset:0,zIndex:9098}} />
+                  <div style={{position:'absolute',top:'100%',left:16,right:16,background:'#fff',border:'0.5px solid #DDE1EB',borderRadius:4,boxShadow:'0 4px 12px rgba(0,0,0,0.12)',maxHeight:280,overflow:'auto',zIndex:9099}}>
+                    {filteredParts.length === 0 ? (
+                      <div style={{padding:16,textAlign:'center',fontSize:11,color:'#9BA3B2'}}>검색 결과 없음</div>
+                    ) : filteredParts.slice(0, 50).map(p => (
+                      <div key={p.id} onMouseDown={(e) => { e.preventDefault(); addItem(p); }}
+                        style={{padding:'7px 12px',fontSize:11,cursor:'pointer',borderBottom:'0.5px solid #F0F2F7',display:'flex',gap:8,alignItems:'center'}}
+                        onMouseEnter={e => e.currentTarget.style.background = '#F4F6FA'}
+                        onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+                      >
+                        <span style={{color:'#9BA3B2',fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)',width:60,flexShrink:0}}>{p.code || '—'}</span>
+                        <span style={{flex:1,fontWeight:500}}>{p.name || '(이름 없음)'}</span>
+                        <span style={{color:'#5A6070',fontSize:10}}>{p.spec || ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div style={{flex:1,overflow:'auto'}}>
+              {editItems.length === 0 ? (
+                <div style={{padding:32,textAlign:'center',fontSize:11,color:'#9BA3B2'}}>위 검색창에서 부속을 추가하세요</div>
+              ) : (
+                <table className="as-table" style={{width:'100%'}}>
+                  <thead>
+                    <tr className="as-col-header">
+                      <th style={{width:60,textAlign:'center'}}>코드</th>
+                      <th style={{textAlign:'left'}}>부품</th>
+                      <th style={{width:120,textAlign:'center'}}>수량</th>
+                      <th style={{width:36}}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editItems.map((it, idx) => {
+                      const p = partsById[it.part_id];
+                      if (!p) return (
+                        <tr key={idx}>
+                          <td colSpan={4} style={{padding:'6px 8px',fontSize:11,color:'#CC2222'}}>⚠️ 부품 정보 없음 (id: {it.part_id})</td>
+                        </tr>
+                      );
+                      return (
+                        <tr key={idx} style={idx % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
+                          <td style={{textAlign:'center',padding:'6px 4px',fontSize:11,fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)',color:'#9BA3B2'}}>{p.code}</td>
+                          <td style={{padding:'6px 8px',fontSize:12}}>
+                            <div style={{fontWeight:500}}>{p.name || '—'}</div>
+                            <div style={{fontSize:10,color:'#9BA3B2'}}>{p.spec || ''}</div>
+                          </td>
+                          <td style={{textAlign:'center',padding:'6px 4px'}}>
+                            <div style={{display:'inline-flex',alignItems:'center',gap:4,justifyContent:'center'}}>
+                              <button onClick={() => updateItemQty(idx, it.quantity - 1)} style={{width:22,height:22,fontSize:13,border:'0.5px solid #DDE1EB',background:'#fff',color:'#5A6070',borderRadius:4,cursor:'pointer',fontFamily:'inherit'}}>−</button>
+                              <input type="number" min="1" value={it.quantity} onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 1) updateItemQty(idx, v); else if (e.target.value === '') updateItemQty(idx, 1); }} style={{width:42,height:22,padding:'0 4px',fontSize:12,border:'0.5px solid #DDE1EB',borderRadius:4,textAlign:'center',fontFamily:'inherit'}} />
+                              <button onClick={() => updateItemQty(idx, it.quantity + 1)} style={{width:22,height:22,fontSize:13,border:'0.5px solid #DDE1EB',background:'#fff',color:'#5A6070',borderRadius:4,cursor:'pointer',fontFamily:'inherit'}}>+</button>
+                            </div>
+                          </td>
+                          <td style={{padding:'6px 4px',textAlign:'center'}}>
+                            <button onClick={() => removeItem(idx)} title="제거" style={{width:22,height:22,fontSize:12,border:'0.5px solid #DDE1EB',background:'#fff',color:'#9BA3B2',borderRadius:4,cursor:'pointer',fontFamily:'inherit'}}>✕</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div style={{flexShrink:0,padding:'10px 16px',borderTop:'0.5px solid #DDE1EB',background:'#FAFBFC',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+              <span style={{fontSize:11,color:'#5A6070'}}>합계 {editItems.length}종 · {editItems.reduce((s, it) => s + (it.quantity || 0), 0)}개</span>
+              <div style={{display:'flex',gap:6}}>
+                <button onClick={handleSave} disabled={!isDirty}
+                  style={{padding:'6px 14px',fontSize:11,background: isDirty ? '#185FA5' : '#DDE1EB',color: isDirty ? '#fff' : '#9BA3B2',border:'none',borderRadius:4,cursor: isDirty ? 'pointer' : 'not-allowed',fontFamily:'inherit',fontWeight:500}}>
+                  {isNewMode ? '+ 새 템플릿 저장' : '변경 저장'}
+                </button>
+                <button onClick={handleApply} disabled={isNewMode || editItems.length === 0}
+                  style={{padding:'6px 14px',fontSize:11,background: (!isNewMode && editItems.length > 0) ? '#0E7A5F' : '#DDE1EB',color: (!isNewMode && editItems.length > 0) ? '#fff' : '#9BA3B2',border:'none',borderRadius:4,cursor: (!isNewMode && editItems.length > 0) ? 'pointer' : 'not-allowed',fontFamily:'inherit',fontWeight:500}}>
+                  → 장바구니 추가
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function CategoryDropdown({ categories, selectedTokens, position, onToggle, onClear, onAddNew, onCancel }) {
   const [addingNew, setAddingNew] = useState(false);
   const [newName, setNewName] = useState('');
