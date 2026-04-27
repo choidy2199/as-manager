@@ -127,19 +127,19 @@ async function generateOrderPDF(order, orderItems, parts) {
       { text: '사진', style: 'th', alignment: 'center' },
       { text: '모델명(한국)', style: 'th', alignment: 'center' },
       { text: '대분류', style: 'th', alignment: 'center' },
-      { text: '모델명(中)', style: 'th', alignment: 'center', font: 'SC' },
-      { text: '부속이름(中)', style: 'th', alignment: 'left', font: 'SC' },
+      { text: '모델명(CN)', style: 'th', alignment: 'center' },
+      { text: '부속이름(CN)', style: 'th', alignment: 'left' },
       { text: '수량', style: 'th', alignment: 'center' },
     ],
     ...itemRows.map(row => [
-      { text: String(row.no), alignment: 'center', fontSize: 11, bold: true },
+      { text: String(row.no), alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23' },
       row.image
         ? { image: row.image, width: 36, height: 36, alignment: 'center' }
         : { text: '—', alignment: 'center', color: '#1A1D23', bold: true },
-      { text: row.model_kr, alignment: 'center', fontSize: 10, bold: true, fillColor: '#E8EFF7', color: '#185FA5' },
-      { text: row.big_category, alignment: 'center', fontSize: 10, bold: true, fillColor: '#EDEBFE', color: '#5046B0' },
-      { text: row.model_cn, alignment: 'center', fontSize: 10, bold: true, fillColor: '#E0F4F0', color: '#0E7A5F', font: 'SC' },
-      { text: row.name_cn, font: 'SC', fontSize: 12, bold: true, color: '#1A1D23' },
+      { text: row.model_kr, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23' },
+      { text: row.big_category, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23' },
+      { text: row.model_cn, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23' },
+      { text: row.name_cn, fontSize: 12, bold: true, color: '#1A1D23' },
       { text: String(row.quantity), alignment: 'center', fontSize: 13, bold: true, color: '#1A1D23' },
     ]),
   ];
