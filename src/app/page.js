@@ -2692,15 +2692,13 @@ function PartsOrderTab({ parts, models, categories, onPhotoClick, cart, setCart,
 /* ═══ PARTS ORDER TABLE — 10컬럼 SELECT only (Phase 2-1a: 담기 활성화) ═══ */
 function PartsOrderTable({ parts, onPhotoClick, onAdd }) {
   const ALL_COLS = [
-    { key:'code',          label:'내부코드',     w:90  },
-    { key:'image_url',     label:'사진',         w:88  },
-    { key:'name_spec',     label:'부품/스펙',    w:200 },
-    { key:'big_category',  label:'대분류',       w:120 },
-    { key:'category',      label:'모델명(한국)', w:90  },
-    { key:'chinese_model', label:'모델명(中)',   w:100 },
+    { key:'image_url',     label:'사진',         w:80  },
+    { key:'name_spec',     label:'부품스펙',     w:220 },
+    { key:'big_category',  label:'대분류',       w:110 },
+    { key:'category',      label:'모델명(한국)', w:120 },
+    { key:'chinese_model', label:'모델명(中)',   w:120 },
     { key:'chinese_name',  label:'부속이름(中)', w:110 },
-    { key:'quantity',      label:'수량',         w:60  },
-    { key:'price',         label:'공임비',       w:90  },
+    { key:'quantity',      label:'수량',         w:55  },
     { key:'_add',          label:'담기',         w:70  },
   ];
   const DEFAULT_W = Object.fromEntries(ALL_COLS.map(c => [c.key, c.w]));
@@ -2920,13 +2918,15 @@ function CartPlaceholder() {
 
 /* ═══ ORDER CART — Phase 2-1a 장바구니 ═══ */
 const CART_COLS = [
-  { key:'image_url', label:'사진',     defaultOn:true  },
-  { key:'name',      label:'부속이름',  defaultOn:true  },
-  { key:'category',  label:'모델',     defaultOn:true  },
-  { key:'spec',      label:'규격',     defaultOn:true  },
-  { key:'quantity',  label:'수량',     defaultOn:true  },
-  { key:'price',     label:'단가',     defaultOn:false },
-  { key:'subtotal',  label:'합계',     defaultOn:false },
+  { key:'image_url',     label:'사진',         defaultOn:true  },
+  { key:'name_spec',     label:'부품스펙',     defaultOn:true  },
+  { key:'big_category',  label:'대분류',       defaultOn:true  },
+  { key:'category',      label:'모델명(한국)', defaultOn:true  },
+  { key:'chinese_model', label:'모델명(中)',   defaultOn:true  },
+  { key:'chinese_name',  label:'부속이름(中)', defaultOn:true  },
+  { key:'quantity',      label:'수량',         defaultOn:true  },
+  { key:'price',         label:'단가',         defaultOn:false },
+  { key:'subtotal',      label:'합계',         defaultOn:false },
 ];
 
 function OrderCart({ cart, setCart, currentDraftId, onSaveDraft, onConfirm, onShowHistory, onShowTemplate }) {
@@ -3031,8 +3031,52 @@ function OrderCart({ cart, setCart, currentDraftId, onSaveDraft, onConfirm, onSh
                     {visible.map(c => {
                       const td = (content, extra={}) => (<td key={c.key} style={{padding:'6px 8px', fontSize:12, textAlign:'center', ...extra}}>{content}</td>);
                       if (c.key === 'image_url') return td(<PartThumbnail url={item.image_url} name={item.name} code={item.code} />, {padding:'6px 4px'});
+                      if (c.key === 'name_spec') return td(
+                        <div style={{textAlign:'left'}}>
+                          <div style={{fontSize:12, fontWeight:500, color:'#1A1D23'}}>{item.name || <span className="empty-dot">●</span>}</div>
+                          {item.spec && <div style={{fontSize:10, color:'#9BA3B2', marginTop:2}}>{item.spec}</div>}
+                        </div>,
+                        {padding:'6px 8px', textAlign:'left'}
+                      );
+                      if (c.key === 'big_category') {
+                        const tokens = (item.big_category || '').split('|').map(s => s.trim()).filter(Boolean);
+                        if (tokens.length === 0) return td(<span className="empty-dot">●</span>);
+                        return td(
+                          <div style={{display:'flex',flexWrap:'wrap',gap:3,justifyContent:'center'}}>
+                            {tokens.map((t, i) => (
+                              <span key={i} style={{display:'inline-block',padding:'2px 7px',background:'#EDEBFE',color:'#5046B0',borderRadius:999,fontSize:11,fontWeight:500,whiteSpace:'nowrap'}}>{t}</span>
+                            ))}
+                          </div>
+                        );
+                      }
+                      if (c.key === 'category') {
+                        const tokens = (item.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean);
+                        if (tokens.length === 0) return td(<span className="empty-dot">●</span>);
+                        return td(
+                          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:3,padding:'0 4px'}}>
+                            {tokens.map((t, i) => (
+                              <span key={i} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:500,background:'#E8EFF7',color:'#185FA5',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:0}}>{t}</span>
+                            ))}
+                          </div>
+                        );
+                      }
+                      if (c.key === 'chinese_model') {
+                        const source = item.chinese_model || item.category;
+                        const tokens = (source || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean);
+                        if (tokens.length === 0) return td(<span className="empty-dot">●</span>);
+                        return td(
+                          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:3,padding:'0 4px'}}>
+                            {tokens.map((t, i) => (
+                              <span key={i} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'3px 8px',borderRadius:4,fontSize:11,fontWeight:500,background:'#E0F4F0',color:'#0E7A5F',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:0}}>{t}</span>
+                            ))}
+                          </div>
+                        );
+                      }
+                      if (c.key === 'chinese_name') {
+                        const display = item.chinese_name || item.name;
+                        return td(display ? <span style={{fontSize:12}}>{display}</span> : <span className="empty-dot">●</span>);
+                      }
                       if (c.key === 'name') return td(<span style={{fontSize:12, fontWeight:500, color:'#1A1D23'}}>{item.name || <span className="empty-dot">●</span>}</span>);
-                      if (c.key === 'category') return td(item.category || <span className="empty-dot">●</span>);
                       if (c.key === 'spec') return td(<span style={{fontSize:11, color:'#5A6070'}}>{item.spec || <span className="empty-dot">●</span>}</span>);
                       if (c.key === 'quantity') return td(
                         <div style={{display:'inline-flex', alignItems:'center', gap:4, justifyContent:'center'}}>
@@ -3501,14 +3545,14 @@ function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDe
 
   return (
     <div onMouseDown={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:24}}>
-      <div onMouseDown={e => e.stopPropagation()} style={{background:'#fff',borderRadius:8,width:'min(960px,95vw)',height:'min(680px,90vh)',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 12px 32px rgba(0,0,0,0.18)'}}>
+      <div onMouseDown={e => e.stopPropagation()} style={{background:'#fff',borderRadius:8,width:'min(1100px,95vw)',height:'min(680px,90vh)',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 12px 32px rgba(0,0,0,0.18)'}}>
         <div style={{flexShrink:0,padding:'12px 16px',background:'#1A1D23',color:'#fff',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span style={{fontSize:13,fontWeight:600}}>부속 템플릿 관리</span>
           <button onClick={onClose} style={{background:'transparent',border:'0.5px solid rgba(255,255,255,0.3)',color:'#fff',padding:'4px 10px',fontSize:11,borderRadius:4,cursor:'pointer',fontFamily:'inherit'}}>닫기</button>
         </div>
 
         <div style={{flex:1,display:'flex',overflow:'hidden'}}>
-          <div style={{width:'38%',display:'flex',flexDirection:'column',borderRight:'0.5px solid #DDE1EB',background:'#FAFBFC'}}>
+          <div style={{width:'30%',display:'flex',flexDirection:'column',borderRight:'0.5px solid #DDE1EB',background:'#FAFBFC'}}>
             <div style={{flexShrink:0,padding:'8px 12px',display:'flex',gap:6,borderBottom:'0.5px solid #DDE1EB'}}>
               <button onClick={() => setSelectedId(null)} style={{flex:1,padding:'5px 10px',fontSize:11,background: selectedId === null ? '#185FA5' : '#fff',color: selectedId === null ? '#fff' : '#5A6070',border:'0.5px solid '+(selectedId === null ? '#185FA5' : '#DDE1EB'),borderRadius:4,cursor:'pointer',fontFamily:'inherit',fontWeight: selectedId === null ? 500 : 400}}>+ 새 템플릿</button>
               <button onClick={handleSaveCartAsNew} title="현재 장바구니 내용으로 새 템플릿" style={{flex:1,padding:'5px 10px',fontSize:11,background:'#fff',color:'#185FA5',border:'0.5px solid #185FA5',borderRadius:4,cursor:'pointer',fontFamily:'inherit',fontWeight:500}}>장바구니→템플릿</button>
@@ -3586,13 +3630,27 @@ function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDe
               {editItems.length === 0 ? (
                 <div style={{padding:32,textAlign:'center',fontSize:11,color:'#9BA3B2'}}>위 검색창에서 부속을 추가하세요</div>
               ) : (
-                <table className="as-table" style={{width:'100%'}}>
+                <table className="as-table" style={{width:'100%',tableLayout:'fixed'}}>
+                  <colgroup>
+                    <col style={{width:50}} />
+                    <col />
+                    <col style={{width:80}} />
+                    <col style={{width:90}} />
+                    <col style={{width:90}} />
+                    <col style={{width:80}} />
+                    <col style={{width:110}} />
+                    <col style={{width:36}} />
+                  </colgroup>
                   <thead>
                     <tr className="as-col-header">
-                      <th style={{width:60,textAlign:'center'}}>코드</th>
-                      <th style={{textAlign:'left'}}>부품</th>
-                      <th style={{width:120,textAlign:'center'}}>수량</th>
-                      <th style={{width:36}}></th>
+                      <th style={{textAlign:'center'}}>사진</th>
+                      <th style={{textAlign:'left'}}>부품스펙</th>
+                      <th style={{textAlign:'center'}}>대분류</th>
+                      <th style={{textAlign:'center'}}>모델명(한국)</th>
+                      <th style={{textAlign:'center'}}>모델명(中)</th>
+                      <th style={{textAlign:'center'}}>부속이름(中)</th>
+                      <th style={{textAlign:'center'}}>수량</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3600,20 +3658,57 @@ function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDe
                       const p = partsById[it.part_id];
                       if (!p) return (
                         <tr key={idx}>
-                          <td colSpan={4} style={{padding:'6px 8px',fontSize:11,color:'#CC2222'}}>⚠️ 부품 정보 없음 (id: {it.part_id})</td>
+                          <td colSpan={8} style={{padding:'6px 8px',fontSize:11,color:'#CC2222'}}>⚠️ 부품 정보 없음 (id: {it.part_id})</td>
                         </tr>
                       );
+                      const bigCatTokens = (p.big_category || '').split('|').map(s => s.trim()).filter(Boolean);
+                      const catTokens = (p.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean);
+                      const cnModelSource = p.chinese_model || p.category;
+                      const cnModelTokens = (cnModelSource || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean);
+                      const cnName = p.chinese_name || p.name;
                       return (
                         <tr key={idx} style={idx % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
-                          <td style={{textAlign:'center',padding:'6px 4px',fontSize:11,fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)',color:'#9BA3B2'}}>{p.code}</td>
-                          <td style={{padding:'6px 8px',fontSize:12}}>
-                            <div style={{fontWeight:500}}>{p.name || '—'}</div>
-                            <div style={{fontSize:10,color:'#9BA3B2'}}>{p.spec || ''}</div>
+                          <td style={{textAlign:'center',padding:'6px 4px'}}>
+                            <PartThumbnail url={p.image_url} name={p.name} code={p.code} />
+                          </td>
+                          <td style={{padding:'6px 8px',fontSize:12,overflow:'hidden'}}>
+                            <div style={{fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.name || '—'}</div>
+                            {p.spec && <div style={{fontSize:10,color:'#9BA3B2',marginTop:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.spec}</div>}
+                          </td>
+                          <td style={{textAlign:'center',padding:'6px 4px'}}>
+                            {bigCatTokens.length === 0 ? <span className="empty-dot">●</span> : (
+                              <div style={{display:'flex',flexWrap:'wrap',gap:2,justifyContent:'center'}}>
+                                {bigCatTokens.map((t, i) => (
+                                  <span key={i} style={{display:'inline-block',padding:'2px 6px',background:'#EDEBFE',color:'#5046B0',borderRadius:999,fontSize:10,fontWeight:500,whiteSpace:'nowrap'}}>{t}</span>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{textAlign:'center',padding:'6px 4px'}}>
+                            {catTokens.length === 0 ? <span className="empty-dot">●</span> : (
+                              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:2,padding:'0 2px'}}>
+                                {catTokens.map((t, i) => (
+                                  <span key={i} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'2px 6px',borderRadius:4,fontSize:10,fontWeight:500,background:'#E8EFF7',color:'#185FA5',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:0}}>{t}</span>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{textAlign:'center',padding:'6px 4px'}}>
+                            {cnModelTokens.length === 0 ? <span className="empty-dot">●</span> : (
+                              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:2,padding:'0 2px'}}>
+                                {cnModelTokens.map((t, i) => (
+                                  <span key={i} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'2px 6px',borderRadius:4,fontSize:10,fontWeight:500,background:'#E0F4F0',color:'#0E7A5F',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:0}}>{t}</span>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{textAlign:'center',padding:'6px 4px',fontSize:11,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                            {cnName ? cnName : <span className="empty-dot">●</span>}
                           </td>
                           <td style={{textAlign:'center',padding:'6px 4px'}}>
                             <div style={{display:'inline-flex',alignItems:'center',gap:4,justifyContent:'center'}}>
                               <button onClick={() => updateItemQty(idx, it.quantity - 1)} style={{width:22,height:22,fontSize:13,border:'0.5px solid #DDE1EB',background:'#fff',color:'#5A6070',borderRadius:4,cursor:'pointer',fontFamily:'inherit'}}>−</button>
-                              <input type="number" min="1" value={it.quantity} onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 1) updateItemQty(idx, v); else if (e.target.value === '') updateItemQty(idx, 1); }} style={{width:42,height:22,padding:'0 4px',fontSize:12,border:'0.5px solid #DDE1EB',borderRadius:4,textAlign:'center',fontFamily:'inherit'}} />
+                              <input type="number" min="1" value={it.quantity} onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 1) updateItemQty(idx, v); else if (e.target.value === '') updateItemQty(idx, 1); }} style={{width:34,height:22,padding:'0 4px',fontSize:12,border:'0.5px solid #DDE1EB',borderRadius:4,textAlign:'center',fontFamily:'inherit'}} />
                               <button onClick={() => updateItemQty(idx, it.quantity + 1)} style={{width:22,height:22,fontSize:13,border:'0.5px solid #DDE1EB',background:'#fff',color:'#5A6070',borderRadius:4,cursor:'pointer',fontFamily:'inherit'}}>+</button>
                             </div>
                           </td>
