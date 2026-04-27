@@ -35,8 +35,10 @@ const HISTORY_BIG_CAT_ORDER = {
   '기타': 8,
 };
 const sortByBigCategory = (a, b) => {
-  const oa = HISTORY_BIG_CAT_ORDER[a.big_category] ?? 999;
-  const ob = HISTORY_BIG_CAT_ORDER[b.big_category] ?? 999;
+  const tokenA = (a.big_category || '').split('|')[0]?.trim() || '';
+  const tokenB = (b.big_category || '').split('|')[0]?.trim() || '';
+  const oa = HISTORY_BIG_CAT_ORDER[tokenA] ?? 999;
+  const ob = HISTORY_BIG_CAT_ORDER[tokenB] ?? 999;
   if (oa !== ob) return oa - ob;
   const na = (a.name || '').localeCompare(b.name || '');
   if (na !== 0) return na;
@@ -475,7 +477,8 @@ export default function Home() {
       ...(p.chinese_model || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean),
     ];
     const mc = partsCatFilter === '전체' || partTokens.includes(partsCatFilter);
-    const mb = partsBigCatFilter === '전체' || p.big_category === partsBigCatFilter;
+    const bigCatTokens = (p.big_category || '').split('|').map(s => s.trim()).filter(Boolean);
+    const mb = partsBigCatFilter === '전체' || bigCatTokens.includes(partsBigCatFilter);
     return ms && mc && mb;
   });
   const partBigCats = ['전체', ...partCategories.map(c => c.name)];
@@ -2550,7 +2553,8 @@ function PartsOrderTab({ parts, models, categories, onPhotoClick, cart, setCart,
     }
     if (orderBigCat === '전체') return true;
     if (orderBigCat === '미분류') return !p.big_category;
-    return p.big_category === orderBigCat;
+    const bigCatTokens = (p.big_category || '').split('|').map(s => s.trim()).filter(Boolean);
+    return bigCatTokens.includes(orderBigCat);
   });
 
   const pillItems = ['전체', ...(categories || []).map(c => c.name), '미분류'];
@@ -2686,8 +2690,15 @@ function PartsOrderTable({ parts, onPhotoClick, onAdd }) {
       </div>
     );
     if (key === 'big_category') {
-      if (p.big_category) return <span style={{display:'inline-block', padding:'2px 7px', background:'#EDEBFE', color:'#5046B0', borderRadius:999, fontSize:11, fontWeight:500, whiteSpace:'nowrap'}}>{p.big_category}</span>;
-      return <span style={{display:'inline-block', padding:'2px 7px', border:'0.5px dashed #DDE1EB', color:'#9BA3B2', borderRadius:999, fontSize:11, whiteSpace:'nowrap'}}>미분류</span>;
+      const tokens = (p.big_category || '').split('|').map(s => s.trim()).filter(Boolean);
+      if (tokens.length === 0) return <span style={{display:'inline-block', padding:'2px 7px', border:'0.5px dashed #DDE1EB', color:'#9BA3B2', borderRadius:999, fontSize:11, whiteSpace:'nowrap'}}>미분류</span>;
+      return (
+        <div style={{display:'flex',flexWrap:'wrap',gap:3,justifyContent:'center',alignItems:'center'}}>
+          {tokens.map((t, i) => (
+            <span key={i} style={{display:'inline-block', padding:'2px 7px', background:'#EDEBFE', color:'#5046B0', borderRadius:999, fontSize:11, fontWeight:500, whiteSpace:'nowrap'}}>{t}</span>
+          ))}
+        </div>
+      );
     }
     if (key === 'category') return p.category || <span className="empty-dot">●</span>;
     if (key === 'chinese_model') return <span style={{fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)'}}>{p.chinese_model || <span className="empty-dot">●</span>}</span>;
@@ -3257,7 +3268,7 @@ function PhotoLightbox({ url, name, code, partId, readOnly, onClose, onUpdate })
 
 
 /* ═══ CATEGORY DROPDOWN — position:fixed, 항목 클릭으로만 닫힘 ═══ */
-function CategoryDropdown({ categories, position, onSelect, onClear, onAddNew, onCancel }) {
+function CategoryDropdown({ categories, selectedTokens, position, onToggle, onClear, onAddNew, onCancel }) {
   const [addingNew, setAddingNew] = useState(false);
   const [newName, setNewName] = useState('');
 
@@ -3274,21 +3285,36 @@ function CategoryDropdown({ categories, position, onSelect, onClear, onAddNew, o
     setAddingNew(false); setNewName('');
   };
 
+  const tokenSet = selectedTokens instanceof Set ? selectedTokens : new Set(selectedTokens || []);
+  const selectedCount = tokenSet.size;
+
   return (
-    <div style={{position:'fixed',top:position.top,left:position.left,zIndex:9999,background:'#fff',border:'0.5px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.12)',minWidth:Math.max(160,position.width),maxHeight:340,overflow:'auto'}}
+    <div style={{position:'fixed',top:position.top,left:position.left,zIndex:9999,background:'#fff',border:'0.5px solid #DDE1EB',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.12)',minWidth:Math.max(180,position.width),maxHeight:380,overflow:'auto'}}
       onMouseDown={e => e.stopPropagation()}
     >
+      <div style={{padding:'8px 12px',background:'#FAFBFC',borderBottom:'0.5px solid #DDE1EB',fontSize:11,color:'#5A6070',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,zIndex:1}}>
+        <span>대분류 선택{selectedCount > 0 ? ` · ${selectedCount}/3` : ''}</span>
+        <span style={{color:'#9BA3B2'}}>ESC 닫기</span>
+      </div>
       <div onClick={onClear} style={{padding:'8px 14px',fontSize:11,cursor:'pointer',color:'#9BA3B2',borderBottom:'0.5px solid #DDE1EB',background:'#FAFBFC'}}
         onMouseEnter={e => e.currentTarget.style.background = '#F4F6FA'}
         onMouseLeave={e => e.currentTarget.style.background = '#FAFBFC'}
-      >미분류로 변경</div>
-      {categories.map(c => (
-        <div key={c.id} onClick={() => onSelect(c.name)}
-          style={{padding:'9px 14px',fontSize:12,cursor:'pointer',borderBottom:'0.5px solid #F0F2F7'}}
-          onMouseEnter={e => e.currentTarget.style.background = '#E8EFF7'}
-          onMouseLeave={e => e.currentTarget.style.background = '#fff'}
-        >{c.name}</div>
-      ))}
+      >전체 해제 (미분류로)</div>
+      {categories.map(c => {
+        const selected = tokenSet.has(c.name);
+        return (
+          <div key={c.id} onClick={() => onToggle(c.name)}
+            style={{padding:'9px 14px',fontSize:12,cursor:'pointer',borderBottom:'0.5px solid #F0F2F7',display:'flex',alignItems:'center',gap:8,background: selected ? '#EDEBFE' : '#fff',color: selected ? '#5046B0' : '#1A1D23',fontWeight: selected ? 500 : 400}}
+            onMouseEnter={e => { if (!selected) e.currentTarget.style.background = '#F4F6FA'; }}
+            onMouseLeave={e => { if (!selected) e.currentTarget.style.background = '#fff'; }}
+          >
+            <span style={{width:14,height:14,borderRadius:3,flexShrink:0,display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:11,background: selected ? '#5046B0' : 'transparent',color:'#fff',border: selected ? 'none' : '1px solid #DDE1EB'}}>
+              {selected ? '✓' : ''}
+            </span>
+            {c.name}
+          </div>
+        );
+      })}
       {!addingNew ? (
         <div onClick={() => setAddingNew(true)} style={{padding:'9px 14px',fontSize:12,cursor:'pointer',background:'#FAFBFC',color:'#185FA5',fontWeight:500,borderTop:'0.5px solid #DDE1EB'}}>+ 새 대분류 추가</div>
       ) : (
@@ -3465,17 +3491,56 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
     setBigCatDropdown({ id: p.id, top: rect.bottom + 4, left: rect.left, width: Math.max(180, rect.width) });
   };
 
-  const addCategoryAndSelect = async (newName) => {
-    if (!editCell) return;
-    const { id } = editCell;
+  const toggleBigCatToken = async (partId, name) => {
+    const part = parts.find(p => p.id === partId);
+    if (!part) return;
+    const tokens = (part.big_category || '').split('|').map(s => s.trim()).filter(Boolean);
+    const idx = tokens.indexOf(name);
+    if (idx >= 0) {
+      tokens.splice(idx, 1);
+    } else {
+      if (tokens.length >= 3) { alert('대분류는 최대 3개까지 선택할 수 있습니다'); return; }
+      tokens.push(name);
+    }
+    const newBigCat = tokens.length > 0 ? tokens.join('|') : null;
+    setParts(prev => prev.map(p => p.id === partId ? { ...p, big_category: newBigCat } : p));
+    const { error } = await supabase.from('parts').update({ big_category: newBigCat }).eq('id', partId);
+    if (error) alert('저장 실패: ' + error.message);
+  };
+
+  const removeBigCatToken = async (partId, name) => {
+    const part = parts.find(p => p.id === partId);
+    if (!part) return;
+    const tokens = (part.big_category || '').split('|').map(s => s.trim()).filter(Boolean).filter(t => t !== name);
+    const newBigCat = tokens.length > 0 ? tokens.join('|') : null;
+    setParts(prev => prev.map(p => p.id === partId ? { ...p, big_category: newBigCat } : p));
+    const { error } = await supabase.from('parts').update({ big_category: newBigCat }).eq('id', partId);
+    if (error) alert('저장 실패: ' + error.message);
+  };
+
+  const clearBigCatTokens = async (partId) => {
+    setParts(prev => prev.map(p => p.id === partId ? { ...p, big_category: null } : p));
+    setBigCatDropdown(null);
+    setEditCell(null);
+    const { error } = await supabase.from('parts').update({ big_category: null }).eq('id', partId);
+    if (error) alert('저장 실패: ' + error.message);
+  };
+
+  const addCategoryAndAddToken = async (newName) => {
+    if (!bigCatDropdown) return;
+    const partId = bigCatDropdown.id;
     if (categories.some(c => c.name === newName)) { alert('이미 존재하는 대분류입니다'); return; }
+    const part = parts.find(p => p.id === partId);
+    const currentTokens = (part?.big_category || '').split('|').map(s => s.trim()).filter(Boolean);
+    if (currentTokens.length >= 3) { alert('대분류는 최대 3개까지 선택할 수 있습니다'); return; }
     const maxOrder = categories.reduce((m, c) => Math.max(m, c.sort_order || 0), 8);
     const { data, error } = await supabase.from('part_categories').insert({ name: newName, sort_order: maxOrder + 1 }).select().single();
     if (error) { alert('대분류 추가 실패: ' + error.message); return; }
     setCategories(prev => [...prev, data].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)));
-    setEditCell(null); setBigCatDropdown(null);
-    setParts(prev => prev.map(p => p.id === id ? { ...p, big_category: newName } : p));
-    const { error: upErr } = await supabase.from('parts').update({ big_category: newName }).eq('id', id);
+    const newTokens = [...currentTokens, newName];
+    const newBigCat = newTokens.join('|');
+    setParts(prev => prev.map(p => p.id === partId ? { ...p, big_category: newBigCat } : p));
+    const { error: upErr } = await supabase.from('parts').update({ big_category: newBigCat }).eq('id', partId);
     if (upErr) alert('부품 저장 실패: ' + upErr.message);
   };
 
@@ -3571,10 +3636,28 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
                 </div>
               )}
             </td>
-            <td style={{textAlign:'center',padding:'8px 6px'}}>
-              {p.big_category
-                ? <span onClick={(e) => openBigCatDropdown(p, e)} style={{display:'inline-block',padding:'3px 9px',background:'#EDEBFE',color:'#5046B0',borderRadius:999,fontSize:11,fontWeight:600,whiteSpace:'nowrap',cursor:'pointer'}}>{p.big_category}</span>
-                : <span onClick={(e) => openBigCatDropdown(p, e)} style={{display:'inline-block',padding:'3px 9px',background:'#FAFBFC',color:'#9BA3B2',borderRadius:999,fontSize:11,border:'0.5px dashed #DDE1EB',whiteSpace:'nowrap',cursor:'pointer'}}>미분류</span>}
+            <td style={{textAlign:'center',padding:'8px 6px',cursor:'pointer'}} onClick={(e) => openBigCatDropdown(p, e)}>
+              {(() => {
+                const tokens = (p.big_category || '').split('|').map(s => s.trim()).filter(Boolean);
+                if (tokens.length === 0) {
+                  return <span style={{display:'inline-block',padding:'3px 9px',background:'#FAFBFC',color:'#9BA3B2',borderRadius:999,fontSize:11,border:'0.5px dashed #DDE1EB',whiteSpace:'nowrap',cursor:'pointer'}}>미분류</span>;
+                }
+                return (
+                  <div style={{display:'flex',flexWrap:'wrap',gap:3,justifyContent:'center',alignItems:'center'}}>
+                    {tokens.map((t, i) => (
+                      <span key={i} style={{display:'inline-flex',alignItems:'center',gap:2,padding:'3px 4px 3px 9px',borderRadius:999,fontSize:11,fontWeight:600,background:'#EDEBFE',color:'#5046B0',whiteSpace:'nowrap'}}>
+                        {t}
+                        <span onClick={(e) => { e.stopPropagation(); removeBigCatToken(p.id, t); }}
+                          title="제거"
+                          style={{width:14,height:14,borderRadius:2,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'#9BA3B2',fontSize:11,cursor:'pointer',lineHeight:1,flexShrink:0}}
+                          onMouseEnter={e => { e.currentTarget.style.background = '#FCEBEB'; e.currentTarget.style.color = '#CC2222'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#9BA3B2'; }}
+                        >×</span>
+                      </span>
+                    ))}
+                  </div>
+                );
+              })()}
             </td>
             <td style={{textAlign:'center',cursor:'pointer',padding:'8px 6px'}}
                 onClick={(e) => openModelDropdown(p, e)}>
@@ -3644,16 +3727,25 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
         {parts.length === 0 && <tr><td colSpan={11} className="empty">부품이 없습니다</td></tr>}
       </tbody>
     </table>
-    {bigCatDropdown && (
-      <CategoryDropdown
-        categories={categories}
-        position={bigCatDropdown}
-        onSelect={(name) => commitEdit(name)}
-        onClear={() => commitEdit(null)}
-        onAddNew={addCategoryAndSelect}
-        onCancel={cancelEdit}
-      />
-    )}
+    {bigCatDropdown && (() => {
+      const dropPart = parts.find(p => p.id === bigCatDropdown.id);
+      const currentTokens = new Set(((dropPart?.big_category || '').split('|').map(s => s.trim()).filter(Boolean)));
+      return (
+        <>
+          <div onMouseDown={() => { setBigCatDropdown(null); setEditCell(null); }}
+            style={{position:'fixed',inset:0,zIndex:9998,background:'transparent'}} />
+          <CategoryDropdown
+            categories={categories}
+            selectedTokens={currentTokens}
+            position={bigCatDropdown}
+            onToggle={(name) => toggleBigCatToken(bigCatDropdown.id, name)}
+            onClear={() => clearBigCatTokens(bigCatDropdown.id)}
+            onAddNew={addCategoryAndAddToken}
+            onCancel={() => { setBigCatDropdown(null); setEditCell(null); }}
+          />
+        </>
+      );
+    })()}
     {modelDropdown && (() => {
       const dropPart = parts.find(p => p.id === modelDropdown.partId);
       if (!dropPart) return null;
@@ -3986,10 +4078,7 @@ function PartModal({ initial, categories, onSave, onDelete, onClose }) {
           </div>
           <div className="form-field">
             <label className="label">대분류</label>
-            <select value={f.big_category} onChange={e => set('big_category', e.target.value)} className="input">
-              <option value="">선택하세요 (미분류)</option>
-              {(categories || []).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-            </select>
+            <div style={{padding:'8px 10px',background:'#FAFBFC',border:'0.5px solid #DDE1EB',borderRadius:6,fontSize:11,color:'#9BA3B2',lineHeight:1.5}}>저장 후 부속가격 테이블에서 대분류 선택 가능 (최대 3개)</div>
           </div>
           <div className="form-grid">
             <div className="form-field"><label className="label">모델명(中)</label><input value={f.chinese_model} onChange={e => set('chinese_model', e.target.value)} className="input" placeholder="예) DC990" /></div>
