@@ -191,8 +191,8 @@ async function generateOrderPDF(order, orderItems, parts) {
   };
 
   const filename = `발주서_${order.order_no || 'draft'}_${order.order_date || ''}.pdf`.replace(/\s+/g, '');
-  // pdfmake 0.3.x 호환: vfs/fonts를 4번째/3번째 인자로 명시 전달
-  const pdf = pdfMake.createPdf(docDef, null, pdfMake.fonts, pdfMake.vfs);
+  // pdfmake 0.2.x 표준: pdfMake.vfs/fonts 할당 후 createPdf(docDef) 호출
+  const pdf = pdfMake.createPdf(docDef);
   pdf.download(filename);
 }
 
