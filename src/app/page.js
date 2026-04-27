@@ -1758,7 +1758,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, showNewRow, onHideNewRow, saveASField, sendAutoSMS }) {
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState('');
-  const [newRow, setNewRow] = useState({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선택', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', delivery_message: '', as_record_id: null, quantity: 1 });
+  const [newRow, setNewRow] = useState({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선택', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', delivery_message: '', as_record_id: null, quantity: 1, memo: '' });
   const [recipientQuery, setRecipientQuery] = useState('');
   const [companyDropOpen, setCompanyDropOpen] = useState(false);
   const [companyDropPos, setCompanyDropPos] = useState(null);
@@ -1785,10 +1785,11 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
     { key:'_origin', label:'출고처', w:50, type:'static', value:'AS' },
     { key:'carrier', label:'택배사', w:100, type:'select', opts: SHIP_CARRIERS },
     { key:'tracking_no', label:'운송장번호', w:140, type:'text' },
+    { key:'memo', label:'비고', w:130, type:'text' },
     { key:'_delete', label:'', w:45, type:'action' },
   ];
 
-  const DEFAULT_SHIP_WIDTHS = { ship_date:90, receiver_name:90, receiver_phone:110, receiver_address:180, contents:90, quantity:45, delivery_message:120, sender_name:80, _origin:50, carrier:100, tracking_no:140, _delete:45 };
+  const DEFAULT_SHIP_WIDTHS = { ship_date:90, receiver_name:90, receiver_phone:110, receiver_address:180, contents:90, quantity:45, delivery_message:120, sender_name:80, _origin:50, carrier:100, tracking_no:140, memo:130, _delete:45 };
   const getColWidth = (key) => savedWidthsRef.current[key] || DEFAULT_SHIP_WIDTHS[key] || 80;
 
   const startResize = (colIdx, colKey, e) => {
@@ -1902,7 +1903,7 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
     const qn = parseInt(String(row.quantity ?? '1'), 10);
     const qty = (Number.isFinite(qn) && qn >= 1) ? qn : 1;
     await onAdd({ shipDate: row.ship_date, carrier: row.carrier, trackingNo: row.tracking_no, senderName: row.sender_name, receiverName: row.receiver_name, receiverPhone: row.receiver_phone, receiverAddress: row.receiver_address, contents: row.contents, memo: row.memo, deliveryMessage: row.delivery_message, asRecordId: row.as_record_id, quantity: qty });
-    setNewRow({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선택', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', delivery_message: '', as_record_id: null, quantity: 1 });
+    setNewRow({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선택', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', delivery_message: '', as_record_id: null, quantity: 1, memo: '' });
     setRecipientQuery('');
     onHideNewRow();
   };
