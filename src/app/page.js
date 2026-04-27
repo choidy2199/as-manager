@@ -206,9 +206,25 @@ async function generateOrderPDF(order, orderItems, parts) {
   };
 
   const filename = `발주서_${order.order_no || 'draft'}_${order.order_date || ''}.pdf`.replace(/\s+/g, '');
-  // pdfmake 0.2.x 표준: pdfMake.vfs/fonts 할당 후 createPdf(docDef) 호출
   const pdf = pdfMake.createPdf(docDef);
-  pdf.download(filename);
+
+  return new Promise((resolve, reject) => {
+    pdf.getBlob(blob => {
+      const blobUrl = URL.createObjectURL(blob);
+      resolve({ blob, blobUrl, filename });
+    }, reject);
+  });
+}
+
+function downloadPdfBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
 }
 
 
@@ -363,6 +379,7 @@ export default function Home() {
   const [orders, setOrders] = useState([]);
   const [orderItems, setOrderItems] = useState([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   /* ── 제품가격 state ── */
@@ -1145,7 +1162,8 @@ export default function Home() {
             onClose={() => setShowHistoryModal(false)}
             onGeneratePdf={async (order) => {
               try {
-                await generateOrderPDF(order, orderItems, parts);
+                const result = await generateOrderPDF(order, orderItems, parts);
+                setPdfPreview(result);
               } catch (err) {
                 alert('PDF 생성 실패: ' + (err?.message || err));
                 console.error(err);
@@ -1164,6 +1182,21 @@ export default function Home() {
                 setCurrentDraftId(null);
               }
               await loadOrders();
+            }}
+          />
+        )}
+
+        {pdfPreview && (
+          <PdfPreviewModal
+            preview={pdfPreview}
+            onClose={() => {
+              if (pdfPreview?.blobUrl) URL.revokeObjectURL(pdfPreview.blobUrl);
+              setPdfPreview(null);
+            }}
+            onDownload={() => {
+              if (pdfPreview?.blob && pdfPreview?.filename) {
+                downloadPdfBlob(pdfPreview.blob, pdfPreview.filename);
+              }
             }}
           />
         )}
@@ -3395,6 +3428,34 @@ function OrderConfirmModal({ cart, onConfirm, onClose }) {
 
 
 /* ═══ ORDER HISTORY MODAL — 발주 이력 (작성중/확정) ═══ */
+/* ═══ PDF PREVIEW MODAL — 미리보기 + 다운로드 ═══ */
+function PdfPreviewModal({ preview, onClose, onDownload }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  if (!preview) return null;
+  return (
+    <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9100, display:'flex', alignItems:'center', justifyContent:'center', padding:24}}
+      onMouseDown={e => e.stopPropagation()}
+    >
+      <div style={{background:'#fff', borderRadius:8, width:'min(960px, 90vw)', height:'90vh', display:'flex', flexDirection:'column', overflow:'hidden', boxShadow:'0 12px 32px rgba(0,0,0,0.3)'}}>
+        <div style={{flexShrink:0, padding:'12px 16px', background:'#1A1D23', color:'#fff', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+          <span style={{fontSize:13, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginRight:12}}>📄 PDF 미리보기 — {preview.filename}</span>
+          <div style={{display:'flex', gap:8, flexShrink:0}}>
+            <button onClick={onDownload} style={{padding:'5px 12px', background:'#185FA5', color:'#fff', border:'none', borderRadius:4, fontSize:12, fontWeight:500, cursor:'pointer', fontFamily:'inherit'}}>📥 다운로드</button>
+            <button onClick={onClose} style={{padding:'5px 10px', background:'transparent', color:'#fff', border:'0.5px solid rgba(255,255,255,0.3)', borderRadius:4, fontSize:12, cursor:'pointer', fontFamily:'inherit'}}>닫기</button>
+          </div>
+        </div>
+        <iframe src={preview.blobUrl} style={{flex:1, width:'100%', border:'none', background:'#525659'}} title="PDF 미리보기" />
+      </div>
+    </div>
+  );
+}
+
+
 function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, onDeleteOrder, onGeneratePdf }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('전체');
