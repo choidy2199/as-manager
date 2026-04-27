@@ -204,7 +204,6 @@ async function generateOrderPDF(order, orderItems, parts) {
       th: { bold: true, fillColor: '#1A1D23', color: '#FFFFFF', fontSize: 10 },
     },
     pageMargins: [40, 40, 40, 40],
-    pageOrientation: 'portrait',
   };
 
   const filename = `발주서_${order.order_no || 'draft'}_${order.order_date || ''}.pdf`.replace(/\s+/g, '');
