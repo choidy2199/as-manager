@@ -24,6 +24,178 @@ const recordTypeToDb = (t) => ({ 'AS 수리':'as_repair','제품 판매':'produc
 const dbToRecordType = (t) => ({ 'as_repair':'AS 수리','product_sale':'제품 판매','parts_sale':'부품 판매' }[t] || 'AS 수리');
 
 /* 발주이력 전용 대분류 정렬 (사장님 지정) — part_categories DB sort_order는 무수정 */
+/* ═══ PDF 생성 헬퍼 — 발주서 출력 (Pretendard + NotoSansSC) ═══ */
+let _pdfFontsLoaded = false;
+async function loadPdfFonts(pdfMake) {
+  if (_pdfFontsLoaded) return;
+  let pretendardBuf;
+  let pretendardFilename = 'Pretendard-Regular.ttf';
+  try {
+    const r = await fetch('/fonts/Pretendard-Regular.ttf');
+    if (!r.ok) throw new Error('ttf not found');
+    pretendardBuf = await r.arrayBuffer();
+  } catch {
+    const r = await fetch('/fonts/Pretendard-Regular.otf');
+    if (!r.ok) throw new Error('Pretendard 폰트(.ttf, .otf 모두) 로드 실패. public/fonts/ 확인');
+    pretendardBuf = await r.arrayBuffer();
+    pretendardFilename = 'Pretendard-Regular.otf';
+  }
+  const scRes = await fetch('/fonts/NotoSansSC-Regular.ttf');
+  if (!scRes.ok) throw new Error('NotoSansSC 폰트 로드 실패. public/fonts/NotoSansSC-Regular.ttf 확인');
+  const scBuf = await scRes.arrayBuffer();
+  const toBase64 = (buf) => {
+    const bytes = new Uint8Array(buf);
+    let s = '';
+    for (let i = 0; i < bytes.byteLength; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s);
+  };
+  pdfMake.vfs = {
+    [pretendardFilename]: toBase64(pretendardBuf),
+    'NotoSansSC-Regular.ttf': toBase64(scBuf),
+  };
+  pdfMake.fonts = {
+    Pretendard: {
+      normal: pretendardFilename,
+      bold: pretendardFilename,
+      italics: pretendardFilename,
+      bolditalics: pretendardFilename,
+    },
+    SC: {
+      normal: 'NotoSansSC-Regular.ttf',
+      bold: 'NotoSansSC-Regular.ttf',
+      italics: 'NotoSansSC-Regular.ttf',
+      bolditalics: 'NotoSansSC-Regular.ttf',
+    },
+  };
+  _pdfFontsLoaded = true;
+}
+
+async function loadImageAsBase64(url) {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch { return null; }
+}
+
+async function generateOrderPDF(order, orderItems, parts) {
+  const pdfMakeMod = await import('pdfmake/build/pdfmake');
+  const pdfMake = pdfMakeMod.default || pdfMakeMod;
+  await loadPdfFonts(pdfMake);
+
+  const partsById = {};
+  parts.forEach(p => { partsById[p.id] = p; });
+
+  const items = (orderItems || []).filter(it => it.order_id === order.id);
+
+  const itemRows = await Promise.all(items.map(async (it, i) => {
+    const part = partsById[it.part_id];
+    const imgBase64 = part?.image_url ? await loadImageAsBase64(part.image_url) : null;
+    return {
+      no: i + 1,
+      image: imgBase64,
+      code: part?.code || '—',
+      name_kr: part?.name || '—',
+      name_cn: part?.chinese_name || part?.name || '—',
+      spec: part?.spec || '',
+      quantity: it.quantity,
+    };
+  }));
+
+  const tableBody = [
+    [
+      { text: 'No', style: 'th', alignment: 'center' },
+      { text: '사진', style: 'th', alignment: 'center' },
+      { text: '내부코드', style: 'th', alignment: 'center' },
+      { text: '부품명 (한국어)', style: 'th', alignment: 'left' },
+      { text: '部品名 (中文)', style: 'th', alignment: 'left', font: 'SC' },
+      { text: '수량', style: 'th', alignment: 'center' },
+    ],
+    ...itemRows.map(row => [
+      { text: String(row.no), alignment: 'center', fontSize: 10 },
+      row.image
+        ? { image: row.image, width: 36, height: 36, alignment: 'center' }
+        : { text: '—', alignment: 'center', color: '#9BA3B2' },
+      { text: row.code, alignment: 'center', fontSize: 9, color: '#5A6070' },
+      {
+        stack: [
+          { text: row.name_kr, fontSize: 11 },
+          ...(row.spec ? [{ text: row.spec, fontSize: 8, color: '#9BA3B2' }] : []),
+        ],
+        font: 'Pretendard',
+      },
+      { text: row.name_cn, font: 'SC', fontSize: 11 },
+      { text: String(row.quantity), alignment: 'center', fontSize: 12, bold: true },
+    ]),
+  ];
+
+  const totalQty = itemRows.reduce((s, r) => s + (r.quantity || 0), 0);
+
+  const docDef = {
+    content: [
+      { text: '발주서 / 订货单', font: 'Pretendard', fontSize: 20, bold: true, alignment: 'center', margin: [0, 0, 0, 16] },
+      {
+        columns: [
+          {
+            width: '*',
+            stack: [
+              { text: `발주번호: ${order.order_no || '(작성중)'}`, fontSize: 11, margin: [0, 0, 0, 4] },
+              { text: `발주일자: ${order.order_date || '—'}`, fontSize: 11, margin: [0, 0, 0, 4] },
+              ...(order.memo ? [{ text: `메모: ${order.memo}`, fontSize: 11, color: '#5A6070' }] : []),
+            ],
+          },
+          {
+            width: 'auto',
+            stack: [
+              { text: `합계 ${itemRows.length}종 / ${totalQty}개`, fontSize: 12, bold: true, alignment: 'right', color: '#185FA5' },
+            ],
+          },
+        ],
+        margin: [0, 0, 0, 14],
+      },
+      {
+        table: {
+          headerRows: 1,
+          widths: [24, 44, 50, '*', '*', 36],
+          body: tableBody,
+        },
+        layout: {
+          hLineWidth: () => 0.5,
+          vLineWidth: () => 0.5,
+          hLineColor: () => '#DDE1EB',
+          vLineColor: () => '#DDE1EB',
+          paddingTop: () => 6,
+          paddingBottom: () => 6,
+          paddingLeft: () => 6,
+          paddingRight: () => 6,
+        },
+      },
+    ],
+    defaultStyle: {
+      font: 'Pretendard',
+      fontSize: 10,
+      color: '#1A1D23',
+    },
+    styles: {
+      th: { bold: true, fillColor: '#1A1D23', color: '#FFFFFF', fontSize: 10 },
+    },
+    pageMargins: [40, 40, 40, 40],
+    pageOrientation: 'portrait',
+  };
+
+  const filename = `발주서_${order.order_no || 'draft'}_${order.order_date || ''}.pdf`.replace(/\s+/g, '');
+  const pdf = pdfMake.createPdf(docDef);
+  pdf.download(filename);
+}
+
+
 const HISTORY_BIG_CAT_ORDER = {
   '2HP-900W': 1,
   '4HP-1,500W': 2,
@@ -955,6 +1127,14 @@ export default function Home() {
             parts={parts}
             onLoadDraft={loadDraft}
             onClose={() => setShowHistoryModal(false)}
+            onGeneratePdf={async (order) => {
+              try {
+                await generateOrderPDF(order, orderItems, parts);
+              } catch (err) {
+                alert('PDF 생성 실패: ' + (err?.message || err));
+                console.error(err);
+              }
+            }}
             onDeleteOrder={async (order) => {
               const isConfirmed = order.status === 'confirmed';
               const message = isConfirmed
@@ -3199,7 +3379,7 @@ function OrderConfirmModal({ cart, onConfirm, onClose }) {
 
 
 /* ═══ ORDER HISTORY MODAL — 발주 이력 (작성중/확정) ═══ */
-function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, onDeleteOrder }) {
+function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, onDeleteOrder, onGeneratePdf }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('전체');
 
@@ -3299,7 +3479,7 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
                         </div>
                       ) : (
                         <div style={{display:'flex', gap:4, justifyContent:'center'}}>
-                          <button onClick={() => alert('PDF 출력은 Phase 2-1b에서 구현 예정')} style={{padding:'4px 10px', fontSize:11, fontWeight:500, background:'#185FA5', color:'#fff', border:'none', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>📄 PDF</button>
+                          <button onClick={() => onGeneratePdf && onGeneratePdf(o)} style={{padding:'4px 10px', fontSize:11, fontWeight:500, background:'#185FA5', color:'#fff', border:'none', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>📄 PDF</button>
                           <button onClick={() => onDeleteOrder && onDeleteOrder(o)} title="확정 발주 삭제 (주의)" style={{padding:'4px 8px', fontSize:11, background:'#FEE2E2', color:'#7a3030', border:'0.5px solid #F0B5B5', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>🗑</button>
                         </div>
                       )}
