@@ -95,16 +95,28 @@ async function generateOrderPDF(order, orderItems, parts) {
 
   const items = (orderItems || []).filter(it => it.order_id === order.id);
 
-  const itemRows = await Promise.all(items.map(async (it, i) => {
+  const sortedItems = [...items].sort((a, b) => {
+    const partA = partsById[a.part_id];
+    const partB = partsById[b.part_id];
+    const firstCatA = (partA?.big_category || '').split('|')[0].trim();
+    const firstCatB = (partB?.big_category || '').split('|')[0].trim();
+    const orderA = HISTORY_BIG_CAT_ORDER[firstCatA] ?? 999;
+    const orderB = HISTORY_BIG_CAT_ORDER[firstCatB] ?? 999;
+    if (orderA !== orderB) return orderA - orderB;
+    if (firstCatA !== firstCatB) return firstCatA.localeCompare(firstCatB, 'ko-KR');
+    return (partA?.name || '').localeCompare(partB?.name || '', 'ko-KR');
+  });
+
+  const itemRows = await Promise.all(sortedItems.map(async (it, i) => {
     const part = partsById[it.part_id];
     const imgBase64 = part?.image_url ? await loadImageAsBase64(part.image_url) : null;
     return {
       no: i + 1,
       image: imgBase64,
-      code: part?.code || '—',
-      name_kr: part?.name || '—',
+      big_category: (part?.big_category || '').split('|').map(s => s.trim()).filter(Boolean).join(' / ') || '—',
+      model_kr: (part?.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean).join(' / ') || '—',
+      model_cn: ((part?.chinese_model || part?.category || '')).split(/[\/,]/).map(s => s.trim()).filter(Boolean).join(' / ') || '—',
       name_cn: part?.chinese_name || part?.name || '—',
-      spec: part?.spec || '',
       quantity: it.quantity,
     };
   }));
@@ -113,26 +125,22 @@ async function generateOrderPDF(order, orderItems, parts) {
     [
       { text: 'No', style: 'th', alignment: 'center' },
       { text: '사진', style: 'th', alignment: 'center' },
-      { text: '내부코드', style: 'th', alignment: 'center' },
-      { text: '부품명 (한국어)', style: 'th', alignment: 'left' },
-      { text: '部品名 (中文)', style: 'th', alignment: 'left', font: 'SC' },
+      { text: '모델명(한국)', style: 'th', alignment: 'center' },
+      { text: '대분류', style: 'th', alignment: 'center' },
+      { text: '모델명(中)', style: 'th', alignment: 'center', font: 'SC' },
+      { text: '부속이름(中)', style: 'th', alignment: 'left', font: 'SC' },
       { text: '수량', style: 'th', alignment: 'center' },
     ],
     ...itemRows.map(row => [
-      { text: String(row.no), alignment: 'center', fontSize: 10 },
+      { text: String(row.no), alignment: 'center', fontSize: 11, bold: true },
       row.image
         ? { image: row.image, width: 36, height: 36, alignment: 'center' }
-        : { text: '—', alignment: 'center', color: '#9BA3B2' },
-      { text: row.code, alignment: 'center', fontSize: 9, color: '#5A6070' },
-      {
-        stack: [
-          { text: row.name_kr, fontSize: 11 },
-          ...(row.spec ? [{ text: row.spec, fontSize: 8, color: '#9BA3B2' }] : []),
-        ],
-        font: 'Pretendard',
-      },
-      { text: row.name_cn, font: 'SC', fontSize: 11 },
-      { text: String(row.quantity), alignment: 'center', fontSize: 12, bold: true },
+        : { text: '—', alignment: 'center', color: '#1A1D23', bold: true },
+      { text: row.model_kr, alignment: 'center', fontSize: 10, bold: true, fillColor: '#E8EFF7', color: '#185FA5' },
+      { text: row.big_category, alignment: 'center', fontSize: 10, bold: true, fillColor: '#EDEBFE', color: '#5046B0' },
+      { text: row.model_cn, alignment: 'center', fontSize: 10, bold: true, fillColor: '#E0F4F0', color: '#0E7A5F', font: 'SC' },
+      { text: row.name_cn, font: 'SC', fontSize: 12, bold: true, color: '#1A1D23' },
+      { text: String(row.quantity), alignment: 'center', fontSize: 13, bold: true, color: '#1A1D23' },
     ]),
   ];
 
@@ -140,7 +148,14 @@ async function generateOrderPDF(order, orderItems, parts) {
 
   const docDef = {
     content: [
-      { text: '발주서 / 订货单', font: 'Pretendard', fontSize: 20, bold: true, alignment: 'center', margin: [0, 0, 0, 16] },
+      {
+        text: [
+          { text: '발주서', font: 'Pretendard' },
+          { text: ' / ', font: 'Pretendard' },
+          { text: '订货单', font: 'SC' },
+        ],
+        fontSize: 22, bold: true, alignment: 'center', margin: [0, 0, 0, 18]
+      },
       {
         columns: [
           {
@@ -163,7 +178,7 @@ async function generateOrderPDF(order, orderItems, parts) {
       {
         table: {
           headerRows: 1,
-          widths: [24, 44, 50, '*', '*', 36],
+          widths: [22, 44, 70, 60, 70, '*', 32],
           body: tableBody,
         },
         layout: {
