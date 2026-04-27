@@ -713,10 +713,9 @@ export default function Home() {
   });
   const partBigCats = ['전체', ...partCategories.map(c => c.name)];
   const partCats = ['전체', ...Array.from(new Set(
-    parts.flatMap(p => [
-      ...(p.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean),
-      ...(p.chinese_model || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean),
-    ])
+    parts.flatMap(p =>
+      (p.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean)
+    )
   )).sort()];
 
   /* ── 제품 필터 ── */
@@ -4077,7 +4076,7 @@ function CategoryDropdown({ categories, selectedTokens, position, onToggle, onCl
       onMouseDown={e => e.stopPropagation()}
     >
       <div style={{padding:'8px 12px',background:'#FAFBFC',borderBottom:'0.5px solid #DDE1EB',fontSize:11,color:'#5A6070',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,zIndex:1}}>
-        <span>대분류 선택{selectedCount > 0 ? ` · ${selectedCount}/3` : ''}</span>
+        <span>대분류 선택{selectedCount > 0 ? ` · ${selectedCount}/4` : ''}</span>
         <span style={{color:'#9BA3B2'}}>ESC 닫기</span>
       </div>
       <div onClick={onClear} style={{padding:'8px 14px',fontSize:11,cursor:'pointer',color:'#9BA3B2',borderBottom:'0.5px solid #DDE1EB',background:'#FAFBFC'}}
@@ -4304,7 +4303,7 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
     if (idx >= 0) {
       tokens.splice(idx, 1);
     } else {
-      if (tokens.length >= 3) { alert('대분류는 최대 3개까지 선택할 수 있습니다'); return; }
+      if (tokens.length >= 4) { alert('대분류는 최대 4개까지 선택할 수 있습니다'); return; }
       tokens.push(name);
     }
     const newBigCat = tokens.length > 0 ? tokens.join('|') : null;
@@ -4337,7 +4336,7 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
     if (categories.some(c => c.name === newName)) { alert('이미 존재하는 대분류입니다'); return; }
     const part = parts.find(p => p.id === partId);
     const currentTokens = (part?.big_category || '').split('|').map(s => s.trim()).filter(Boolean);
-    if (currentTokens.length >= 3) { alert('대분류는 최대 3개까지 선택할 수 있습니다'); return; }
+    if (currentTokens.length >= 4) { alert('대분류는 최대 4개까지 선택할 수 있습니다'); return; }
     const maxOrder = categories.reduce((m, c) => Math.max(m, c.sort_order || 0), 8);
     const { data, error } = await supabase.from('part_categories').insert({ name: newName, sort_order: maxOrder + 1 }).select().single();
     if (error) { alert('대분류 추가 실패: ' + error.message); return; }
