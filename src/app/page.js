@@ -3444,7 +3444,7 @@ function PdfPreviewModal({ preview, onClose, onDownload }) {
 
   if (!preview) return null;
   return (
-    <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9100, display:'flex', alignItems:'center', justifyContent:'center', padding:24}}
+    <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:10002, display:'flex', alignItems:'center', justifyContent:'center', padding:24}}
       onMouseDown={e => e.stopPropagation()}
     >
       <div style={{background:'#fff', borderRadius:8, width:'min(960px, 90vw)', height:'90vh', display:'flex', flexDirection:'column', overflow:'hidden', boxShadow:'0 12px 32px rgba(0,0,0,0.3)'}}>
