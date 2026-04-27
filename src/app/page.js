@@ -132,21 +132,23 @@ async function generateOrderPDF(order, orderItems, parts) {
       { text: '수량', style: 'th', alignment: 'center' },
     ],
     ...itemRows.map(row => [
-      { text: String(row.no), alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 12, 0, 12] },
+      { text: String(row.no), alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
       row.image
-        ? { image: row.image, width: 36, height: 36, alignment: 'center' }
-        : { text: '—', alignment: 'center', color: '#1A1D23', bold: true, margin: [0, 12, 0, 12] },
-      { text: row.model_kr, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 12, 0, 12] },
-      { text: row.big_category, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 12, 0, 12] },
-      { text: row.model_cn, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 12, 0, 12] },
-      { text: row.name_cn, fontSize: 12, bold: true, color: '#1A1D23', margin: [0, 12, 0, 12] },
-      { text: String(row.quantity), alignment: 'center', fontSize: 13, bold: true, color: '#1A1D23', margin: [0, 12, 0, 12] },
+        ? { image: row.image, width: 60, height: 60, alignment: 'center' }
+        : { text: '—', alignment: 'center', color: '#1A1D23', bold: true, margin: [0, 20, 0, 20] },
+      { text: row.model_kr, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
+      { text: row.big_category, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
+      { text: row.model_cn, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
+      { text: row.name_cn, fontSize: 12, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
+      { text: String(row.quantity), alignment: 'center', fontSize: 13, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
     ]),
   ];
 
   const totalQty = itemRows.reduce((s, r) => s + (r.quantity || 0), 0);
 
   const docDef = {
+    pageOrientation: 'landscape',
+    pageSize: 'A4',
     content: [
       {
         text: [
@@ -178,7 +180,7 @@ async function generateOrderPDF(order, orderItems, parts) {
       {
         table: {
           headerRows: 1,
-          widths: [22, 44, 70, 60, 70, '*', 32],
+          widths: [28, 84, 100, 100, 100, '*', 44],
           body: tableBody,
         },
         layout: {
