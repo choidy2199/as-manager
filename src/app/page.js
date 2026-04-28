@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from 'react';
 import { supabase } from '@/lib/supabase';
 
 /* ── 상수 ── */
@@ -3152,6 +3152,25 @@ function CartPlaceholder() {
 
 
 /* ═══ ORDER CART — Phase 2-1a 장바구니 ═══ */
+const CART_GROUP_ORDER = [
+  '2HP-900W', '4HP-1,500W', '5HP-2,200W', '8HP-4,000W',
+  '유무선', '충전', '금속절단기', '기타',
+  '공용/호환',
+];
+
+function getCartGroupKey(item) {
+  let cats = item?.big_category;
+  if (typeof cats === 'string') {
+    cats = cats.split('|').map(s => s.trim()).filter(Boolean);
+  } else if (!Array.isArray(cats)) {
+    cats = [];
+  }
+  if (cats.length === 1 && cats[0] && cats[0] !== '—') {
+    return cats[0];
+  }
+  return '공용/호환';
+}
+
 const CART_COLS = [
   { key:'image_url',     label:'사진',         defaultOn:true  },
   { key:'name_spec',     label:'부품스펙',     defaultOn:true  },
@@ -3220,6 +3239,28 @@ function OrderCart({ cart, setCart, currentDraftId, onSaveDraft, onConfirm, onSh
   const totalAmount = cart.reduce((s, x) => s + (x.quantity || 0) * (x.price || 0), 0);
   const isEmpty = cart.length === 0;
 
+  const groupedCart = useMemo(() => {
+    const groups = new Map();
+    cart.forEach((item, idx) => {
+      const key = getCartGroupKey(item);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({ ...item, _origIdx: idx });
+    });
+    return CART_GROUP_ORDER
+      .filter(key => groups.has(key))
+      .map(key => {
+        const items = groups.get(key);
+        return {
+          key,
+          items,
+          totalCount: items.length,
+          totalQty: items.reduce((sum, it) => sum + (it.quantity || 0), 0),
+        };
+      });
+  }, [cart]);
+
+  const visibleColCount = visible.length + 1; // +1 for delete column
+
   return (
     <>
       <div className="section" style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
@@ -3261,8 +3302,45 @@ function OrderCart({ cart, setCart, currentDraftId, onSaveDraft, onConfirm, onSh
                 <th style={{position:'sticky', top:0, zIndex:10, background:'#EAECF2', boxShadow:'0 1px 0 0 #DDE1EB', width:36, padding:'8px 4px'}} />
               </tr></thead>
               <tbody>
-                {cart.map((item, idx) => (
-                  <tr key={item.part_id + ':' + idx} style={idx % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
+                {groupedCart.map(group => (
+                  <Fragment key={group.key}>
+                    <tr>
+                      <td colSpan={visibleColCount} style={{padding:0, border:'none'}}>
+                        <div style={{
+                          background:'#1A1D23',
+                          color:'#FFFFFF',
+                          padding:'7px 14px',
+                          fontSize:12,
+                          fontWeight:600,
+                          display:'flex',
+                          alignItems:'center',
+                          gap:10,
+                          borderTop: group.key === '공용/호환' ? '2px solid #444444' : 'none',
+                        }}>
+                          <span style={{
+                            background: group.key === '공용/호환' ? '#5A6070' : '#185FA5',
+                            color:'#fff',
+                            padding:'2px 8px',
+                            borderRadius:3,
+                            fontSize:11,
+                            fontWeight:600,
+                            whiteSpace:'nowrap',
+                          }}>{group.key}</span>
+                          <span style={{color:'#9BA3B2', fontWeight:400, fontSize:11, fontVariantNumeric:'tabular-nums'}}>
+                            {group.totalCount}종 · {group.totalQty}개
+                          </span>
+                          {group.key === '공용/호환' && (
+                            <span style={{color:'#888780', fontWeight:400, fontSize:10, marginLeft:'auto', whiteSpace:'nowrap'}}>
+                              대분류 다중 · 미지정 항목
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {group.items.map((item, groupIdx) => {
+                      const idx = item._origIdx;
+                      return (
+                  <tr key={item.part_id} style={groupIdx % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
                     {visible.map(c => {
                       const td = (content, extra={}) => (<td key={c.key} style={{padding:'6px 8px', fontSize:12, textAlign:'center', ...extra}}>{content}</td>);
                       if (c.key === 'image_url') return td(<PartThumbnail url={item.image_url} name={item.name} code={item.code} />, {padding:'6px 4px'});
@@ -3328,6 +3406,9 @@ function OrderCart({ cart, setCart, currentDraftId, onSaveDraft, onConfirm, onSh
                       <button onClick={() => removeItem(idx)} title="삭제" style={{width:22, height:22, fontSize:12, border:'0.5px solid #DDE1EB', background:'#fff', color:'#9BA3B2', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>✕</button>
                     </td>
                   </tr>
+                      );
+                    })}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -3336,9 +3417,12 @@ function OrderCart({ cart, setCart, currentDraftId, onSaveDraft, onConfirm, onSh
 
         {/* 합계 바 */}
         {!isEmpty && (
-          <div style={{flexShrink:0, padding:'8px 12px', background:'#FAFBFC', borderTop:'0.5px solid #DDE1EB', display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:12}}>
-            <span style={{color:'#5A6070'}}>합계 {cart.length}종 · {totalQty}개</span>
-            <span style={{color:'#185FA5', fontWeight:700, fontVariantNumeric:'tabular-nums'}}>{totalAmount.toLocaleString('ko-KR')}원</span>
+          <div style={{flexShrink:0, padding:'8px 12px', background:'#FAFBFC', borderTop:'0.5px solid #DDE1EB', display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:12, gap:12}}>
+            <span style={{color:'#5A6070', whiteSpace:'nowrap'}}>총 {groupedCart.length}개 분류</span>
+            <span style={{display:'flex', alignItems:'center', gap:12}}>
+              <span style={{color:'#5A6070', fontWeight:600}}>합계: {cart.length}종 · {totalQty}개</span>
+              <span style={{color:'#185FA5', fontWeight:700, fontVariantNumeric:'tabular-nums'}}>{totalAmount.toLocaleString('ko-KR')}원</span>
+            </span>
           </div>
         )}
 
