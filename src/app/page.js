@@ -171,7 +171,7 @@ async function generateOrderPDF(order, orderItems, parts) {
         colSpan: 7,
         fillColor: isCompat ? '#2C2E33' : '#1A1D23',
         border: [false, false, false, false],
-        margin: [10, 5, 10, 5],
+        margin: [10, 2, 10, 2],
         text: headerText,
       },
       {}, {}, {}, {}, {}, {},
