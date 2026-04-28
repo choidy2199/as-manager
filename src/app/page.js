@@ -417,7 +417,8 @@ export default function Home() {
   const [showNewShipRow, setShowNewShipRow] = useState(false);
 
   /* ── 부속 기존 state ── */
-  const [partsSubTab, setPartsSubTab] = useState('parts'); // 'parts' | 'products' | 'order'
+  const [mainTab, setMainTab] = useState('parts'); // 'parts' | 'products'
+  const [partsSubTab, setPartsSubTab] = useState('price'); // 'price' | 'order'
   const [partsSearch, setPartsSearch] = useState('');
   const [partsCatFilter, setPartsCatFilter] = useState('전체');
   const [partsBigCatFilter, setPartsBigCatFilter] = useState('전체');
@@ -1071,15 +1072,80 @@ export default function Home() {
         {/* ═══ 제품/부속가격 ═══ */}
         {tab === 'parts' && (
           <div style={{display:'flex',flexDirection:'column',height:'calc(100vh - 110px)'}}>
-            {/* 서브탭 헤더 */}
-            <div style={{display:'flex',borderBottom:'0.5px solid #DDE1EB',background:'#fff',flexShrink:0}}>
-              {[['parts','부속가격'],['products','제품가격'],['order','부속발주']].map(([k,v]) => (
-                <div key={k} onClick={() => setPartsSubTab(k)} style={{padding:'9px 16px',fontSize:12,cursor:'pointer',color:partsSubTab===k?'#185FA5':'#5A6070',fontWeight:partsSubTab===k?500:400,borderBottom:partsSubTab===k?'2px solid #185FA5':'2px solid transparent',marginBottom:'-0.5px',userSelect:'none'}}>{v}</div>
-              ))}
+            {/* 메인 탭 헤더 (1단 + 2단) */}
+            <div style={{padding:'12px 12px 0',flexShrink:0}}>
+              {/* 1단 메인 탭 */}
+              <div style={{display:'flex',justifyContent:'flex-start',gap:8,marginBottom:10}}>
+                <button
+                  onClick={() => setMainTab('parts')}
+                  style={{
+                    padding:'9px 20px',
+                    borderRadius:8,
+                    fontSize:14,
+                    fontWeight: mainTab === 'parts' ? 500 : 400,
+                    cursor:'pointer',
+                    background: mainTab === 'parts' ? '#185FA5' : '#ffffff',
+                    color: mainTab === 'parts' ? '#ffffff' : '#1A1D23',
+                    border: mainTab === 'parts' ? '1px solid transparent' : '1px solid #D5D7DB',
+                    boxSizing:'border-box',
+                    fontFamily:'inherit',
+                  }}
+                >부품리스트</button>
+                <button
+                  onClick={() => setMainTab('products')}
+                  style={{
+                    padding:'9px 20px',
+                    borderRadius:8,
+                    fontSize:14,
+                    fontWeight: mainTab === 'products' ? 500 : 400,
+                    cursor:'pointer',
+                    background: mainTab === 'products' ? '#185FA5' : '#ffffff',
+                    color: mainTab === 'products' ? '#ffffff' : '#1A1D23',
+                    border: mainTab === 'products' ? '1px solid transparent' : '1px solid #D5D7DB',
+                    boxSizing:'border-box',
+                    fontFamily:'inherit',
+                  }}
+                >제품리스트</button>
+              </div>
+              {/* 2단 부품 하위 탭 */}
+              {mainTab === 'parts' && (
+                <div style={{display:'flex',justifyContent:'flex-start',gap:8,paddingLeft:20,marginBottom:16}}>
+                  <button
+                    onClick={() => setPartsSubTab('price')}
+                    style={{
+                      padding:'7px 16px',
+                      borderRadius:6,
+                      fontSize:13,
+                      fontWeight: partsSubTab === 'price' ? 500 : 400,
+                      cursor:'pointer',
+                      background: partsSubTab === 'price' ? '#185FA5' : '#ffffff',
+                      color: partsSubTab === 'price' ? '#ffffff' : '#1A1D23',
+                      border: partsSubTab === 'price' ? '1px solid transparent' : '1px solid #D5D7DB',
+                      boxSizing:'border-box',
+                      fontFamily:'inherit',
+                    }}
+                  >부품가격</button>
+                  <button
+                    onClick={() => setPartsSubTab('order')}
+                    style={{
+                      padding:'7px 16px',
+                      borderRadius:6,
+                      fontSize:13,
+                      fontWeight: partsSubTab === 'order' ? 500 : 400,
+                      cursor:'pointer',
+                      background: partsSubTab === 'order' ? '#185FA5' : '#ffffff',
+                      color: partsSubTab === 'order' ? '#ffffff' : '#1A1D23',
+                      border: partsSubTab === 'order' ? '1px solid transparent' : '1px solid #D5D7DB',
+                      boxSizing:'border-box',
+                      fontFamily:'inherit',
+                    }}
+                  >부품발주</button>
+                </div>
+              )}
             </div>
 
-            {/* 서브탭 본문 — 부속가격 */}
-            {partsSubTab === 'parts' && (
+            {/* 서브탭 본문 — 부품가격 */}
+            {mainTab === 'parts' && partsSubTab === 'price' && (
               <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
                 <div className="as-filter-row" style={{padding:'8px 12px'}}>
                   <div className="as-filter-search-wrap" style={{flex:1}}>
@@ -1126,8 +1192,8 @@ export default function Home() {
               </div>
             )}
 
-            {/* 서브탭 본문 — 제품가격 */}
-            {partsSubTab === 'products' && (
+            {/* 서브탭 본문 — 제품가격 (제품리스트) */}
+            {mainTab === 'products' && (
               <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
                 <div className="as-filter-row" style={{padding:'8px 12px'}}>
                   <div className="as-filter-search-wrap">
@@ -1155,8 +1221,8 @@ export default function Home() {
               </div>
             )}
 
-            {/* 서브탭 본문 — 부속발주 (Phase 2-1a) */}
-            {partsSubTab === 'order' && (
+            {/* 서브탭 본문 — 부품발주 (Phase 2-1a) */}
+            {mainTab === 'parts' && partsSubTab === 'order' && (
               <PartsOrderTab
                 parts={parts}
                 models={partCats}
