@@ -417,6 +417,7 @@ export default function Home() {
   const [showNewShipRow, setShowNewShipRow] = useState(false);
 
   /* ── 부속 기존 state ── */
+  const [mode, setMode] = useState('home'); // 'home' | 'detail'
   const [mainTab, setMainTab] = useState('parts'); // 'parts' | 'products'
   const [partsSubTab, setPartsSubTab] = useState('price'); // 'price' | 'order'
   const [partsSearch, setPartsSearch] = useState('');
@@ -1072,76 +1073,136 @@ export default function Home() {
         {/* ═══ 제품/부속가격 ═══ */}
         {tab === 'parts' && (
           <div style={{display:'flex',flexDirection:'column',height:'calc(100vh - 110px)'}}>
-            {/* 메인 탭 헤더 (1단 + 2단) */}
+            {/* 메인 탭 헤더 (3가지 모드 분기) */}
             <div style={{padding:'12px 12px 0',flexShrink:0}}>
-              {/* 1단 메인 탭 */}
-              <div style={{display:'flex',justifyContent:'flex-start',gap:8,marginBottom:10}}>
-                <button
-                  onClick={() => setMainTab('parts')}
-                  style={{
-                    padding:'9px 20px',
-                    borderRadius:8,
-                    fontSize:14,
-                    fontWeight: mainTab === 'parts' ? 500 : 400,
-                    cursor:'pointer',
-                    background: mainTab === 'parts' ? '#185FA5' : '#ffffff',
-                    color: mainTab === 'parts' ? '#ffffff' : '#1A1D23',
-                    border: mainTab === 'parts' ? '1px solid transparent' : '1px solid #D5D7DB',
-                    boxSizing:'border-box',
-                    fontFamily:'inherit',
-                  }}
-                >부품리스트</button>
-                <button
-                  onClick={() => setMainTab('products')}
-                  style={{
-                    padding:'9px 20px',
-                    borderRadius:8,
-                    fontSize:14,
-                    fontWeight: mainTab === 'products' ? 500 : 400,
-                    cursor:'pointer',
-                    background: mainTab === 'products' ? '#185FA5' : '#ffffff',
-                    color: mainTab === 'products' ? '#ffffff' : '#1A1D23',
-                    border: mainTab === 'products' ? '1px solid transparent' : '1px solid #D5D7DB',
-                    boxSizing:'border-box',
-                    fontFamily:'inherit',
-                  }}
-                >제품리스트</button>
+              <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',gap:8,marginBottom:16}}>
+
+                {mode === 'home' && (
+                  <>
+                    {/* CASE A: [부품리스트] [제품리스트] */}
+                    <button
+                      onClick={() => { setMainTab('parts'); setMode('detail'); }}
+                      style={{
+                        padding:'9px 20px',
+                        borderRadius:8,
+                        fontSize:14,
+                        fontWeight: mainTab === 'parts' ? 500 : 400,
+                        cursor:'pointer',
+                        background: mainTab === 'parts' ? '#185FA5' : '#ffffff',
+                        color: mainTab === 'parts' ? '#ffffff' : '#1A1D23',
+                        border: mainTab === 'parts' ? '1px solid transparent' : '1px solid #D5D7DB',
+                        boxSizing:'border-box',
+                        fontFamily:'inherit',
+                      }}
+                    >부품리스트</button>
+                    <button
+                      onClick={() => { setMainTab('products'); setMode('detail'); }}
+                      style={{
+                        padding:'9px 20px',
+                        borderRadius:8,
+                        fontSize:14,
+                        fontWeight: mainTab === 'products' ? 500 : 400,
+                        cursor:'pointer',
+                        background: mainTab === 'products' ? '#185FA5' : '#ffffff',
+                        color: mainTab === 'products' ? '#ffffff' : '#1A1D23',
+                        border: mainTab === 'products' ? '1px solid transparent' : '1px solid #D5D7DB',
+                        boxSizing:'border-box',
+                        fontFamily:'inherit',
+                      }}
+                    >제품리스트</button>
+                  </>
+                )}
+
+                {mode === 'detail' && mainTab === 'parts' && (
+                  <>
+                    {/* CASE B: [←] [부품가격] [부품발주] */}
+                    <button
+                      onClick={() => setMode('home')}
+                      aria-label="뒤로"
+                      style={{
+                        width:38,
+                        height:38,
+                        padding:0,
+                        background:'#ffffff',
+                        color:'#1A1D23',
+                        border:'1px solid #D5D7DB',
+                        borderRadius:8,
+                        cursor:'pointer',
+                        display:'inline-flex',
+                        alignItems:'center',
+                        justifyContent:'center',
+                        boxSizing:'border-box',
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A1D23" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M19 12H5"/>
+                        <path d="M12 19l-7-7 7-7"/>
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => setPartsSubTab('price')}
+                      style={{
+                        padding:'9px 20px',
+                        borderRadius:8,
+                        fontSize:14,
+                        fontWeight: partsSubTab === 'price' ? 500 : 400,
+                        cursor:'pointer',
+                        background: partsSubTab === 'price' ? '#185FA5' : '#ffffff',
+                        color: partsSubTab === 'price' ? '#ffffff' : '#1A1D23',
+                        border: partsSubTab === 'price' ? '1px solid transparent' : '1px solid #D5D7DB',
+                        boxSizing:'border-box',
+                        fontFamily:'inherit',
+                      }}
+                    >부품가격</button>
+                    <button
+                      onClick={() => setPartsSubTab('order')}
+                      style={{
+                        padding:'9px 20px',
+                        borderRadius:8,
+                        fontSize:14,
+                        fontWeight: partsSubTab === 'order' ? 500 : 400,
+                        cursor:'pointer',
+                        background: partsSubTab === 'order' ? '#185FA5' : '#ffffff',
+                        color: partsSubTab === 'order' ? '#ffffff' : '#1A1D23',
+                        border: partsSubTab === 'order' ? '1px solid transparent' : '1px solid #D5D7DB',
+                        boxSizing:'border-box',
+                        fontFamily:'inherit',
+                      }}
+                    >부품발주</button>
+                  </>
+                )}
+
+                {mode === 'detail' && mainTab === 'products' && (
+                  <>
+                    {/* CASE C: [←] 제품리스트 */}
+                    <button
+                      onClick={() => setMode('home')}
+                      aria-label="뒤로"
+                      style={{
+                        width:38,
+                        height:38,
+                        padding:0,
+                        background:'#ffffff',
+                        color:'#1A1D23',
+                        border:'1px solid #D5D7DB',
+                        borderRadius:8,
+                        cursor:'pointer',
+                        display:'inline-flex',
+                        alignItems:'center',
+                        justifyContent:'center',
+                        boxSizing:'border-box',
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A1D23" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M19 12H5"/>
+                        <path d="M12 19l-7-7 7-7"/>
+                      </svg>
+                    </button>
+                    <span style={{fontSize:13,color:'#5A6070',padding:'0 8px 0 4px'}}>제품리스트</span>
+                  </>
+                )}
+
               </div>
-              {/* 2단 부품 하위 탭 */}
-              {mainTab === 'parts' && (
-                <div style={{display:'flex',justifyContent:'flex-start',gap:8,paddingLeft:20,marginBottom:16}}>
-                  <button
-                    onClick={() => setPartsSubTab('price')}
-                    style={{
-                      padding:'7px 16px',
-                      borderRadius:6,
-                      fontSize:13,
-                      fontWeight: partsSubTab === 'price' ? 500 : 400,
-                      cursor:'pointer',
-                      background: partsSubTab === 'price' ? '#185FA5' : '#ffffff',
-                      color: partsSubTab === 'price' ? '#ffffff' : '#1A1D23',
-                      border: partsSubTab === 'price' ? '1px solid transparent' : '1px solid #D5D7DB',
-                      boxSizing:'border-box',
-                      fontFamily:'inherit',
-                    }}
-                  >부품가격</button>
-                  <button
-                    onClick={() => setPartsSubTab('order')}
-                    style={{
-                      padding:'7px 16px',
-                      borderRadius:6,
-                      fontSize:13,
-                      fontWeight: partsSubTab === 'order' ? 500 : 400,
-                      cursor:'pointer',
-                      background: partsSubTab === 'order' ? '#185FA5' : '#ffffff',
-                      color: partsSubTab === 'order' ? '#ffffff' : '#1A1D23',
-                      border: partsSubTab === 'order' ? '1px solid transparent' : '1px solid #D5D7DB',
-                      boxSizing:'border-box',
-                      fontFamily:'inherit',
-                    }}
-                  >부품발주</button>
-                </div>
-              )}
             </div>
 
             {/* 서브탭 본문 — 부품가격 */}
