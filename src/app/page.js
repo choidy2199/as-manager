@@ -3129,15 +3129,63 @@ function PartsOrderTable({ parts, onPhotoClick, onAdd }) {
               ))}
             </tr></thead>
             <tbody>
-              {parts.map((p, i) => (
-                <tr key={p.id} className="as-data-row" style={i % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
-                  {COLS.map(c => (
-                    <td key={c.key} style={{textAlign: c.key === 'name_spec' ? 'left' : c.key === 'price' ? 'right' : 'center', padding: c.key === 'image_url' ? '8px 4px' : c.key === 'name_spec' ? '10px 8px' : '8px 10px'}}>
-                      {renderCell(p, c.key)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {(() => {
+                const groups = new Map();
+                parts.forEach(p => {
+                  const key = getCartGroupKey(p);
+                  if (!groups.has(key)) groups.set(key, []);
+                  groups.get(key).push(p);
+                });
+                const groupedParts = CART_GROUP_ORDER
+                  .filter(k => groups.has(k))
+                  .map(k => ({ key:k, items:groups.get(k), totalCount:groups.get(k).length }));
+                return groupedParts.map(group => (
+                  <Fragment key={group.key}>
+                    <tr>
+                      <td colSpan={COLS.length} style={{padding:0, border:'none'}}>
+                        <div style={{
+                          background:'#1A1D23',
+                          color:'#FFFFFF',
+                          padding:'7px 14px',
+                          fontSize:12,
+                          fontWeight:600,
+                          display:'flex',
+                          alignItems:'center',
+                          gap:10,
+                          borderTop: group.key === '공용/호환' ? '2px solid #444444' : 'none',
+                        }}>
+                          <span style={{
+                            background: group.key === '공용/호환' ? '#5A6070' : '#185FA5',
+                            color:'#fff',
+                            padding:'2px 8px',
+                            borderRadius:3,
+                            fontSize:11,
+                            fontWeight:600,
+                            whiteSpace:'nowrap',
+                          }}>{group.key}</span>
+                          <span style={{color:'#9BA3B2', fontWeight:400, fontSize:11, fontVariantNumeric:'tabular-nums'}}>
+                            {group.totalCount}종
+                          </span>
+                          {group.key === '공용/호환' && (
+                            <span style={{color:'#888780', fontWeight:400, fontSize:10, marginLeft:'auto', whiteSpace:'nowrap'}}>
+                              대분류 다중 · 미지정 항목
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {group.items.map((p, gIdx) => (
+                      <tr key={p.id} className="as-data-row" style={gIdx % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
+                        {COLS.map(c => (
+                          <td key={c.key} style={{textAlign: c.key === 'name_spec' ? 'left' : c.key === 'price' ? 'right' : 'center', padding: c.key === 'image_url' ? '8px 4px' : c.key === 'name_spec' ? '10px 8px' : '8px 10px'}}>
+                            {renderCell(p, c.key)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </Fragment>
+                ));
+              })()}
               {parts.length === 0 && <tr><td colSpan={COLS.length} className="empty">부품이 없습니다</td></tr>}
             </tbody>
           </table>
@@ -3202,6 +3250,7 @@ function CartPlaceholder() {
 const CART_GROUP_ORDER = [
   '2HP-900W', '4HP-1,500W', '5HP-2,200W', '8HP-4,000W',
   '유무선', '충전', '금속절단기', '기타',
+  '공용부품',
   '공용/호환',
 ];
 
@@ -4546,8 +4595,55 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
         ))}
       </tr></thead>
       <tbody>
-        {parts.map((p, i) => (
-          <tr key={p.id} className="as-data-row" style={i % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
+        {(() => {
+          const groups = new Map();
+          parts.forEach((p, idx) => {
+            const key = getCartGroupKey(p);
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push({ ...p, _origIdx: idx });
+          });
+          const groupedParts = CART_GROUP_ORDER
+            .filter(k => groups.has(k))
+            .map(k => ({ key:k, items:groups.get(k), totalCount:groups.get(k).length }));
+          return groupedParts.map(group => (
+            <Fragment key={group.key}>
+              <tr>
+                <td colSpan={11} style={{padding:0, border:'none'}}>
+                  <div style={{
+                    background:'#1A1D23',
+                    color:'#FFFFFF',
+                    padding:'7px 14px',
+                    fontSize:12,
+                    fontWeight:600,
+                    display:'flex',
+                    alignItems:'center',
+                    gap:10,
+                    borderTop: group.key === '공용/호환' ? '2px solid #444444' : 'none',
+                  }}>
+                    <span style={{
+                      background: group.key === '공용/호환' ? '#5A6070' : '#185FA5',
+                      color:'#fff',
+                      padding:'2px 8px',
+                      borderRadius:3,
+                      fontSize:11,
+                      fontWeight:600,
+                      whiteSpace:'nowrap',
+                    }}>{group.key}</span>
+                    <span style={{color:'#9BA3B2', fontWeight:400, fontSize:11, fontVariantNumeric:'tabular-nums'}}>
+                      {group.totalCount}종
+                    </span>
+                    {group.key === '공용/호환' && (
+                      <span style={{color:'#888780', fontWeight:400, fontSize:10, marginLeft:'auto', whiteSpace:'nowrap'}}>
+                        대분류 다중 · 미지정 항목
+                      </span>
+                    )}
+                  </div>
+                </td>
+              </tr>
+              {group.items.map((p, gIdx) => {
+                const i = p._origIdx;
+                return (
+          <tr key={p.id} className="as-data-row" style={gIdx % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
             <td style={{textAlign:'center',fontSize:12,color:'#9BA3B2',fontVariantNumeric:'tabular-nums'}}>{i + 1}</td>
             <td style={{textAlign:'center'}}><span style={{fontSize:13,color:'#5A6070'}}>{p.code || <span className="empty-dot">●</span>}</span></td>
             <td style={{textAlign:'center',padding:'8px 4px'}}>
@@ -4663,7 +4759,11 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
               </span>
             </td>
           </tr>
-        ))}
+                );
+              })}
+            </Fragment>
+          ));
+        })()}
         {parts.length === 0 && <tr><td colSpan={11} className="empty">부품이 없습니다</td></tr>}
       </tbody>
     </table>
