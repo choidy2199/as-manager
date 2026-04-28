@@ -121,28 +121,75 @@ async function generateOrderPDF(order, orderItems, parts) {
     };
   }));
 
-  const tableBody = [
-    [
-      { text: 'No', style: 'th', alignment: 'center' },
-      { text: '사진', style: 'th', alignment: 'center' },
-      { text: '모델명(한국)', style: 'th', alignment: 'center' },
-      { text: '대분류', style: 'th', alignment: 'center' },
-      { text: '모델명(CN)', style: 'th', alignment: 'center' },
-      { text: '부속이름(CN)', style: 'th', alignment: 'left' },
-      { text: '수량', style: 'th', alignment: 'center' },
-    ],
-    ...itemRows.map(row => [
-      { text: String(row.no), alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
-      row.image
-        ? { image: row.image, width: 60, height: 60, alignment: 'center' }
-        : { text: '—', alignment: 'center', color: '#1A1D23', bold: true, margin: [0, 20, 0, 20] },
-      { text: row.model_kr, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
-      { text: row.big_category, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
-      { text: row.model_cn, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
-      { text: row.name_cn, fontSize: 12, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
-      { text: String(row.quantity), alignment: 'center', fontSize: 13, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
-    ]),
+  // 행 데이터에 part 객체 참조 보존 → getCartGroupKey 사용 위해
+  const enrichedRows = itemRows.map((row, i) => ({
+    ...row,
+    _part: partsById[sortedItems[i].part_id] || null,
+  }));
+
+  // patch35: 대분류 그룹핑 (CART_GROUP_ORDER + getCartGroupKey 재사용)
+  const _groupMap = new Map();
+  enrichedRows.forEach(row => {
+    const key = getCartGroupKey({ big_category: row._part?.big_category || '' });
+    if (!_groupMap.has(key)) _groupMap.set(key, []);
+    _groupMap.get(key).push(row);
+  });
+  const groupedRows = CART_GROUP_ORDER
+    .filter(k => _groupMap.has(k))
+    .map(k => {
+      const gItems = _groupMap.get(k);
+      return {
+        key: k,
+        items: gItems,
+        totalCount: gItems.length,
+        totalQty: gItems.reduce((s, r) => s + (r.quantity || 0), 0),
+      };
+    });
+
+  const headerRow = [
+    { text: 'No', style: 'th', alignment: 'center' },
+    { text: '사진', style: 'th', alignment: 'center' },
+    { text: '모델명(한국)', style: 'th', alignment: 'center' },
+    { text: '대분류', style: 'th', alignment: 'center' },
+    { text: '모델명(CN)', style: 'th', alignment: 'center' },
+    { text: '부속이름(CN)', style: 'th', alignment: 'left' },
+    { text: '수량', style: 'th', alignment: 'center' },
   ];
+
+  const tableBody = [headerRow];
+  groupedRows.forEach(group => {
+    const isCompat = group.key === '공용/호환';
+    const headerText = [
+      { text: group.key, color: '#FFFFFF', bold: true, fontSize: 10 },
+      { text: `   ·   ${group.totalCount}종 · ${group.totalQty}개`, color: '#9BA3B2', fontSize: 9, bold: false },
+    ];
+    if (isCompat) {
+      headerText.push({ text: '     대분류 다중 · 미지정 항목', color: '#888780', fontSize: 8, bold: false });
+    }
+    tableBody.push([
+      {
+        colSpan: 7,
+        fillColor: isCompat ? '#2C2E33' : '#1A1D23',
+        border: [false, false, false, false],
+        margin: [10, 5, 10, 5],
+        text: headerText,
+      },
+      {}, {}, {}, {}, {}, {},
+    ]);
+    group.items.forEach(row => {
+      tableBody.push([
+        { text: String(row.no), alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
+        row.image
+          ? { image: row.image, width: 60, height: 60, alignment: 'center' }
+          : { text: '—', alignment: 'center', color: '#1A1D23', bold: true, margin: [0, 20, 0, 20] },
+        { text: row.model_kr, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
+        { text: row.big_category, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
+        { text: row.model_cn, alignment: 'center', fontSize: 11, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
+        { text: row.name_cn, fontSize: 12, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
+        { text: String(row.quantity), alignment: 'center', fontSize: 13, bold: true, color: '#1A1D23', margin: [0, 20, 0, 20] },
+      ]);
+    });
+  });
 
   const totalQty = itemRows.reduce((s, r) => s + (r.quantity || 0), 0);
 
@@ -171,7 +218,7 @@ async function generateOrderPDF(order, orderItems, parts) {
           {
             width: 'auto',
             stack: [
-              { text: `합계 ${itemRows.length}종 / ${totalQty}개`, fontSize: 12, bold: true, alignment: 'right', color: '#185FA5' },
+              { text: `합계 ${itemRows.length}종 / ${totalQty}개 · ${groupedRows.length}개 분류`, fontSize: 12, bold: true, alignment: 'right', color: '#185FA5' },
             ],
           },
         ],
