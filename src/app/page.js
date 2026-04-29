@@ -718,10 +718,17 @@ export default function Home() {
     const m = String(today.getMonth() + 1).padStart(2, '0');
     const d = String(today.getDate()).padStart(2, '0');
     const dateStr = `${y}${m}${d}`;
-    const { data: existing } = await supabase
-      .from('parts_orders').select('order_no').like('order_no', `${dateStr}-%`);
-    const nextNum = (existing?.length || 0) + 1;
-    const orderNo = `${dateStr}-${String(nextNum).padStart(3, '0')}`;
+    // [PATCH36] 기존 order_no 보존 (수정 후 재확정 케이스 — 같은 발주번호 유지)
+    const { data: existingRow } = await supabase
+      .from('parts_orders').select('order_no').eq('id', savedId).single();
+    let orderNo = existingRow?.order_no;
+    if (!orderNo) {
+      const { data: existing } = await supabase
+        .from('parts_orders').select('order_no').like('order_no', `${dateStr}-%`);
+      const nextNum = (existing?.length || 0) + 1;
+      orderNo = `${dateStr}-${String(nextNum).padStart(3, '0')}`;
+    }
+    // [/PATCH36]
     const { error } = await supabase
       .from('parts_orders')
       .update({ status: 'confirmed', order_no: orderNo, order_date: `${y}-${m}-${d}` })
@@ -747,6 +754,27 @@ export default function Home() {
     setCurrentDraftId(orderId);
     setShowHistoryModal(false);
   }, [parts]);
+
+  /* ── [PATCH36] 확정 발주 수정: status를 draft로 되돌리고 cart에 로드 ── */
+  const handleEditOrder = useCallback(async (order) => {
+    if (cart.length > 0 || currentDraftId !== null) {
+      alert('장바구니를 먼저 비우거나 [작성중 저장] 후에 시도하세요.');
+      return;
+    }
+    const ok = window.confirm(
+      '이 확정 발주를 수정하시겠습니까?\n\n' +
+      '작성중 상태로 되돌립니다.\n' +
+      '편집 후 [발주확정]을 다시 눌러야 확정됩니다.\n' +
+      '발주번호는 그대로 유지됩니다.'
+    );
+    if (!ok) return;
+    const { error } = await supabase
+      .from('parts_orders').update({ status: 'draft' }).eq('id', order.id);
+    if (error) { alert('수정 모드 진입 실패: ' + error.message); return; }
+    await loadDraft(order.id);
+    await loadOrders();
+    setShowHistoryModal(false);
+  }, [cart, currentDraftId, loadDraft, loadOrders]);
 
   /* ── 부속 필터 (기존) ── */
   const filteredParts = parts.filter(p => {
@@ -1339,6 +1367,8 @@ export default function Home() {
             orderItems={orderItems}
             parts={parts}
             onLoadDraft={loadDraft}
+            onEditOrder={handleEditOrder}
+            canEdit={cart.length === 0 && currentDraftId === null}
             onClose={() => setShowHistoryModal(false)}
             onGeneratePdf={async (order) => {
               try {
@@ -3769,7 +3799,7 @@ function PdfPreviewModal({ preview, onClose, onDownload }) {
 }
 
 
-function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, onDeleteOrder, onGeneratePdf }) {
+function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, onDeleteOrder, onGeneratePdf, onEditOrder, canEdit }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('전체');
 
@@ -3870,6 +3900,22 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
                       ) : (
                         <div style={{display:'flex', gap:4, justifyContent:'center'}}>
                           <button onClick={() => onGeneratePdf && onGeneratePdf(o)} style={{padding:'4px 10px', fontSize:11, fontWeight:500, background:'#185FA5', color:'#fff', border:'none', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>📄 PDF</button>
+                          <button
+                            onClick={() => canEdit && onEditOrder && onEditOrder(o)}
+                            disabled={!canEdit}
+                            title={canEdit ? '이 확정 발주를 수정 (작성중으로 되돌림)' : '장바구니를 먼저 비우거나 [작성중 저장] 후에 시도하세요'}
+                            style={{
+                              padding:'4px 10px',
+                              fontSize:11,
+                              fontWeight:500,
+                              background: canEdit ? '#FFF4D6' : '#F4F6FA',
+                              color: canEdit ? '#8A6300' : '#9BA3B2',
+                              border: canEdit ? '0.5px solid #F0D27A' : '0.5px solid #DDE1EB',
+                              borderRadius:4,
+                              cursor: canEdit ? 'pointer' : 'not-allowed',
+                              fontFamily:'inherit'
+                            }}
+                          >✏️ 수정</button>
                           <button onClick={() => onDeleteOrder && onDeleteOrder(o)} title="확정 발주 삭제 (주의)" style={{padding:'4px 8px', fontSize:11, background:'#FEE2E2', color:'#7a3030', border:'0.5px solid #F0B5B5', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>🗑</button>
                         </div>
                       )}
