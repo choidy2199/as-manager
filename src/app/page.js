@@ -134,8 +134,10 @@ async function generateOrderPDF(order, orderItems, parts) {
     if (!_groupMap.has(key)) _groupMap.set(key, []);
     _groupMap.get(key).push(row);
   });
-  const groupedRows = CART_GROUP_ORDER
-    .filter(k => _groupMap.has(k))
+  // [PATCH39] ORDER 우선 + 잔여 동적 키 합집합 (사일런트 누락 방지)
+  const orderedKeys = CART_GROUP_ORDER.filter(k => _groupMap.has(k));
+  const extraKeys = Array.from(_groupMap.keys()).filter(k => !CART_GROUP_ORDER.includes(k));
+  const groupedRows = [...orderedKeys, ...extraKeys]
     .map(k => {
       const gItems = _groupMap.get(k);
       return {
@@ -145,6 +147,7 @@ async function generateOrderPDF(order, orderItems, parts) {
         totalQty: gItems.reduce((s, r) => s + (r.quantity || 0), 0),
       };
     });
+  // [/PATCH39]
 
   const headerRow = [
     { text: 'No', style: 'th', alignment: 'center' },
@@ -3293,9 +3296,12 @@ function PartsOrderTable({ parts, onPhotoClick, onAdd }) {
                   if (!groups.has(key)) groups.set(key, []);
                   groups.get(key).push(p);
                 });
-                const groupedParts = CART_GROUP_ORDER
-                  .filter(k => groups.has(k))
+                // [PATCH39] ORDER 우선 + 잔여 동적 키 합집합 (사일런트 누락 방지)
+                const orderedKeys = CART_GROUP_ORDER.filter(k => groups.has(k));
+                const extraKeys = Array.from(groups.keys()).filter(k => !CART_GROUP_ORDER.includes(k));
+                const groupedParts = [...orderedKeys, ...extraKeys]
                   .map(k => ({ key:k, items:groups.get(k), totalCount:groups.get(k).length }));
+                // [/PATCH39]
                 return groupedParts.map(group => (
                   <Fragment key={group.key}>
                     <tr>
@@ -3499,8 +3505,10 @@ function OrderCart({ cart, setCart, currentDraftId, onSaveDraft, onConfirm, onSh
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push({ ...item, _origIdx: idx });
     });
-    return CART_GROUP_ORDER
-      .filter(key => groups.has(key))
+    // [PATCH39] ORDER 우선 + 잔여 동적 키 합집합 (사일런트 누락 방지)
+    const orderedKeys = CART_GROUP_ORDER.filter(key => groups.has(key));
+    const extraKeys = Array.from(groups.keys()).filter(key => !CART_GROUP_ORDER.includes(key));
+    return [...orderedKeys, ...extraKeys]
       .map(key => {
         const items = groups.get(key);
         return {
@@ -3510,6 +3518,7 @@ function OrderCart({ cart, setCart, currentDraftId, onSaveDraft, onConfirm, onSh
           totalQty: items.reduce((sum, it) => sum + (it.quantity || 0), 0),
         };
       });
+    // [/PATCH39]
   }, [cart]);
 
   const visibleColCount = visible.length + 1; // +1 for delete column
@@ -4775,9 +4784,12 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
             if (!groups.has(key)) groups.set(key, []);
             groups.get(key).push({ ...p, _origIdx: idx });
           });
-          const groupedParts = CART_GROUP_ORDER
-            .filter(k => groups.has(k))
+          // [PATCH39] ORDER 우선 + 잔여 동적 키 합집합 (사일런트 누락 방지)
+          const orderedKeys = CART_GROUP_ORDER.filter(k => groups.has(k));
+          const extraKeys = Array.from(groups.keys()).filter(k => !CART_GROUP_ORDER.includes(k));
+          const groupedParts = [...orderedKeys, ...extraKeys]
             .map(k => ({ key:k, items:groups.get(k), totalCount:groups.get(k).length }));
+          // [/PATCH39]
           return groupedParts.map(group => (
             <Fragment key={group.key}>
               <tr>
