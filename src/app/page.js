@@ -3841,7 +3841,7 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
 
   return (
     <div onClick={onClose} style={{position:'fixed', inset:0, zIndex:10001, background:'rgba(26,29,35,0.5)', display:'flex', alignItems:'center', justifyContent:'center', padding:24}}>
-      <div onClick={e => e.stopPropagation()} style={{background:'#fff', borderRadius:10, boxShadow:'0 8px 24px rgba(0,0,0,0.2)', width:'100%', maxWidth:760, maxHeight:'85vh', display:'flex', flexDirection:'column', fontFamily:'Pretendard, -apple-system, sans-serif'}}>
+      <div onClick={e => e.stopPropagation()} style={{background:'#fff', borderRadius:10, boxShadow:'0 8px 24px rgba(0,0,0,0.2)', width:'100%', maxWidth:1400, maxHeight:'85vh', display:'flex', flexDirection:'column', fontFamily:'Pretendard, -apple-system, sans-serif'}}>
         {/* 헤더 */}
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 18px', borderBottom:'0.5px solid #DDE1EB', flexShrink:0}}>
           <div style={{fontSize:14, fontWeight:600, color:'#1A1D23'}}>
@@ -3865,7 +3865,7 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
           <table className="as-table" style={{width:'100%'}}>
             <thead><tr className="as-col-header">
               {['발주번호','날짜','상태','항목','합계','액션'].map(h => (
-                <th key={h} style={{position:'sticky', top:0, zIndex:10, background:'#EAECF2', color:'#5A6070', fontSize:12, fontWeight:500, padding:'8px 10px', height:36, lineHeight:'20px', boxShadow:'0 1px 0 0 #DDE1EB', userSelect:'none'}}>{h}</th>
+                <th key={h} style={{position:'sticky', top:0, zIndex:10, background:'#EAECF2', color:'#5A6070', fontSize:12, fontWeight:500, padding:'8px 10px', height:36, lineHeight:'20px', boxShadow:'0 1px 0 0 #DDE1EB', userSelect:'none', ...(h === '액션' ? {width:240, minWidth:240} : {})}}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
