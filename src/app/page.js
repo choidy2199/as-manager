@@ -5875,6 +5875,23 @@ function SettingsTab({ asRecords }) {
     }
   };
 
+  const quickBtnStyle = (mode) => {
+    const isActive = billDateFilterMode === mode;
+    return {
+      height: 36,
+      padding: '0 14px',
+      background: isActive ? '#185FA5' : '#E6F1FB',
+      color: isActive ? '#ffffff' : '#185FA5',
+      border: `1px solid ${isActive ? '#185FA5' : '#B5D4F4'}`,
+      borderRadius: 6,
+      fontSize: 13,
+      fontFamily: 'inherit',
+      fontWeight: isActive ? 600 : 400,
+      cursor: 'pointer',
+      whiteSpace: 'nowrap',
+    };
+  };
+
   return (
     <div style={{padding:'0 4px'}}>
       <div style={{display:'flex',gap:4,marginBottom:20}}>
@@ -5908,6 +5925,12 @@ function SettingsTab({ asRecords }) {
               <span style={{color:'#9BA3B2',padding:'0 4px',fontSize:12}}>~</span>
               <input type="date" value={billDateAll ? '' : pendingBillDateTo} onChange={e => setPendingBillDateTo(e.target.value)} style={{fontSize:12,height:28,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
             </div>
+            <button onClick={() => setBillMode('lastMonth')} style={quickBtnStyle('lastMonth')}>전월</button>
+            <button onClick={() => setBillMode('today')} style={quickBtnStyle('today')}>오늘</button>
+            <button onClick={() => setBillMode('week')} style={quickBtnStyle('week')}>이번주</button>
+            <button onClick={() => setBillMode('month')} style={quickBtnStyle('month')}>이번달</button>
+            <button onClick={() => setBillMode('all')} style={quickBtnStyle('all')}>전체</button>
+            <div style={{width:1,height:24,background:'#DDE1EB',margin:'0 6px'}} />
             <button
               onClick={() => {
                 setBillDateAll(false);
@@ -5918,23 +5941,8 @@ function SettingsTab({ asRecords }) {
                 localStorage.setItem('bill_date_from', pendingBillDateFrom);
                 localStorage.setItem('bill_date_to', pendingBillDateTo);
               }}
-              style={{height:36,padding:'0 18px',background:'#185FA5',color:'#ffffff',border:'1px solid #185FA5',borderRadius:6,fontSize:13,fontFamily:'inherit',fontWeight:600,cursor:'pointer',whiteSpace:'nowrap'}}
+              style={{height:36,padding:'0 18px',background:'#1A1D23',color:'#ffffff',border:'1px solid #1A1D23',borderRadius:6,fontSize:13,fontFamily:'inherit',fontWeight:600,cursor:'pointer',whiteSpace:'nowrap'}}
             >적용</button>
-            <div style={{width:1,height:24,background:'#DDE1EB',margin:'0 6px'}} />
-            {(() => {
-              const active = {height:32,padding:'0 12px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#185FA5',color:'#fff',whiteSpace:'nowrap'};
-              const inactive = {...active,background:'#E6F1FB',color:'#0C447C'};
-              const lastMonthActive = {height:36,padding:'0 14px',borderRadius:6,fontSize:13,fontWeight:600,border:'1px solid #8A6300',cursor:'pointer',fontFamily:'inherit',background:'#8A6300',color:'#FFFFFF',whiteSpace:'nowrap'};
-              const lastMonthInactive = {height:36,padding:'0 14px',borderRadius:6,fontSize:13,fontWeight:500,border:'1px solid #F0D27A',cursor:'pointer',fontFamily:'inherit',background:'#FFF4D6',color:'#8A6300',whiteSpace:'nowrap'};
-              return (
-              <div style={{display:'flex',gap:4,alignItems:'center'}}>
-                <button onClick={() => setBillMode('lastMonth')} style={billDateFilterMode==='lastMonth'?lastMonthActive:lastMonthInactive}>전월</button>
-                <button onClick={() => setBillMode('today')} style={billDateFilterMode==='today'?active:inactive}>오늘</button>
-                <button onClick={() => setBillMode('week')} style={billDateFilterMode==='week'?active:inactive}>이번주</button>
-                <button onClick={() => setBillMode('month')} style={billDateFilterMode==='month'?active:inactive}>이번달</button>
-                <button onClick={() => setBillMode('all')} style={billDateFilterMode==='all'?active:inactive}>전체</button>
-              </div>
-            ); })()}
             <div style={{marginLeft:'auto',fontSize:12,color:'#5A6070',whiteSpace:'nowrap'}}>조회 기간: <span style={{color:'#1A1D23',fontWeight:600}}>{billDateLabel}</span></div>
           </div>
 
