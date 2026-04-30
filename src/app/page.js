@@ -5660,6 +5660,13 @@ function SettingsTab({ asRecords }) {
       const monday = new Date(d); monday.setDate(d.getDate() + diff);
       return monday.getFullYear() + '-' + String(monday.getMonth()+1).padStart(2,'0') + '-' + String(monday.getDate()).padStart(2,'0');
     }
+    if (mode === 'lastMonth') {
+      const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+      const y = d.getFullYear(), m = d.getMonth() + 1;
+      const prevY = m === 1 ? y - 1 : y;
+      const prevM = m === 1 ? 12 : m - 1;
+      return prevY + '-' + String(prevM).padStart(2,'0') + '-01';
+    }
     if (mode === 'all') return '';
     if (mode === 'custom') return localStorage.getItem('bill_date_from') || today();
     const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
@@ -5675,6 +5682,60 @@ function SettingsTab({ asRecords }) {
       const monday = new Date(d); monday.setDate(d.getDate() + diff);
       const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
       return sunday.getFullYear() + '-' + String(sunday.getMonth()+1).padStart(2,'0') + '-' + String(sunday.getDate()).padStart(2,'0');
+    }
+    if (mode === 'lastMonth') {
+      const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+      const y = d.getFullYear(), m = d.getMonth() + 1;
+      const prevY = m === 1 ? y - 1 : y;
+      const prevM = m === 1 ? 12 : m - 1;
+      const lastDay = new Date(prevY, prevM, 0).getDate();
+      return prevY + '-' + String(prevM).padStart(2,'0') + '-' + String(lastDay).padStart(2,'0');
+    }
+    if (mode === 'all') return '';
+    if (mode === 'custom') { const saved = localStorage.getItem('bill_date_to'); return (saved && saved >= today()) ? saved : today(); }
+    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' })); const y=d.getFullYear(), m=d.getMonth()+1; const lastDay=new Date(y,m,0).getDate();
+    return y+'-'+String(m).padStart(2,'0')+'-'+String(lastDay).padStart(2,'0');
+  });
+  const [pendingBillDateFrom, setPendingBillDateFrom] = useState(() => {
+    if (typeof window === 'undefined') return today();
+    const mode = localStorage.getItem('bill_date_filter_mode') || 'month';
+    if (mode === 'today') return today();
+    if (mode === 'week') {
+      const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+      const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day;
+      const monday = new Date(d); monday.setDate(d.getDate() + diff);
+      return monday.getFullYear() + '-' + String(monday.getMonth()+1).padStart(2,'0') + '-' + String(monday.getDate()).padStart(2,'0');
+    }
+    if (mode === 'lastMonth') {
+      const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+      const y = d.getFullYear(), m = d.getMonth() + 1;
+      const prevY = m === 1 ? y - 1 : y;
+      const prevM = m === 1 ? 12 : m - 1;
+      return prevY + '-' + String(prevM).padStart(2,'0') + '-01';
+    }
+    if (mode === 'all') return '';
+    if (mode === 'custom') return localStorage.getItem('bill_date_from') || today();
+    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-01';
+  });
+  const [pendingBillDateTo, setPendingBillDateTo] = useState(() => {
+    if (typeof window === 'undefined') return today();
+    const mode = localStorage.getItem('bill_date_filter_mode') || 'month';
+    if (mode === 'today') return today();
+    if (mode === 'week') {
+      const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+      const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day;
+      const monday = new Date(d); monday.setDate(d.getDate() + diff);
+      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+      return sunday.getFullYear() + '-' + String(sunday.getMonth()+1).padStart(2,'0') + '-' + String(sunday.getDate()).padStart(2,'0');
+    }
+    if (mode === 'lastMonth') {
+      const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+      const y = d.getFullYear(), m = d.getMonth() + 1;
+      const prevY = m === 1 ? y - 1 : y;
+      const prevM = m === 1 ? 12 : m - 1;
+      const lastDay = new Date(prevY, prevM, 0).getDate();
+      return prevY + '-' + String(prevM).padStart(2,'0') + '-' + String(lastDay).padStart(2,'0');
     }
     if (mode === 'all') return '';
     if (mode === 'custom') { const saved = localStorage.getItem('bill_date_to'); return (saved && saved >= today()) ? saved : today(); }
@@ -5774,7 +5835,9 @@ function SettingsTab({ asRecords }) {
     const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
     if (mode === 'today') {
       const t = today();
-      setBillDateAll(false); setBillDateFrom(t); setBillDateTo(t); setBillDateFilterMode('today');
+      setBillDateAll(false); setBillDateFrom(t); setBillDateTo(t);
+      setPendingBillDateFrom(t); setPendingBillDateTo(t);
+      setBillDateFilterMode('today');
       localStorage.setItem('bill_date_filter_mode','today');
     } else if (mode === 'week') {
       const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day;
@@ -5782,17 +5845,32 @@ function SettingsTab({ asRecords }) {
       const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
       const f = monday.getFullYear() + '-' + String(monday.getMonth()+1).padStart(2,'0') + '-' + String(monday.getDate()).padStart(2,'0');
       const tt = sunday.getFullYear() + '-' + String(sunday.getMonth()+1).padStart(2,'0') + '-' + String(sunday.getDate()).padStart(2,'0');
-      setBillDateAll(false); setBillDateFrom(f); setBillDateTo(tt); setBillDateFilterMode('week');
+      setBillDateAll(false); setBillDateFrom(f); setBillDateTo(tt);
+      setPendingBillDateFrom(f); setPendingBillDateTo(tt);
+      setBillDateFilterMode('week');
       localStorage.setItem('bill_date_filter_mode','week');
     } else if (mode === 'month') {
       const y=d.getFullYear(), m=d.getMonth()+1; const lastDay=new Date(y,m,0).getDate();
-      setBillDateAll(false);
-      setBillDateFrom(y+'-'+String(m).padStart(2,'0')+'-01');
-      setBillDateTo(y+'-'+String(m).padStart(2,'0')+'-'+String(lastDay).padStart(2,'0'));
+      const f = y+'-'+String(m).padStart(2,'0')+'-01';
+      const tt = y+'-'+String(m).padStart(2,'0')+'-'+String(lastDay).padStart(2,'0');
+      setBillDateAll(false); setBillDateFrom(f); setBillDateTo(tt);
+      setPendingBillDateFrom(f); setPendingBillDateTo(tt);
       setBillDateFilterMode('month');
       localStorage.setItem('bill_date_filter_mode','month');
+    } else if (mode === 'lastMonth') {
+      const y = d.getFullYear(), m = d.getMonth() + 1;
+      const prevY = m === 1 ? y - 1 : y;
+      const prevM = m === 1 ? 12 : m - 1;
+      const lastDay = new Date(prevY, prevM, 0).getDate();
+      const f = prevY+'-'+String(prevM).padStart(2,'0')+'-01';
+      const tt = prevY+'-'+String(prevM).padStart(2,'0')+'-'+String(lastDay).padStart(2,'0');
+      setBillDateAll(false); setBillDateFrom(f); setBillDateTo(tt);
+      setPendingBillDateFrom(f); setPendingBillDateTo(tt);
+      setBillDateFilterMode('lastMonth');
+      localStorage.setItem('bill_date_filter_mode','lastMonth');
     } else if (mode === 'all') {
       setBillDateAll(true); setBillDateFilterMode('all');
+      setPendingBillDateFrom(''); setPendingBillDateTo('');
       localStorage.setItem('bill_date_filter_mode','all');
     }
   };
@@ -5824,21 +5902,40 @@ function SettingsTab({ asRecords }) {
       {subTab === 'billing' && authOk && (
         <>
           {/* 기간 필터 바 */}
-          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12,flexWrap:'nowrap'}}>
             <div style={{display:'flex',alignItems:'center',height:32,border:'0.5px solid #DDE1EB',borderRadius:6,padding:'0 6px',background:'#fff'}}>
-              <input type="date" value={billDateAll ? '' : billDateFrom} onChange={e => { setBillDateAll(false); setBillDateFrom(e.target.value); setBillDateFilterMode('custom'); localStorage.setItem('bill_date_filter_mode','custom'); localStorage.setItem('bill_date_from',e.target.value); localStorage.setItem('bill_date_to',billDateTo); }} style={{fontSize:12,height:28,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
+              <input type="date" value={billDateAll ? '' : pendingBillDateFrom} onChange={e => setPendingBillDateFrom(e.target.value)} style={{fontSize:12,height:28,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
               <span style={{color:'#9BA3B2',padding:'0 4px',fontSize:12}}>~</span>
-              <input type="date" value={billDateAll ? '' : billDateTo} onChange={e => { setBillDateAll(false); setBillDateTo(e.target.value); setBillDateFilterMode('custom'); localStorage.setItem('bill_date_filter_mode','custom'); localStorage.setItem('bill_date_from',billDateFrom); localStorage.setItem('bill_date_to',e.target.value); }} style={{fontSize:12,height:28,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
+              <input type="date" value={billDateAll ? '' : pendingBillDateTo} onChange={e => setPendingBillDateTo(e.target.value)} style={{fontSize:12,height:28,border:'none',width:130,background:'transparent',fontFamily:'inherit',outline:'none',color:'#1A1D23'}} />
             </div>
-            {(() => { const active = {height:32,padding:'0 12px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#185FA5',color:'#fff',whiteSpace:'nowrap'}; const inactive = {...active,background:'#E6F1FB',color:'#0C447C'}; return (
-              <div style={{display:'flex',gap:4}}>
+            <button
+              onClick={() => {
+                setBillDateAll(false);
+                setBillDateFrom(pendingBillDateFrom);
+                setBillDateTo(pendingBillDateTo);
+                setBillDateFilterMode('custom');
+                localStorage.setItem('bill_date_filter_mode','custom');
+                localStorage.setItem('bill_date_from', pendingBillDateFrom);
+                localStorage.setItem('bill_date_to', pendingBillDateTo);
+              }}
+              style={{height:36,padding:'0 18px',background:'#185FA5',color:'#ffffff',border:'1px solid #185FA5',borderRadius:6,fontSize:13,fontFamily:'inherit',fontWeight:600,cursor:'pointer',whiteSpace:'nowrap'}}
+            >적용</button>
+            <div style={{width:1,height:24,background:'#DDE1EB',margin:'0 6px'}} />
+            {(() => {
+              const active = {height:32,padding:'0 12px',borderRadius:4,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'#185FA5',color:'#fff',whiteSpace:'nowrap'};
+              const inactive = {...active,background:'#E6F1FB',color:'#0C447C'};
+              const lastMonthActive = {height:36,padding:'0 14px',borderRadius:6,fontSize:13,fontWeight:600,border:'1px solid #8A6300',cursor:'pointer',fontFamily:'inherit',background:'#8A6300',color:'#FFFFFF',whiteSpace:'nowrap'};
+              const lastMonthInactive = {height:36,padding:'0 14px',borderRadius:6,fontSize:13,fontWeight:500,border:'1px solid #F0D27A',cursor:'pointer',fontFamily:'inherit',background:'#FFF4D6',color:'#8A6300',whiteSpace:'nowrap'};
+              return (
+              <div style={{display:'flex',gap:4,alignItems:'center'}}>
+                <button onClick={() => setBillMode('lastMonth')} style={billDateFilterMode==='lastMonth'?lastMonthActive:lastMonthInactive}>전월</button>
                 <button onClick={() => setBillMode('today')} style={billDateFilterMode==='today'?active:inactive}>오늘</button>
                 <button onClick={() => setBillMode('week')} style={billDateFilterMode==='week'?active:inactive}>이번주</button>
                 <button onClick={() => setBillMode('month')} style={billDateFilterMode==='month'?active:inactive}>이번달</button>
                 <button onClick={() => setBillMode('all')} style={billDateFilterMode==='all'?active:inactive}>전체</button>
               </div>
             ); })()}
-            <div style={{marginLeft:'auto',fontSize:12,color:'#5A6070'}}>조회 기간: <span style={{color:'#1A1D23',fontWeight:600}}>{billDateLabel}</span></div>
+            <div style={{marginLeft:'auto',fontSize:12,color:'#5A6070',whiteSpace:'nowrap'}}>조회 기간: <span style={{color:'#1A1D23',fontWeight:600}}>{billDateLabel}</span></div>
           </div>
 
           {/* KPI 카드 4개 (구분별) */}
