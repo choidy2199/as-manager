@@ -420,8 +420,6 @@ export default function Home() {
   const [showNewShipRow, setShowNewShipRow] = useState(false);
 
   /* ── 부속 기존 state ── */
-  const [mode, setMode] = useState('home'); // 'home' | 'detail'
-  const [mainTab, setMainTab] = useState('parts'); // 'parts' | 'products'
   const [partsSubTab, setPartsSubTab] = useState('price'); // 'price' | 'order'
   const [partsSearch, setPartsSearch] = useState('');
   const [partsCatFilter, setPartsCatFilter] = useState('전체');
@@ -833,7 +831,7 @@ export default function Home() {
           AS Manager
         </div>
         <div className="nav-tabs">
-          {[['as','AS 일지'],['ship','택배발송'],['companies','거래처'],['parts','제품/부속가격'],['settings','설정']].map(([k,v]) => (
+          {[['as','AS 일지'],['ship','택배발송'],['companies','거래처'],['products','제품'],['parts','부품'],['settings','설정']].map(([k,v]) => (
             <button key={k} onClick={() => { setTab(k); localStorage.setItem('as_active_tab', k); }} className={`nav-tab ${tab===k?'active':''}`}>{v}</button>
           ))}
         </div>
@@ -1101,143 +1099,78 @@ export default function Home() {
           <CompaniesTab companies={companies} setCompanies={setCompanies} onReload={loadData} />
         )}
 
-        {/* ═══ 제품/부속가격 ═══ */}
+        {/* ═══ 제품 ═══ */}
+        {tab === 'products' && (
+          <div style={{display:'flex',flexDirection:'column',height:'calc(100vh - 110px)'}}>
+            <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+              <div className="as-filter-row" style={{padding:'8px 12px'}}>
+                <div className="as-filter-search-wrap">
+                  <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                  <input className="input as-filter-search" placeholder="브랜드, 모델 검색..." value={productsSearch} onChange={e => setProductsSearch(e.target.value)} autoComplete="off" />
+                </div>
+              </div>
+              <div className="section" style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                <div className="section-header">
+                  <span style={{fontSize:12,fontWeight:600}}>제품가격</span>
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    <span style={{fontSize:12,color:'rgba(255,255,255,0.5)'}}>총 {filteredProducts.length}건</span>
+                    <button className="btn-primary" style={{fontSize:11,padding:'4px 12px'}} onClick={async () => {
+                      const maxOrder = products.reduce((m, p) => Math.max(m, p.sort_order || 0), 0);
+                      const { data, error } = await supabase.from('products').insert({ brand: '', model: '', price: 0, sort_order: maxOrder + 1 }).select().single();
+                      if (error) { alert('추가 실패: ' + error.message); return; }
+                      setProducts(prev => [...prev, data]);
+                    }}>+ 제품 추가</button>
+                  </div>
+                </div>
+                <div className="as-table-wrapper" style={{flex:1,overflow:'auto'}}>
+                  <ProductsTable products={filteredProducts} onReload={() => loadData()} setProducts={setProducts} categories={partCategories} setCategories={setPartCategories} onPhotoClick={info => setPartLightbox(info)} />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ 부품 ═══ */}
         {tab === 'parts' && (
           <div style={{display:'flex',flexDirection:'column',height:'calc(100vh - 110px)'}}>
-            {/* 메인 탭 헤더 (3가지 모드 분기) */}
+            {/* 부품가격 / 부품발주 서브탭 헤더 */}
             <div style={{padding:'12px 12px 0',flexShrink:0}}>
               <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',gap:8,marginBottom:16}}>
-
-                {mode === 'home' && (
-                  <>
-                    {/* CASE A: [부품리스트] [제품리스트] */}
-                    <button
-                      onClick={() => { setMainTab('parts'); setMode('detail'); }}
-                      style={{
-                        padding:'9px 20px',
-                        borderRadius:8,
-                        fontSize:14,
-                        fontWeight: mainTab === 'parts' ? 500 : 400,
-                        cursor:'pointer',
-                        background: mainTab === 'parts' ? '#185FA5' : '#ffffff',
-                        color: mainTab === 'parts' ? '#ffffff' : '#1A1D23',
-                        border: mainTab === 'parts' ? '1px solid transparent' : '1px solid #D5D7DB',
-                        boxSizing:'border-box',
-                        fontFamily:'inherit',
-                      }}
-                    >부품리스트</button>
-                    <button
-                      onClick={() => { setMainTab('products'); setMode('detail'); }}
-                      style={{
-                        padding:'9px 20px',
-                        borderRadius:8,
-                        fontSize:14,
-                        fontWeight: mainTab === 'products' ? 500 : 400,
-                        cursor:'pointer',
-                        background: mainTab === 'products' ? '#185FA5' : '#ffffff',
-                        color: mainTab === 'products' ? '#ffffff' : '#1A1D23',
-                        border: mainTab === 'products' ? '1px solid transparent' : '1px solid #D5D7DB',
-                        boxSizing:'border-box',
-                        fontFamily:'inherit',
-                      }}
-                    >제품리스트</button>
-                  </>
-                )}
-
-                {mode === 'detail' && mainTab === 'parts' && (
-                  <>
-                    {/* CASE B: [←] [부품가격] [부품발주] */}
-                    <button
-                      onClick={() => setMode('home')}
-                      aria-label="뒤로"
-                      style={{
-                        width:38,
-                        height:38,
-                        padding:0,
-                        background:'#ffffff',
-                        color:'#1A1D23',
-                        border:'1px solid #D5D7DB',
-                        borderRadius:8,
-                        cursor:'pointer',
-                        display:'inline-flex',
-                        alignItems:'center',
-                        justifyContent:'center',
-                        boxSizing:'border-box',
-                      }}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A1D23" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M19 12H5"/>
-                        <path d="M12 19l-7-7 7-7"/>
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => setPartsSubTab('price')}
-                      style={{
-                        padding:'9px 20px',
-                        borderRadius:8,
-                        fontSize:14,
-                        fontWeight: partsSubTab === 'price' ? 500 : 400,
-                        cursor:'pointer',
-                        background: partsSubTab === 'price' ? '#1A1D23' : '#ffffff',
-                        color: partsSubTab === 'price' ? '#ffffff' : '#1A1D23',
-                        border: partsSubTab === 'price' ? '1px solid transparent' : '1px solid #D5D7DB',
-                        boxSizing:'border-box',
-                        fontFamily:'inherit',
-                      }}
-                    >부품가격</button>
-                    <button
-                      onClick={() => setPartsSubTab('order')}
-                      style={{
-                        padding:'9px 20px',
-                        borderRadius:8,
-                        fontSize:14,
-                        fontWeight: partsSubTab === 'order' ? 500 : 400,
-                        cursor:'pointer',
-                        background: partsSubTab === 'order' ? '#1A1D23' : '#ffffff',
-                        color: partsSubTab === 'order' ? '#ffffff' : '#1A1D23',
-                        border: partsSubTab === 'order' ? '1px solid transparent' : '1px solid #D5D7DB',
-                        boxSizing:'border-box',
-                        fontFamily:'inherit',
-                      }}
-                    >부품발주</button>
-                  </>
-                )}
-
-                {mode === 'detail' && mainTab === 'products' && (
-                  <>
-                    {/* CASE C: [←] 제품리스트 */}
-                    <button
-                      onClick={() => setMode('home')}
-                      aria-label="뒤로"
-                      style={{
-                        width:38,
-                        height:38,
-                        padding:0,
-                        background:'#ffffff',
-                        color:'#1A1D23',
-                        border:'1px solid #D5D7DB',
-                        borderRadius:8,
-                        cursor:'pointer',
-                        display:'inline-flex',
-                        alignItems:'center',
-                        justifyContent:'center',
-                        boxSizing:'border-box',
-                      }}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A1D23" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M19 12H5"/>
-                        <path d="M12 19l-7-7 7-7"/>
-                      </svg>
-                    </button>
-                    <span style={{fontSize:13,color:'#5A6070',padding:'0 8px 0 4px'}}>제품리스트</span>
-                  </>
-                )}
-
+                <button
+                  onClick={() => setPartsSubTab('price')}
+                  style={{
+                    padding:'9px 20px',
+                    borderRadius:8,
+                    fontSize:14,
+                    fontWeight: partsSubTab === 'price' ? 500 : 400,
+                    cursor:'pointer',
+                    background: partsSubTab === 'price' ? '#1A1D23' : '#ffffff',
+                    color: partsSubTab === 'price' ? '#ffffff' : '#1A1D23',
+                    border: partsSubTab === 'price' ? '1px solid transparent' : '1px solid #D5D7DB',
+                    boxSizing:'border-box',
+                    fontFamily:'inherit',
+                  }}
+                >부품가격</button>
+                <button
+                  onClick={() => setPartsSubTab('order')}
+                  style={{
+                    padding:'9px 20px',
+                    borderRadius:8,
+                    fontSize:14,
+                    fontWeight: partsSubTab === 'order' ? 500 : 400,
+                    cursor:'pointer',
+                    background: partsSubTab === 'order' ? '#1A1D23' : '#ffffff',
+                    color: partsSubTab === 'order' ? '#ffffff' : '#1A1D23',
+                    border: partsSubTab === 'order' ? '1px solid transparent' : '1px solid #D5D7DB',
+                    boxSizing:'border-box',
+                    fontFamily:'inherit',
+                  }}
+                >부품발주</button>
               </div>
             </div>
 
             {/* 서브탭 본문 — 부품가격 */}
-            {mainTab === 'parts' && partsSubTab === 'price' && (
+            {partsSubTab === 'price' && (
               <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
                 <div className="as-filter-row" style={{padding:'8px 12px'}}>
                   <div className="as-filter-search-wrap" style={{flex:1}}>
@@ -1284,37 +1217,8 @@ export default function Home() {
               </div>
             )}
 
-            {/* 서브탭 본문 — 제품가격 (제품리스트) */}
-            {mainTab === 'products' && (
-              <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
-                <div className="as-filter-row" style={{padding:'8px 12px'}}>
-                  <div className="as-filter-search-wrap">
-                    <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                    <input className="input as-filter-search" placeholder="브랜드, 모델 검색..." value={productsSearch} onChange={e => setProductsSearch(e.target.value)} autoComplete="off" />
-                  </div>
-                </div>
-                <div className="section" style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
-                  <div className="section-header">
-                    <span style={{fontSize:12,fontWeight:600}}>제품가격</span>
-                    <div style={{display:'flex',alignItems:'center',gap:10}}>
-                      <span style={{fontSize:12,color:'rgba(255,255,255,0.5)'}}>총 {filteredProducts.length}건</span>
-                      <button className="btn-primary" style={{fontSize:11,padding:'4px 12px'}} onClick={async () => {
-                        const maxOrder = products.reduce((m, p) => Math.max(m, p.sort_order || 0), 0);
-                        const { data, error } = await supabase.from('products').insert({ brand: '', model: '', price: 0, sort_order: maxOrder + 1 }).select().single();
-                        if (error) { alert('추가 실패: ' + error.message); return; }
-                        setProducts(prev => [...prev, data]);
-                      }}>+ 제품 추가</button>
-                    </div>
-                  </div>
-                  <div className="as-table-wrapper" style={{flex:1,overflow:'auto'}}>
-                    <ProductsTable products={filteredProducts} onReload={() => loadData()} setProducts={setProducts} categories={partCategories} setCategories={setPartCategories} onPhotoClick={info => setPartLightbox(info)} />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 서브탭 본문 — 부품발주 (Phase 2-1a) */}
-            {mainTab === 'parts' && partsSubTab === 'order' && (
+            {/* 서브탭 본문 — 부품발주 */}
+            {partsSubTab === 'order' && (
               <PartsOrderTab
                 parts={parts}
                 models={partCats}
