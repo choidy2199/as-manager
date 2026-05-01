@@ -4264,6 +4264,7 @@ function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDe
                 <input value={partSearch} onChange={e => { setPartSearch(e.target.value); setShowPartDropdown(true); }}
                   onFocus={() => setShowPartDropdown(true)}
                   placeholder="부품코드/품명 검색..."
+                  autoComplete="off"
                   style={{flex:1,padding:'5px 8px',fontSize:12,border:'0.5px solid #DDE1EB',borderRadius:4,fontFamily:'inherit'}}
                 />
               </div>
@@ -5497,6 +5498,7 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
             type="password"
             maxLength={4}
             autoFocus
+            autoComplete="new-password"
             onChange={(e) => { e.target.value = e.target.value.replace(/\D/g, ''); }}
             onKeyDown={async (e) => { if (e.key === 'Enter') await handleAuthSubmit(e.target.value); }}
             style={{
@@ -6238,7 +6240,7 @@ function SettingsTab({ asRecords }) {
           <div className="modal-content" style={{maxWidth:360,padding:0}} onClick={e => e.stopPropagation()}>
             <div style={{padding:'24px',textAlign:'center'}}>
               <div style={{fontSize:16,fontWeight:700,marginBottom:16}}>🔒 정산 관리 접근</div>
-              <input type="password" maxLength={4} value={pwInput} onChange={e => setPwInput(e.target.value.replace(/\D/g,''))} onKeyDown={e => e.key==='Enter' && handlePwCheck()} placeholder="4자리 비밀번호" className="input" style={{textAlign:'center',fontSize:20,letterSpacing:8,marginBottom:8}} autoFocus />
+              <input type="password" maxLength={4} value={pwInput} onChange={e => setPwInput(e.target.value.replace(/\D/g,''))} onKeyDown={e => e.key==='Enter' && handlePwCheck()} placeholder="4자리 비밀번호" className="input" autoComplete="new-password" style={{textAlign:'center',fontSize:20,letterSpacing:8,marginBottom:8}} autoFocus />
               {pwError && <div style={{color:'#CC2222',fontSize:12,marginBottom:8}}>{pwError}</div>}
               <div style={{display:'flex',gap:8,justifyContent:'center',marginTop:12}}>
                 <button className="btn-secondary" onClick={() => { setPwModal(false); setSubTab('system'); }}>취소</button>
@@ -6700,7 +6702,7 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
             </div>
             <button onClick={onClose} style={{width:32,height:32,borderRadius:'50%',background:'rgba(255,255,255,0.2)',color:'#fff',border:'none',fontSize:18,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>✕</button>
           </div>
-          <div style={{padding:8}}><input className="input" style={{height:34,fontSize:13,borderRadius:8}} placeholder="고객명, 연락처 검색..." value={searchQ} onChange={e => setSearchQ(e.target.value)} /></div>
+          <div style={{padding:8}}><input className="input" style={{height:34,fontSize:13,borderRadius:8}} placeholder="고객명, 연락처 검색..." value={searchQ} onChange={e => setSearchQ(e.target.value)} autoComplete="off" /></div>
           <div style={{flex:1,overflowY:'auto'}}>
             {filtered.map((c, i) => (
               <div key={c.phone} style={{display:'flex',alignItems:'center',gap:10,padding:'12px 14px',borderBottom:'0.5px solid #F0F2F7',cursor:'pointer',background: selected === c.phone ? '#E6F1FB' : (c.unread > 0 ? '#F4F8FD' : 'transparent')}} onClick={() => setSelected(c.phone)}>
