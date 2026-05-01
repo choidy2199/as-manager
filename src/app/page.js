@@ -5010,6 +5010,8 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
   const [editValue, setEditValue] = useState('');
   const [badgeOpen, setBadgeOpen] = useState(null);
   const [bigCatDropdown, setBigCatDropdown] = useState(null);
+  const [motorDropdown, setMotorDropdown] = useState(null);
+  const [materialDropdown, setMaterialDropdown] = useState(null);
   const [purchaseAuthOk, setPurchaseAuthOk] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authError, setAuthError] = useState('');
@@ -5022,14 +5024,18 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
   const COLS = [
     { key: 'image_url', label: '사진', w: 80 },
     { key: 'brand', label: '브랜드', w: 90 },
-    { key: 'model', label: '모델넘버', w: 180 },
+    { key: 'model', label: '모델넘버', w: 200 },
     { key: 'big_category', label: '대분류', w: 160 },
     { key: 'price', label: '제품가격', w: 110 },
     { key: 'memo', label: '비고', w: 140 },
+    { key: 'tank_size', label: '탱크용량', w: 80 },
+    { key: 'tank_material', label: '탱크재질', w: 90 },
+    { key: 'power_watt', label: '소비전력', w: 90 },
+    { key: 'weight_kg', label: '중량', w: 80 },
     { key: 'purchase_price', label: '매입가', w: 110 },
     { key: '_manage', label: '관리', w: 110 },
   ];
-  const DEFAULT_W = { image_url: 80, brand: 90, model: 180, big_category: 160, price: 110, memo: 140, purchase_price: 110, _manage: 110 };
+  const DEFAULT_W = { image_url: 80, brand: 90, model: 200, big_category: 160, price: 110, memo: 140, tank_size: 80, tank_material: 90, power_watt: 90, weight_kg: 80, purchase_price: 110, _manage: 110 };
   const getW = (k) => savedWidthsRef.current[k] || DEFAULT_W[k] || 80;
 
   const BRAND_COLORS = {
@@ -5060,15 +5066,22 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
     setEditValue(value ?? '');
   };
 
+  const intFields = ['price', 'purchase_price', 'tank_size', 'power_watt'];
+  const floatFields = ['weight_kg'];
   const commitEdit = async () => {
     if (!editCell) return;
     const { id, field } = editCell;
     let val = editValue;
-    if (field === 'price' || field === 'purchase_price') {
+    let saveVal;
+    if (intFields.includes(field)) {
       const trimmed = String(val).trim();
-      val = trimmed === '' ? null : (parseInt(trimmed.replace(/,/g, '')) || 0);
+      saveVal = trimmed === '' ? null : (parseInt(trimmed.replace(/[^\d]/g, '')) || null);
+    } else if (floatFields.includes(field)) {
+      const trimmed = String(val).trim();
+      saveVal = trimmed === '' ? null : (parseFloat(trimmed.replace(/[^\d.]/g, '')) || null);
+    } else {
+      saveVal = val || null;
     }
-    const saveVal = (field === 'price' || field === 'purchase_price') ? val : (val || null);
     setEditCell(null);
     setProducts(prev => prev.map(p => p.id === id ? { ...p, [field]: saveVal } : p));
     const { error } = await supabase.from('products').update({ [field]: saveVal, updated_at: new Date().toISOString() }).eq('id', id);
@@ -5143,6 +5156,33 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
     setProducts(prev => prev.map(p => p.id === productId ? { ...p, big_category: newBigCat } : p));
     const { error: upErr } = await supabase.from('products').update({ big_category: newBigCat, updated_at: new Date().toISOString() }).eq('id', productId);
     if (upErr) alert('제품 저장 실패: ' + upErr.message);
+  };
+
+  // ─── 모터 타입 / 탱크재질 드롭다운 ───
+  const openMotorDropdown = (productId, e) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMotorDropdown({ id: productId, top: rect.bottom + 4, left: rect.left });
+  };
+
+  const setMotorType = async (productId, value) => {
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, motor_type: value } : p));
+    setMotorDropdown(null);
+    const { error } = await supabase.from('products').update({ motor_type: value, updated_at: new Date().toISOString() }).eq('id', productId);
+    if (error) { alert('저장 실패: ' + error.message); onReload?.(); }
+  };
+
+  const openMaterialDropdown = (productId, e) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMaterialDropdown({ id: productId, top: rect.bottom + 4, left: rect.left });
+  };
+
+  const setTankMaterial = async (productId, value) => {
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, tank_material: value } : p));
+    setMaterialDropdown(null);
+    const { error } = await supabase.from('products').update({ tank_material: value, updated_at: new Date().toISOString() }).eq('id', productId);
+    if (error) { alert('저장 실패: ' + error.message); onReload?.(); }
   };
 
   // ─── 매입가 인증 ───
@@ -5314,8 +5354,83 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
       );
     }
 
+    if (col.key === 'model') {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+          {isEditing ? (
+            <input className="as-cell-input" value={editValue} autoFocus autoComplete="off"
+              onChange={e => setEditValue(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(); } if (e.key === 'Escape') setEditCell(null); }} />
+          ) : (
+            <span
+              onClick={(e) => { e.stopPropagation(); startEdit(p.id, 'model', p.model || ''); }}
+              style={{ cursor: 'pointer', fontWeight: 500, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}
+            >
+              {p.model || <span style={{ color: '#9BA3B2' }}>모델</span>}
+            </span>
+          )}
+          <span
+            onClick={(e) => openMotorDropdown(p.id, e)}
+            style={{
+              background: p.motor_type === 'BL' ? '#1A1D23' : p.motor_type === '브러시' ? '#5A6070' : 'transparent',
+              color: p.motor_type ? '#fff' : '#9BA3B2',
+              padding: '2px 7px',
+              borderRadius: 3,
+              fontSize: 10,
+              fontWeight: 600,
+              cursor: 'pointer',
+              minWidth: 32,
+              textAlign: 'center',
+              border: p.motor_type ? 'none' : '1px dashed #B5D4F4',
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {p.motor_type || '?'}
+          </span>
+        </div>
+      );
+    }
+
+    if (col.key === 'tank_size' || col.key === 'power_watt' || col.key === 'weight_kg') {
+      const unit = col.key === 'tank_size' ? 'L' : col.key === 'power_watt' ? 'W' : 'Kg';
+      if (isEditing) {
+        return <input className="as-cell-input" value={editValue} autoFocus autoComplete="off"
+          onChange={e => setEditValue(e.target.value.replace(col.key === 'weight_kg' ? /[^\d.]/g : /[^\d]/g, ''))}
+          onBlur={commitEdit}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(); } if (e.key === 'Escape') setEditCell(null); }}
+          style={{ textAlign: 'center', maxWidth: 70 }} />;
+      }
+      return val != null && val !== ''
+        ? <span style={{ fontSize: 12, color: '#1A1D23', fontVariantNumeric: 'tabular-nums' }}>{val}{unit}</span>
+        : <span style={{ fontSize: 11, color: '#9BA3B2' }}>입력</span>;
+    }
+
+    if (col.key === 'tank_material') {
+      return (
+        <span
+          onClick={(e) => openMaterialDropdown(p.id, e)}
+          style={{
+            display: 'inline-block',
+            cursor: 'pointer',
+            background: val === '알루미늄' ? '#E6F1FB' : val === '스틸' ? '#EAECF2' : 'transparent',
+            color: val === '알루미늄' ? '#185FA5' : val === '스틸' ? '#1A1D23' : '#9BA3B2',
+            padding: '2px 8px',
+            borderRadius: 3,
+            fontSize: 11,
+            fontWeight: 500,
+            border: val ? 'none' : '1px dashed #DDE1EB',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {val || '입력'}
+        </span>
+      );
+    }
+
     if (isEditing) {
-      return <input className="as-cell-input" value={editValue} autoFocus
+      return <input className="as-cell-input" value={editValue} autoFocus autoComplete="off"
         onChange={e => setEditValue(e.target.value)}
         onBlur={commitEdit}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(); } }} />;
@@ -5349,13 +5464,19 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
           ...(c.key === 'brand' ? { overflow: 'visible', position: 'relative' } : {}),
           ...(c.key === 'image_url' ? { padding: '4px 6px' } : {}),
           ...(c.key === 'big_category' ? { cursor: 'pointer', padding: '8px 6px' } : {}),
+          ...(c.key === 'model' ? { cursor: 'default', padding: '8px 6px' } : {}),
+          ...(c.key === 'tank_material' ? { cursor: 'pointer' } : {}),
           ...(c.key === 'purchase_price' && purchaseAuthOk ? { textAlign: 'right' } : {}),
         }}
           onClick={(e) => {
-            if (c.key === 'brand' || c.key === '_manage' || c.key === 'image_url') return;
+            if (c.key === 'brand' || c.key === '_manage' || c.key === 'image_url' || c.key === 'model' || c.key === 'tank_material') return;
             if (c.key === 'big_category') { openBigCatDropdown(p, e); return; }
             if (c.key === 'purchase_price') {
               if (purchaseAuthOk) startEdit(p.id, 'purchase_price', p.purchase_price?.toString() || '');
+              return;
+            }
+            if (c.key === 'tank_size' || c.key === 'power_watt' || c.key === 'weight_kg') {
+              startEdit(p.id, c.key, p[c.key] != null ? String(p[c.key]) : '');
               return;
             }
             startEdit(p.id, c.key, c.key === 'price' ? (p[c.key]?.toString() || '') : (p[c.key] || ''));
@@ -5400,7 +5521,7 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
         {groupedProducts.map(group => (
           <Fragment key={group.key}>
             <tr>
-              <td colSpan={9} style={{ padding: 0, border: 'none' }}>
+              <td colSpan={COLS.length + 1} style={{ padding: 0, border: 'none' }}>
                 <div style={{
                   background: '#1A1D23',
                   color: '#FFFFFF',
@@ -5450,7 +5571,7 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
             })}
           </Fragment>
         ))}
-        {products.length === 0 && <tr><td colSpan={9} className="empty">등록된 제품이 없습니다</td></tr>}
+        {products.length === 0 && <tr><td colSpan={COLS.length + 1} className="empty">등록된 제품이 없습니다</td></tr>}
       </tbody>
     </table>
 
@@ -5474,6 +5595,82 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
         </>
       );
     })()}
+
+    {/* 모터 타입 드롭다운 */}
+    {motorDropdown && (
+      <>
+        <div onMouseDown={() => setMotorDropdown(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'transparent' }} />
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            top: motorDropdown.top,
+            left: motorDropdown.left,
+            background: '#fff',
+            border: '1px solid #DDE1EB',
+            borderRadius: 6,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            padding: 4,
+            zIndex: 9999,
+            minWidth: 90,
+          }}
+        >
+          {['BL', '브러시'].map(opt => (
+            <div key={opt}
+              onClick={() => setMotorType(motorDropdown.id, opt)}
+              style={{ padding: '6px 14px', fontSize: 12, cursor: 'pointer', borderRadius: 3 }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#F4F6FA'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            >{opt}</div>
+          ))}
+          <div
+            onClick={() => setMotorType(motorDropdown.id, null)}
+            style={{ padding: '6px 14px', fontSize: 12, color: '#9BA3B2', cursor: 'pointer', borderTop: '1px solid #EAECF2' }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#F4F6FA'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+          >지우기</div>
+        </div>
+      </>
+    )}
+
+    {/* 탱크재질 드롭다운 */}
+    {materialDropdown && (
+      <>
+        <div onMouseDown={() => setMaterialDropdown(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'transparent' }} />
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            top: materialDropdown.top,
+            left: materialDropdown.left,
+            background: '#fff',
+            border: '1px solid #DDE1EB',
+            borderRadius: 6,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            padding: 4,
+            zIndex: 9999,
+            minWidth: 100,
+          }}
+        >
+          {['알루미늄', '스틸'].map(opt => (
+            <div key={opt}
+              onClick={() => setTankMaterial(materialDropdown.id, opt)}
+              style={{ padding: '6px 14px', fontSize: 12, cursor: 'pointer', borderRadius: 3 }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#F4F6FA'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            >{opt}</div>
+          ))}
+          <div
+            onClick={() => setTankMaterial(materialDropdown.id, null)}
+            style={{ padding: '6px 14px', fontSize: 12, color: '#9BA3B2', cursor: 'pointer', borderTop: '1px solid #EAECF2' }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#F4F6FA'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+          >지우기</div>
+        </div>
+      </>
+    )}
 
     {/* 매입가 인증 모달 */}
     {showAuthModal && (
