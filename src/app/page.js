@@ -1421,7 +1421,7 @@ export default function Home() {
 
         {/* ═══ 설정 ═══ */}
         {tab === 'settings' && (
-          <SettingsTab asRecords={asRecords} />
+          <SettingsTab asRecords={asRecords} products={products} />
         )}
       </div>
 
@@ -6076,7 +6076,7 @@ function CompaniesTab({ companies, setCompanies, onReload }) {
 
 
 /* ═══ SETTINGS TAB ═══ */
-function SettingsTab({ asRecords }) {
+function SettingsTab({ asRecords, products }) {
   const [subTab, setSubTab] = useState('system');
   const [pwModal, setPwModal] = useState(false);
   const [pwInput, setPwInput] = useState('');
@@ -6243,8 +6243,25 @@ function SettingsTab({ asRecords }) {
     const sum = a => a.reduce((s,r) => s + (Number(r.repair_cost)||0), 0);
     return { count: arr.length, revenue: sum(arr), paid: sum(paid), unpaid: sum(unpaid), free: sum(free) };
   };
+  // patch45: 제품 판매 카드용 — 매입가 매칭 (model 키, trim+lowercase)
+  const productCostMap = useMemo(() => {
+    const m = new Map();
+    (products || []).forEach(p => {
+      if (p.model) {
+        m.set(String(p.model).trim().toLowerCase(), p.purchase_price ?? 0);
+      }
+    });
+    return m;
+  }, [products]);
   const asStats = aggregate(sRecs.filter(r => r.record_type === 'as_repair'));
-  const productStats = aggregate(sRecs.filter(r => r.record_type === 'product_sale'));
+  const productSaleRecs = sRecs.filter(r => r.record_type === 'product_sale');
+  const productStatsBase = aggregate(productSaleRecs);
+  const productCost = productSaleRecs.reduce((sum, r) => {
+    if (!r.model) return sum;
+    const key = String(r.model).trim().toLowerCase();
+    return sum + (productCostMap.get(key) ?? 0);
+  }, 0);
+  const productStats = { ...productStatsBase, cost: productCost, profit: productStatsBase.revenue - productCost };
   const partsStats = aggregate(sRecs.filter(r => r.record_type === 'parts_sale'));
   const totalStats = aggregate(sRecs);
   const displayRecs = billTypeFilter ? sRecs.filter(r => r.record_type === billTypeFilter) : sRecs;
@@ -6417,20 +6434,33 @@ function SettingsTab({ asRecords }) {
                       <span style={{fontSize:13,fontWeight:500,color:'#5A6070'}}>원</span>
                     </div>
                   </div>
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr'}}>
-                    <div style={{padding:'10px 8px',textAlign:'center',borderRight:'1px solid #DDE1EB'}}>
-                      <div style={{fontSize:11,fontWeight:500,color:'#5A6070',display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:2,whiteSpace:'nowrap'}}><span style={{width:6,height:6,borderRadius:'50%',background:'#1D9E75',display:'inline-block'}}/>입금완료</div>
-                      <div style={cellValStyle(stats.paid)}>{stats.paid.toLocaleString('ko-KR')}</div>
+                  {card.typeKey === 'product_sale' ? (
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr'}}>
+                      <div style={{padding:'10px 8px',textAlign:'center',borderRight:'1px solid #DDE1EB'}}>
+                        <div style={{fontSize:11,fontWeight:500,color:'#5A6070',display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:2,whiteSpace:'nowrap'}}><span style={{width:6,height:6,borderRadius:'50%',background:'#888780',display:'inline-block'}}/>제품원가</div>
+                        <div style={stats.cost === 0 ? {fontSize:14,fontWeight:500,color:'#9BA3B2',fontFamily:"'Pretendard', -apple-system, sans-serif"} : {fontSize:14,fontWeight:500,color:'#5F5E5A',fontFamily:"'Pretendard', -apple-system, sans-serif"}}>{(stats.cost ?? 0).toLocaleString('ko-KR')}</div>
+                      </div>
+                      <div style={{padding:'10px 8px',textAlign:'center'}}>
+                        <div style={{fontSize:11,fontWeight:500,color:'#5A6070',display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:2,whiteSpace:'nowrap'}}><span style={{width:6,height:6,borderRadius:'50%',background:'#1D9E75',display:'inline-block'}}/>이익금</div>
+                        <div style={{fontSize:14,fontWeight:500,color:(stats.profit ?? 0) >= 0 ? '#1D9E75' : '#CC2222',fontFamily:"'Pretendard', -apple-system, sans-serif"}}>{(stats.profit ?? 0).toLocaleString('ko-KR')}</div>
+                      </div>
                     </div>
-                    <div style={{padding:'10px 8px',textAlign:'center',borderRight:'1px solid #DDE1EB'}}>
-                      <div style={{fontSize:11,fontWeight:500,color:'#5A6070',display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:2,whiteSpace:'nowrap'}}><span style={{width:6,height:6,borderRadius:'50%',background:'#EF9F27',display:'inline-block'}}/>미수금</div>
-                      <div style={cellValStyle(stats.unpaid)}>{stats.unpaid.toLocaleString('ko-KR')}</div>
+                  ) : (
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr'}}>
+                      <div style={{padding:'10px 8px',textAlign:'center',borderRight:'1px solid #DDE1EB'}}>
+                        <div style={{fontSize:11,fontWeight:500,color:'#5A6070',display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:2,whiteSpace:'nowrap'}}><span style={{width:6,height:6,borderRadius:'50%',background:'#1D9E75',display:'inline-block'}}/>입금완료</div>
+                        <div style={cellValStyle(stats.paid)}>{stats.paid.toLocaleString('ko-KR')}</div>
+                      </div>
+                      <div style={{padding:'10px 8px',textAlign:'center',borderRight:'1px solid #DDE1EB'}}>
+                        <div style={{fontSize:11,fontWeight:500,color:'#5A6070',display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:2,whiteSpace:'nowrap'}}><span style={{width:6,height:6,borderRadius:'50%',background:'#EF9F27',display:'inline-block'}}/>미수금</div>
+                        <div style={cellValStyle(stats.unpaid)}>{stats.unpaid.toLocaleString('ko-KR')}</div>
+                      </div>
+                      <div style={{padding:'10px 8px',textAlign:'center'}}>
+                        <div style={{fontSize:11,fontWeight:500,color:'#5A6070',display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:2,whiteSpace:'nowrap'}}><span style={{width:6,height:6,borderRadius:'50%',background:'#9BA3B2',display:'inline-block'}}/>무상</div>
+                        <div style={cellValStyle(stats.free)}>{stats.free.toLocaleString('ko-KR')}</div>
+                      </div>
                     </div>
-                    <div style={{padding:'10px 8px',textAlign:'center'}}>
-                      <div style={{fontSize:11,fontWeight:500,color:'#5A6070',display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:2,whiteSpace:'nowrap'}}><span style={{width:6,height:6,borderRadius:'50%',background:'#9BA3B2',display:'inline-block'}}/>무상</div>
-                      <div style={cellValStyle(stats.free)}>{stats.free.toLocaleString('ko-KR')}</div>
-                    </div>
-                  </div>
+                  )}
                 </div>
               );
             })}
