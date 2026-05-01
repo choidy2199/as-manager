@@ -1307,7 +1307,7 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="as-table-wrapper" style={{flex:1,overflow:'auto'}}>
-                    <ProductsTable products={filteredProducts} onReload={() => loadData()} setProducts={setProducts} />
+                    <ProductsTable products={filteredProducts} onReload={() => loadData()} setProducts={setProducts} categories={partCategories} setCategories={setPartCategories} onPhotoClick={info => setPartLightbox(info)} />
                   </div>
                 </div>
               </div>
@@ -1349,11 +1349,18 @@ export default function Home() {
             name={partLightbox.name}
             code={partLightbox.code}
             partId={partLightbox.partId}
+            productId={partLightbox.productId}
+            table={partLightbox.table}
             readOnly={partLightbox.readOnly}
             onClose={() => setPartLightbox(null)}
             onUpdate={(newUrl) => {
-              if (!partLightbox?.partId) return;
-              setParts(prev => prev.map(p => p.id === partLightbox.partId ? { ...p, image_url: newUrl } : p));
+              if (partLightbox?.table === 'products') {
+                if (!partLightbox?.productId) return;
+                setProducts(prev => prev.map(p => p.id === partLightbox.productId ? { ...p, image_url: newUrl } : p));
+              } else {
+                if (!partLightbox?.partId) return;
+                setParts(prev => prev.map(p => p.id === partLightbox.partId ? { ...p, image_url: newUrl } : p));
+              }
             }}
           />
         )}
@@ -4997,11 +5004,14 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
 
 
 /* ═══ PRODUCTS TABLE — 제품가격 인라인 편집 ═══ */
-function ProductsTable({ products, onReload, setProducts }) {
+function ProductsTable({ products, onReload, setProducts, categories, setCategories, onPhotoClick }) {
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [badgeOpen, setBadgeOpen] = useState(null);
-  const [showNewRow, setShowNewRow] = useState(false);
+  const [bigCatDropdown, setBigCatDropdown] = useState(null);
+  const [purchaseAuthOk, setPurchaseAuthOk] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authError, setAuthError] = useState('');
   const tableRef = useRef(null);
   const savedWidthsRef = useRef((() => {
     if (typeof window === 'undefined') return {};
@@ -5009,13 +5019,16 @@ function ProductsTable({ products, onReload, setProducts }) {
   })());
 
   const COLS = [
-    { key: 'brand', label: '브랜드', w: 100 },
+    { key: 'image_url', label: '사진', w: 80 },
+    { key: 'brand', label: '브랜드', w: 90 },
     { key: 'model', label: '모델넘버', w: 180 },
-    { key: 'price', label: '제품가격', w: 120 },
+    { key: 'big_category', label: '대분류', w: 160 },
+    { key: 'price', label: '제품가격', w: 110 },
     { key: 'memo', label: '비고', w: 140 },
+    { key: 'purchase_price', label: '매입가', w: 110 },
     { key: '_manage', label: '관리', w: 110 },
   ];
-  const DEFAULT_W = { brand: 100, model: 180, price: 120, memo: 140, _manage: 110 };
+  const DEFAULT_W = { image_url: 80, brand: 90, model: 180, big_category: 160, price: 110, memo: 140, purchase_price: 110, _manage: 110 };
   const getW = (k) => savedWidthsRef.current[k] || DEFAULT_W[k] || 80;
 
   const BRAND_COLORS = {
@@ -5050,8 +5063,11 @@ function ProductsTable({ products, onReload, setProducts }) {
     if (!editCell) return;
     const { id, field } = editCell;
     let val = editValue;
-    if (field === 'price') val = parseInt(String(val).replace(/,/g, '')) || 0;
-    const saveVal = field === 'price' ? val : (val || null);
+    if (field === 'price' || field === 'purchase_price') {
+      const trimmed = String(val).trim();
+      val = trimmed === '' ? null : (parseInt(trimmed.replace(/,/g, '')) || 0);
+    }
+    const saveVal = (field === 'price' || field === 'purchase_price') ? val : (val || null);
     setEditCell(null);
     setProducts(prev => prev.map(p => p.id === id ? { ...p, [field]: saveVal } : p));
     const { error } = await supabase.from('products').update({ [field]: saveVal, updated_at: new Date().toISOString() }).eq('id', id);
@@ -5063,6 +5079,82 @@ function ProductsTable({ products, onReload, setProducts }) {
     setProducts(prev => prev.filter(x => x.id !== p.id));
     const { error } = await supabase.from('products').delete().eq('id', p.id);
     if (error) { alert('삭제 실패: ' + error.message); onReload(); }
+  };
+
+  // ─── 카테고리 함수 4개 (PartsTable 패턴 복제, DB 테이블만 products로) ───
+  const openBigCatDropdown = (p, e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const popH = 380;
+    const margin = 8;
+    const proposedTop = rect.bottom + 4;
+    const flipUp = proposedTop + popH > window.innerHeight - margin;
+    const top = flipUp ? Math.max(margin, rect.top - popH - 4) : proposedTop;
+    setBigCatDropdown({ id: p.id, top, left: rect.left, width: Math.max(180, rect.width) });
+  };
+
+  const toggleBigCatToken = async (productId, name) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    const tokens = (product.big_category || '').split('|').map(s => s.trim()).filter(Boolean);
+    const idx = tokens.indexOf(name);
+    if (idx >= 0) {
+      tokens.splice(idx, 1);
+    } else {
+      if (tokens.length >= 4) { alert('대분류는 최대 4개까지 선택할 수 있습니다'); return; }
+      tokens.push(name);
+    }
+    const newBigCat = tokens.length > 0 ? tokens.join('|') : null;
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, big_category: newBigCat } : p));
+    const { error } = await supabase.from('products').update({ big_category: newBigCat, updated_at: new Date().toISOString() }).eq('id', productId);
+    if (error) alert('저장 실패: ' + error.message);
+  };
+
+  const removeBigCatToken = async (productId, name) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    const tokens = (product.big_category || '').split('|').map(s => s.trim()).filter(Boolean).filter(t => t !== name);
+    const newBigCat = tokens.length > 0 ? tokens.join('|') : null;
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, big_category: newBigCat } : p));
+    const { error } = await supabase.from('products').update({ big_category: newBigCat, updated_at: new Date().toISOString() }).eq('id', productId);
+    if (error) alert('저장 실패: ' + error.message);
+  };
+
+  const clearBigCatTokens = async (productId) => {
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, big_category: null } : p));
+    setBigCatDropdown(null);
+    const { error } = await supabase.from('products').update({ big_category: null, updated_at: new Date().toISOString() }).eq('id', productId);
+    if (error) alert('저장 실패: ' + error.message);
+  };
+
+  const addCategoryAndAddToken = async (newName) => {
+    if (!bigCatDropdown) return;
+    const productId = bigCatDropdown.id;
+    if ((categories || []).some(c => c.name === newName)) { alert('이미 존재하는 대분류입니다'); return; }
+    const product = products.find(p => p.id === productId);
+    const currentTokens = (product?.big_category || '').split('|').map(s => s.trim()).filter(Boolean);
+    if (currentTokens.length >= 4) { alert('대분류는 최대 4개까지 선택할 수 있습니다'); return; }
+    const maxOrder = (categories || []).reduce((m, c) => Math.max(m, c.sort_order || 0), 8);
+    const { data, error } = await supabase.from('part_categories').insert({ name: newName, sort_order: maxOrder + 1 }).select().single();
+    if (error) { alert('대분류 추가 실패: ' + error.message); return; }
+    setCategories(prev => [...prev, data].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)));
+    const newTokens = [...currentTokens, newName];
+    const newBigCat = newTokens.join('|');
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, big_category: newBigCat } : p));
+    const { error: upErr } = await supabase.from('products').update({ big_category: newBigCat, updated_at: new Date().toISOString() }).eq('id', productId);
+    if (upErr) alert('제품 저장 실패: ' + upErr.message);
+  };
+
+  // ─── 매입가 인증 ───
+  const handleAuthSubmit = async (input) => {
+    const { data } = await supabase.from('settings').select('value').eq('key', 'admin_password').maybeSingle();
+    const correctPw = data?.value ? String(data.value).replace(/"/g, '') : '1234';
+    if (String(input) === correctPw) {
+      setPurchaseAuthOk(true);
+      setShowAuthModal(false);
+      setAuthError('');
+    } else {
+      setAuthError('비밀번호가 일치하지 않습니다');
+    }
   };
 
   // 드래그 앤 드롭
@@ -5078,11 +5170,9 @@ function ProductsTable({ products, onReload, setProducts }) {
     if (fromIdx === -1 || fromIdx === dropIdx) { setDragId(null); setOverId(null); return; }
     const item = sorted[fromIdx];
     const newArr = [...sorted]; newArr.splice(fromIdx, 1); newArr.splice(dropIdx, 0, item);
-    // 로컬 state 즉시 갱신
     const updated = newArr.map((p, i) => ({ ...p, sort_order: i + 1 }));
     setProducts(updated);
     setDragId(null); setOverId(null);
-    // Supabase 저장 — 변경된 것만
     const changes = updated.filter((p, i) => sorted.findIndex(s => s.id === p.id) !== i || p.sort_order !== sorted.find(s => s.id === p.id)?.sort_order);
     await Promise.all(changes.map(p => supabase.from('products').update({ sort_order: p.sort_order }).eq('id', p.id)));
   };
@@ -5108,9 +5198,47 @@ function ProductsTable({ products, onReload, setProducts }) {
 
   const empty = <span className="empty-dot">●</span>;
 
-  const renderCell = (p, col, rowIdx) => {
+  // 그룹화 (PATCH39 합집합 패턴)
+  const groupedProducts = useMemo(() => {
+    const map = new Map();
+    products.forEach(p => {
+      const key = getCartGroupKey(p);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(p);
+    });
+    const orderedKeys = CART_GROUP_ORDER.filter(k => map.has(k));
+    const extraKeys = Array.from(map.keys()).filter(k => !CART_GROUP_ORDER.includes(k));
+    return [...orderedKeys, ...extraKeys].map(key => ({
+      key,
+      items: map.get(key),
+      totalCount: map.get(key).length,
+    }));
+  }, [products]);
+
+  const sortedAll = useMemo(() => [...products].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)), [products]);
+
+  const renderCell = (p, col) => {
     const val = p[col.key];
     const isEditing = editCell?.id === p.id && editCell?.field === col.key;
+
+    if (col.key === 'image_url') {
+      return (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <PartThumbnail
+            url={p.image_url}
+            name={p.model}
+            code={p.brand}
+            onClick={() => onPhotoClick && onPhotoClick({
+              url: p.image_url || null,
+              name: p.model,
+              code: p.brand,
+              productId: p.id,
+              table: 'products',
+            })}
+          />
+        </div>
+      );
+    }
 
     if (col.key === 'brand') {
       const [bg, c] = BRAND_COLORS[val] || ['#F4F6FA', '#5A6070'];
@@ -5130,6 +5258,46 @@ function ProductsTable({ products, onReload, setProducts }) {
               })}
             </div>
           )}
+        </div>
+      );
+    }
+
+    if (col.key === 'big_category') {
+      const tokens = (p.big_category || '').split('|').map(s => s.trim()).filter(Boolean);
+      if (tokens.length === 0) {
+        return <span style={{ display: 'inline-block', padding: '3px 9px', background: '#FAFBFC', color: '#9BA3B2', borderRadius: 999, fontSize: 11, border: '0.5px dashed #DDE1EB', whiteSpace: 'nowrap' }}>미분류</span>;
+      }
+      return (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'center', alignItems: 'center' }}>
+          {tokens.map((t, i) => (
+            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, padding: '3px 4px 3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: '#EDEBFE', color: '#5046B0', whiteSpace: 'nowrap' }}>
+              {t}
+              <span onClick={(e) => { e.stopPropagation(); removeBigCatToken(p.id, t); }}
+                title="제거"
+                style={{ width: 14, height: 14, borderRadius: 2, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#9BA3B2', fontSize: 11, cursor: 'pointer', lineHeight: 1, flexShrink: 0 }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#FCEBEB'; e.currentTarget.style.color = '#CC2222'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#9BA3B2'; }}
+              >×</span>
+            </span>
+          ))}
+        </div>
+      );
+    }
+
+    if (col.key === 'purchase_price') {
+      if (!purchaseAuthOk) {
+        return <span style={{ display: 'inline-block', width: 10, height: 10, background: '#CC2222', borderRadius: '50%' }} />;
+      }
+      if (isEditing) {
+        return <input className="as-cell-input" value={editValue} autoFocus
+          onChange={e => setEditValue(e.target.value.replace(/[^0-9]/g, ''))}
+          onBlur={commitEdit}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(); } if (e.key === 'Escape') setEditCell(null); }}
+          style={{ textAlign: 'right' }} />;
+      }
+      return (
+        <div style={{ background: '#FFF9E8', color: '#8A6300', fontWeight: 600, padding: '4px 10px', borderRadius: 3, textAlign: 'right', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}>
+          {val ? val.toLocaleString('ko-KR') : '입력'}
         </div>
       );
     }
@@ -5156,54 +5324,216 @@ function ProductsTable({ products, onReload, setProducts }) {
     return val || empty;
   };
 
+  const renderProductRow = (p, sortedIdx, zebraIdx) => (
+    <tr key={p.id} className="as-data-row"
+      draggable={dragId === p.id}
+      onDragOver={e => e.preventDefault()}
+      onDragEnter={e => { e.preventDefault(); setOverId(p.id); }}
+      onDragLeave={() => { if (overId === p.id) setOverId(null); }}
+      onDrop={e => { e.preventDefault(); handleDrop(sortedIdx); }}
+      onDragEnd={() => { setDragId(null); setOverId(null); }}
+      style={{
+        ...(zebraIdx % 2 === 1 && dragId !== p.id ? { background: '#FAFBFC' } : {}),
+        ...(dragId === p.id ? { background: '#E6F1FB', outline: '2px solid #185FA5', opacity: 0.7 } : {}),
+        ...(overId === p.id && dragId !== p.id ? { borderTop: '2px dashed #185FA5' } : {}),
+      }}>
+      <td style={{ width: 24, minWidth: 24, maxWidth: 24, padding: '4px 0', textAlign: 'center', cursor: 'grab', userSelect: 'none' }}
+        onMouseDown={() => { dragRef.current.dragId = p.id; setDragId(p.id); }}
+        onMouseUp={() => { if (!overId) { dragRef.current.dragId = null; setDragId(null); } }}>
+        <span style={{ color: '#9BA3B2', fontSize: 14 }}>≡</span>
+      </td>
+      {COLS.map(c => (
+        <td key={c.key} style={{
+          textAlign: 'center',
+          ...(c.key === 'brand' ? { overflow: 'visible', position: 'relative' } : {}),
+          ...(c.key === 'image_url' ? { padding: '4px 6px' } : {}),
+          ...(c.key === 'big_category' ? { cursor: 'pointer', padding: '8px 6px' } : {}),
+          ...(c.key === 'purchase_price' && purchaseAuthOk ? { textAlign: 'right' } : {}),
+        }}
+          onClick={(e) => {
+            if (c.key === 'brand' || c.key === '_manage' || c.key === 'image_url') return;
+            if (c.key === 'big_category') { openBigCatDropdown(p, e); return; }
+            if (c.key === 'purchase_price') {
+              if (purchaseAuthOk) startEdit(p.id, 'purchase_price', p.purchase_price?.toString() || '');
+              return;
+            }
+            startEdit(p.id, c.key, c.key === 'price' ? (p[c.key]?.toString() || '') : (p[c.key] || ''));
+          }}>
+          {renderCell(p, c)}
+        </td>
+      ))}
+    </tr>
+  );
+
   return (
+    <>
     <table className="as-table" ref={tableRef} style={{ width: 24 + COLS.reduce((s, c) => s + getW(c.key), 0) }}>
       <colgroup>
         <col style={{ width: 24 }} />
         {COLS.map(c => <col key={c.key} style={{ width: getW(c.key) }} />)}
       </colgroup>
       <thead><tr className="as-col-header">
-        <th style={{ width: 24, minWidth: 24, maxWidth: 24, padding: 0, position:'sticky', top:0, zIndex:10, background:'#EAECF2', boxShadow:'0 1px 0 0 #DDE1EB' }} />
-        {COLS.map((c, idx) => (
-          <th key={c.key} style={{position:'sticky',top:0,zIndex:10,background:'#EAECF2',color:'#5A6070',fontSize:13,fontWeight:500,padding:'8px 10px',height:36,lineHeight:'20px',boxShadow:'0 1px 0 0 #DDE1EB',userSelect:'none'}}>
-            {c.label}
-            <span className="col-resize-handle" onMouseDown={e => startResize(idx + 1, c.key, e)} />
-          </th>
-        ))}
+        <th style={{ width: 24, minWidth: 24, maxWidth: 24, padding: 0, position: 'sticky', top: 0, zIndex: 10, background: '#EAECF2', boxShadow: '0 1px 0 0 #DDE1EB' }} />
+        {COLS.map((c, idx) => {
+          const isPurchase = c.key === 'purchase_price';
+          return (
+            <th key={c.key}
+              onClick={isPurchase && !purchaseAuthOk ? () => setShowAuthModal(true) : undefined}
+              style={{
+                position: 'sticky', top: 0, zIndex: 10,
+                background: isPurchase ? '#FFF4D6' : '#EAECF2',
+                color: isPurchase ? '#8A6300' : '#5A6070',
+                fontSize: 13, fontWeight: isPurchase ? 600 : 500,
+                padding: '8px 10px', height: 36, lineHeight: '20px',
+                boxShadow: '0 1px 0 0 #DDE1EB', userSelect: 'none',
+                cursor: isPurchase && !purchaseAuthOk ? 'pointer' : 'default',
+                textAlign: 'center',
+              }}>
+              {isPurchase ? `${c.label} ${purchaseAuthOk ? '🔓' : '🔒'}` : c.label}
+              <span className="col-resize-handle" onMouseDown={e => startResize(idx + 1, c.key, e)} />
+            </th>
+          );
+        })}
       </tr></thead>
       <tbody>
-        {products.map((p, i) => (
-          <tr key={p.id} className="as-data-row"
-            draggable={dragId === p.id}
-            onDragOver={e => e.preventDefault()}
-            onDragEnter={e => { e.preventDefault(); setOverId(p.id); }}
-            onDragLeave={() => { if (overId === p.id) setOverId(null); }}
-            onDrop={e => { e.preventDefault(); handleDrop(i); }}
-            onDragEnd={() => { setDragId(null); setOverId(null); }}
-            style={{
-              ...(i % 2 === 1 && dragId !== p.id ? { background: '#FAFBFC' } : {}),
-              ...(dragId === p.id ? { background: '#E6F1FB', outline: '2px solid #185FA5', opacity: 0.7 } : {}),
-              ...(overId === p.id && dragId !== p.id ? { borderTop: '2px dashed #185FA5' } : {}),
-            }}>
-            <td style={{ width: 24, minWidth: 24, maxWidth: 24, padding: '4px 0', textAlign: 'center', cursor: 'grab', userSelect: 'none' }}
-              onMouseDown={() => { dragRef.current.dragId = p.id; setDragId(p.id); }}
-              onMouseUp={() => { if (!overId) { dragRef.current.dragId = null; setDragId(null); } }}>
-              <span style={{ color: '#9BA3B2', fontSize: 14 }}>≡</span>
-            </td>
-            {COLS.map(c => (
-              <td key={c.key} style={{ ...(c.key === 'brand' ? { overflow: 'visible', position: 'relative' } : {}), ...(c.key === '_manage' ? { textAlign: 'center' } : {}) }}
-                onClick={() => {
-                  if (c.key === 'brand' || c.key === '_manage') return;
-                  startEdit(p.id, c.key, c.key === 'price' ? (p[c.key]?.toString() || '') : (p[c.key] || ''));
+        {groupedProducts.map(group => (
+          <Fragment key={group.key}>
+            <tr>
+              <td colSpan={9} style={{ padding: 0, border: 'none' }}>
+                <div style={{
+                  background: '#1A1D23',
+                  color: '#FFFFFF',
+                  padding: '7px 14px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  borderTop: group.key === '공용/호환' ? '2px solid #444444' : 'none',
                 }}>
-                {renderCell(p, c, i)}
+                  <span style={{
+                    background: group.key === '공용/호환' ? '#5A6070' : '#185FA5',
+                    color: '#fff',
+                    padding: '2px 8px',
+                    borderRadius: 3,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                  }}>{group.key}</span>
+                  <span style={{ color: '#9BA3B2', fontWeight: 400, fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
+                    {group.totalCount}종
+                  </span>
+                  {group.key === '공용/호환' && (
+                    <span style={{ color: '#888780', fontWeight: 400, fontSize: 10, whiteSpace: 'nowrap' }}>
+                      대분류 다중 · 미지정 항목
+                    </span>
+                  )}
+                  {purchaseAuthOk && (
+                    <span style={{
+                      marginLeft: 'auto',
+                      background: '#FFF4D6',
+                      color: '#8A6300',
+                      padding: '2px 8px',
+                      borderRadius: 3,
+                      fontSize: 11,
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                    }}>🔓 매입가 노출 중</span>
+                  )}
+                </div>
               </td>
-            ))}
-          </tr>
+            </tr>
+            {group.items.map((p, gIdx) => {
+              const sortedIdx = sortedAll.findIndex(x => x.id === p.id);
+              return renderProductRow(p, sortedIdx, gIdx);
+            })}
+          </Fragment>
         ))}
-        {products.length === 0 && <tr><td colSpan={6} className="empty">등록된 제품이 없습니다</td></tr>}
+        {products.length === 0 && <tr><td colSpan={9} className="empty">등록된 제품이 없습니다</td></tr>}
       </tbody>
     </table>
+
+    {/* 카테고리 드롭다운 */}
+    {bigCatDropdown && (() => {
+      const dropProduct = products.find(p => p.id === bigCatDropdown.id);
+      const currentTokens = new Set(((dropProduct?.big_category || '').split('|').map(s => s.trim()).filter(Boolean)));
+      return (
+        <>
+          <div onMouseDown={() => setBigCatDropdown(null)}
+            style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'transparent' }} />
+          <CategoryDropdown
+            categories={categories || []}
+            selectedTokens={currentTokens}
+            position={bigCatDropdown}
+            onToggle={(name) => toggleBigCatToken(bigCatDropdown.id, name)}
+            onClear={() => clearBigCatTokens(bigCatDropdown.id)}
+            onAddNew={addCategoryAndAddToken}
+            onCancel={() => setBigCatDropdown(null)}
+          />
+        </>
+      );
+    })()}
+
+    {/* 매입가 인증 모달 */}
+    {showAuthModal && (
+      <div
+        className="modal-overlay"
+        onMouseDown={() => { setShowAuthModal(false); setAuthError(''); }}
+        onClick={() => { setShowAuthModal(false); setAuthError(''); }}
+      >
+        <div
+          className="modal-content"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          style={{ maxWidth: 360, padding: 24 }}
+        >
+          <div style={{ fontSize: 16, fontWeight: 600, color: '#1A1D23', marginBottom: 6 }}>
+            🔒 매입가 보기
+          </div>
+          <div style={{ fontSize: 12, color: '#5A6070', marginBottom: 16 }}>
+            관리자 비밀번호 4자리
+          </div>
+          <input
+            type="password"
+            maxLength={4}
+            autoFocus
+            onChange={(e) => { e.target.value = e.target.value.replace(/\D/g, ''); }}
+            onKeyDown={async (e) => { if (e.key === 'Enter') await handleAuthSubmit(e.target.value); }}
+            style={{
+              width: '100%', height: 40, padding: '0 12px', fontSize: 18,
+              letterSpacing: 4, textAlign: 'center',
+              border: '1px solid #DDE1EB', borderRadius: 6,
+              marginBottom: 12, fontFamily: 'inherit', boxSizing: 'border-box',
+            }}
+          />
+          {authError && (
+            <div style={{ color: '#CC2222', fontSize: 12, marginBottom: 12 }}>{authError}</div>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => { setShowAuthModal(false); setAuthError(''); }}
+              style={{
+                flex: 1, height: 36, background: '#FFFFFF', color: '#5A6070',
+                border: '1px solid #DDE1EB', borderRadius: 6,
+                fontFamily: 'inherit', fontSize: 13, cursor: 'pointer',
+              }}
+            >취소</button>
+            <button
+              onClick={async () => {
+                const inputEl = document.querySelector('.modal-content input[type=password]');
+                if (inputEl?.value) await handleAuthSubmit(inputEl.value);
+              }}
+              style={{
+                flex: 1, height: 36, background: '#185FA5', color: '#FFFFFF',
+                border: '1px solid #185FA5', borderRadius: 6,
+                fontFamily: 'inherit', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              }}
+            >확인</button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
