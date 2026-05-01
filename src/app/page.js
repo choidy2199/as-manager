@@ -6396,7 +6396,7 @@ function SettingsTab({ asRecords }) {
             <div style={{fontSize:15,fontWeight:600,marginBottom:12}}>📡 SMS 연동 (httpSMS)</div>
             <div style={{marginBottom:12}}><span style={{fontSize:12,color:apiKey?'#1D9E75':'#9BA3B2'}}>● {apiKey?'연결됨':'미설정'}</span></div>
             <div className="form-grid">
-              <div className="form-field"><label className="label">API 키</label><input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} className="input" placeholder="httpSMS API Key" /></div>
+              <div className="form-field"><label className="label">API 키</label><input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} className="input" autoComplete="off" placeholder="httpSMS API Key" /></div>
               <div className="form-field"><label className="label">발신 번호</label><input value={apiPhone} onChange={e => setApiPhone(e.target.value)} className="input" placeholder="010-0000-0000" /></div>
             </div>
             <div style={{display:'flex',gap:8,marginTop:8}}>
@@ -6445,9 +6445,9 @@ function SettingsTab({ asRecords }) {
           <div style={{background:'#fff',border:'1px solid #DDE1EB',borderRadius:8,padding:20,marginBottom:16}}>
             <div style={{fontSize:15,fontWeight:600,marginBottom:12}}>🔐 관리자 비밀번호 변경</div>
             <div style={{maxWidth:300}}>
-              <div className="form-field"><label className="label">현재 비밀번호</label><input type="password" maxLength={4} value={curPw} onChange={e => setCurPw(e.target.value.replace(/\D/g,''))} className="input" placeholder="4자리" /></div>
-              <div className="form-field"><label className="label">새 비밀번호</label><input type="password" maxLength={4} value={newPw} onChange={e => setNewPw(e.target.value.replace(/\D/g,''))} className="input" placeholder="4자리" /></div>
-              <div className="form-field"><label className="label">새 비밀번호 확인</label><input type="password" maxLength={4} value={newPwC} onChange={e => setNewPwC(e.target.value.replace(/\D/g,''))} className="input" placeholder="4자리" /></div>
+              <div className="form-field"><label className="label">현재 비밀번호</label><input type="password" maxLength={4} value={curPw} onChange={e => setCurPw(e.target.value.replace(/\D/g,''))} className="input" autoComplete="current-password" placeholder="4자리" /></div>
+              <div className="form-field"><label className="label">새 비밀번호</label><input type="password" maxLength={4} value={newPw} onChange={e => setNewPw(e.target.value.replace(/\D/g,''))} className="input" autoComplete="new-password" placeholder="4자리" /></div>
+              <div className="form-field"><label className="label">새 비밀번호 확인</label><input type="password" maxLength={4} value={newPwC} onChange={e => setNewPwC(e.target.value.replace(/\D/g,''))} className="input" autoComplete="new-password" placeholder="4자리" /></div>
             </div>
             <button className="btn-primary" style={{fontSize:12,marginTop:8}} onClick={() => {
               if(curPw!==getAdminPw()){alert('현재 비밀번호가 틀립니다');return;}
