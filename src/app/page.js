@@ -3965,9 +3965,12 @@ function PartThumbnail({ url, name, code, onClick }) {
 
 
 /* ═══ PHOTO LIGHTBOX ═══ */
-function PhotoLightbox({ url, name, code, partId, readOnly, onClose, onUpdate }) {
+function PhotoLightbox({ url, name, code, partId, productId, table = 'parts', readOnly, onClose, onUpdate }) {
   const fileInputRef = useRef(null);
   const [busy, setBusy] = useState(false);
+  const recordId = table === 'products' ? productId : partId;
+  const bucket = table === 'products' ? 'product-images' : 'parts-images';
+  const fileNamePrefix = table === 'products' ? 'product_' : 'part_';
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -3995,13 +3998,13 @@ function PhotoLightbox({ url, name, code, partId, readOnly, onClose, onUpdate })
         canvas.toBlob(async (blob) => {
           if (!blob) { alert('이미지 변환 실패'); return; }
           setBusy(true);
-          const fileName = `part_${Date.now()}.png`;
-          const { error: upErr } = await supabase.storage.from('parts-images').upload(fileName, blob, { contentType: 'image/png', upsert: true });
+          const fileName = `${fileNamePrefix}${Date.now()}.png`;
+          const { error: upErr } = await supabase.storage.from(bucket).upload(fileName, blob, { contentType: 'image/png', upsert: true });
           if (upErr) { setBusy(false); alert('이미지 업로드 실패: ' + upErr.message); return; }
-          const { data: urlData } = supabase.storage.from('parts-images').getPublicUrl(fileName);
+          const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
           const newUrl = urlData?.publicUrl || null;
           if (!newUrl || newUrl.startsWith('blob:')) { setBusy(false); alert('업로드 URL 생성 실패'); return; }
-          const { error } = await supabase.from('parts').update({ image_url: newUrl }).eq('id', partId);
+          const { error } = await supabase.from(table).update({ image_url: newUrl }).eq('id', recordId);
           if (error) { setBusy(false); alert('저장 실패: ' + error.message); return; }
           setBusy(false);
           if (onUpdate) onUpdate(newUrl);
@@ -4016,14 +4019,14 @@ function PhotoLightbox({ url, name, code, partId, readOnly, onClose, onUpdate })
   const handleDelete = async () => {
     if (!confirm('사진을 삭제하시겠습니까?')) return;
     setBusy(true);
-    const { error } = await supabase.from('parts').update({ image_url: null }).eq('id', partId);
+    const { error } = await supabase.from(table).update({ image_url: null }).eq('id', recordId);
     if (error) { setBusy(false); alert('삭제 실패: ' + error.message); return; }
     setBusy(false);
     if (onUpdate) onUpdate(null);
     onClose();
   };
 
-  const canEdit = !readOnly && !!partId;
+  const canEdit = !readOnly && !!recordId;
 
   return (
     <div onClick={onClose} style={{position:'fixed',inset:0,zIndex:10000,background:'rgba(10,12,15,0.82)',display:'flex',alignItems:'center',justifyContent:'center',padding:24}}>
