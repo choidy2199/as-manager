@@ -4919,6 +4919,7 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
   const [purchaseAuthOk, setPurchaseAuthOk] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [showLockConfirmModal, setShowLockConfirmModal] = useState(false);
   const tableRef = useRef(null);
   const savedWidthsRef = useRef((() => {
     if (typeof window === 'undefined') return {};
@@ -5101,6 +5102,14 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
       setAuthError('비밀번호가 일치하지 않습니다');
     }
   };
+
+  // 잠금 확인 모달 ESC 처리 (인증 상태 유지, 모달만 닫기)
+  useEffect(() => {
+    if (!showLockConfirmModal) return;
+    const handler = (e) => { if (e.key === 'Escape') setShowLockConfirmModal(false); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [showLockConfirmModal]);
 
   // 드래그 앤 드롭
   const dragRef = useRef({ dragId: null, overId: null });
@@ -5404,7 +5413,7 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
           const isPurchase = c.key === 'purchase_price';
           return (
             <th key={c.key}
-              onClick={isPurchase && !purchaseAuthOk ? () => setShowAuthModal(true) : undefined}
+              onClick={isPurchase ? (() => { if (purchaseAuthOk) setShowLockConfirmModal(true); else setShowAuthModal(true); }) : undefined}
               style={{
                 position: 'sticky', top: 0, zIndex: 10,
                 background: isPurchase ? '#FFF4D6' : '#EAECF2',
@@ -5412,7 +5421,7 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
                 fontSize: 13, fontWeight: isPurchase ? 600 : 500,
                 padding: '8px 10px', height: 36, lineHeight: '20px',
                 boxShadow: '0 1px 0 0 #DDE1EB', userSelect: 'none',
-                cursor: isPurchase && !purchaseAuthOk ? 'pointer' : 'default',
+                cursor: isPurchase ? 'pointer' : 'default',
                 textAlign: 'center',
               }}>
               {isPurchase ? `${c.label} ${purchaseAuthOk ? '🔓' : '🔒'}` : c.label}
@@ -5626,6 +5635,48 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
                 const inputEl = document.querySelector('.modal-content input[type=password]');
                 if (inputEl?.value) await handleAuthSubmit(inputEl.value);
               }}
+              style={{
+                flex: 1, height: 36, background: '#185FA5', color: '#FFFFFF',
+                border: '1px solid #185FA5', borderRadius: 6,
+                fontFamily: 'inherit', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              }}
+            >확인</button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* 매입가 잠금 확인 모달 */}
+    {showLockConfirmModal && (
+      <div
+        className="modal-overlay"
+        onMouseDown={() => setShowLockConfirmModal(false)}
+        onClick={() => setShowLockConfirmModal(false)}
+      >
+        <div
+          className="modal-content"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          style={{ maxWidth: 360, padding: 24 }}
+        >
+          <div style={{ fontSize: 16, fontWeight: 600, color: '#1A1D23', marginBottom: 8 }}>
+            🔒 매입가 입력 종료
+          </div>
+          <div style={{ fontSize: 13, color: '#5A6070', marginBottom: 20, lineHeight: 1.5 }}>
+            매입가 입력을 마치시겠습니까?<br />
+            확인 시 매입가가 다시 잠금 처리됩니다.
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => setShowLockConfirmModal(false)}
+              style={{
+                flex: 1, height: 36, background: '#FFFFFF', color: '#5A6070',
+                border: '1px solid #DDE1EB', borderRadius: 6,
+                fontFamily: 'inherit', fontSize: 13, cursor: 'pointer',
+              }}
+            >취소</button>
+            <button
+              onClick={() => { setPurchaseAuthOk(false); setShowLockConfirmModal(false); }}
               style={{
                 flex: 1, height: 36, background: '#185FA5', color: '#FFFFFF',
                 border: '1px solid #185FA5', borderRadius: 6,
