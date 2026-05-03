@@ -2072,8 +2072,10 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
           </tr>
         )}
         {/* 데이터 행 */}
-        {records.map((r, rowIdx) => (
-          <tr key={r.id} className="as-data-row" style={rowIdx % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
+        {records.map((r, rowIdx) => {
+          const isCompleted = !!String(r.tracking_number || '').trim();
+          return (
+          <tr key={r.id} className="as-data-row" style={isCompleted ? {background:'#B0BBC9'} : (rowIdx % 2 === 1 ? {background:'#FAFBFC'} : undefined)}>
             {COLS.map(c => {
                 const tdStyle = { ...(c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {}), ...(c.type === 'readonly' ? {cursor:'default'} : {}), ...(deleteMode && c.key === 'record_type' ? {position:'relative'} : {}) };
                 return (
@@ -2095,7 +2097,8 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
                 </td>);
             })}
           </tr>
-        ))}
+          );
+        })}
         {records.length === 0 && !hideEmptyMessage && (
           <tr><td colSpan={COLS.length} className="empty">조건에 맞는 AS 건이 없습니다</td></tr>
         )}
@@ -2607,8 +2610,10 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
           </tr>
           );
         })()}
-        {sorted.map((r, i) => (
-          <tr key={r.id} className="as-data-row" style={{background: noTracking(r) ? '#FAEEDA' : (i % 2 === 1 ? '#FAFBFC' : undefined)}}>
+        {sorted.map((r, i) => {
+          const isCompleted = !!String(r.tracking_no || '').trim();
+          return (
+          <tr key={r.id} className="as-data-row" style={{background: noTracking(r) ? '#FAEEDA' : (isCompleted ? '#B0BBC9' : (i % 2 === 1 ? '#FAFBFC' : undefined))}}>
             {COLS.map(c => (
               <td key={c.key} style={{...(c.key === 'tracking_no' && noTracking(r) ? {border:'2px solid #1D9E75'} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {}), ...((c.type === 'readonly' || c.type === 'readonly-badge' || c.type === 'static') ? {cursor:'default'} : {})}}
                 onClick={() => { if (c.type === 'action' || c.type === 'select' || c.type === 'readonly' || c.type === 'readonly-badge' || c.type === 'static') return; startEdit(r.id, c.key, r[c.key] || ''); }}>
@@ -2616,7 +2621,8 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
               </td>
             ))}
           </tr>
-        ))}
+          );
+        })}
         {sorted.length === 0 && !hideEmptyMessage && <tr><td colSpan={COLS.length} className="empty">택배 발송 내역이 없습니다</td></tr>}
       </tbody>
     </table>
