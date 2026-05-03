@@ -978,6 +978,15 @@ export default function Home() {
                     onClick={() => setDeleteMode(!deleteMode)}>{deleteMode ? '완료' : '삭제'}</button>
                 </div>
               </div>
+              {filteredAS.length === 0 && !dateAll && !search && (
+                <EmptyDateFilterNotice
+                  onShowAll={() => {
+                    setDateAll(true);
+                    setDateFilterMode('all');
+                    localStorage.setItem('as_date_filter_mode','all');
+                  }}
+                />
+              )}
               <div className="as-table-wrapper">
                 <ASTable
                   records={filteredAS}
@@ -993,6 +1002,7 @@ export default function Home() {
                   companies={companies}
                   sendAutoSMS={sendAutoSMS}
                   confirmMap={confirmMap}
+                  hideEmptyMessage={filteredAS.length === 0 && !dateAll && !search}
                   onOpenCustomer={(name, phone, company) => setCustomerPopup({ name, phone, company })}
                   onAddShip={async (r) => {
                     await addShip({ shipDate: today(), carrier: null, trackingNo: null, senderName: '선택', receiverName: r.customer_name || r.company_name || '', receiverPhone: r.customer_phone, receiverAddress: null, contents: r.model || null, memo: null, asRecordId: r.id, deliveryMessage: r.repair_result || null });
@@ -1066,6 +1076,15 @@ export default function Home() {
                 <span style={{fontSize:12,fontWeight:600}}>택배 발송</span>
                 <span style={{fontSize:12,color:'rgba(255,255,255,0.5)'}}>{shipDateLabel} — {filtered.length}건</span>
               </div>
+              {filtered.length === 0 && !shipDateAll && !shipSearch && (
+                <EmptyDateFilterNotice
+                  onShowAll={() => {
+                    setShipDateAll(true);
+                    setShipDateFilterMode('all');
+                    localStorage.setItem('ship_date_filter_mode','all');
+                  }}
+                />
+              )}
               <div className="as-table-wrapper" style={{maxHeight:'calc(100vh - 220px)'}}>
                 <ShipTable
                   records={filtered}
@@ -1078,6 +1097,7 @@ export default function Home() {
                   onHideNewRow={() => setShowNewShipRow(false)}
                   saveASField={saveASField}
                   sendAutoSMS={sendAutoSMS}
+                  hideEmptyMessage={filtered.length === 0 && !shipDateAll && !shipSearch}
                 />
               </div>
             </div>
@@ -1447,9 +1467,56 @@ export default function Home() {
 
 
 /* ═══════════════════════════════════════════════
+   EMPTY DATE FILTER NOTICE — 0건 시 [전체 기간 보기] 안내
+   ═══════════════════════════════════════════════ */
+function EmptyDateFilterNotice({ onShowAll }) {
+  return (
+    <div style={{
+      margin: '12px 0',
+      padding: '14px 18px',
+      background: '#E6F1FB',
+      border: '1px solid #B5D4F4',
+      borderRadius: 8,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 14,
+    }}>
+      <span style={{ fontSize: 20 }}>ℹ️</span>
+      <div style={{ flex: 1, fontSize: 13, color: '#1A1D23', lineHeight: 1.5 }}>
+        <div style={{ fontWeight: 600, marginBottom: 2 }}>
+          현재 기간 필터에 데이터가 없습니다.
+        </div>
+        <div style={{ color: '#5A6070', fontSize: 12 }}>
+          기본 필터는 &quot;이번달&quot;입니다. 전체 기간 데이터를 확인하려면 우측 버튼을 눌러주세요.
+        </div>
+      </div>
+      <button
+        onClick={onShowAll}
+        style={{
+          height: 36,
+          padding: '0 16px',
+          background: '#185FA5',
+          color: '#FFFFFF',
+          border: '1px solid #185FA5',
+          borderRadius: 6,
+          fontFamily: 'inherit',
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        📅 전체 기간 보기
+      </button>
+    </div>
+  );
+}
+
+
+/* ═══════════════════════════════════════════════
    AS 테이블 — 인라인 편집
    ═══════════════════════════════════════════════ */
-function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip, deleteMode, technicians, products, companies, sendAutoSMS, confirmMap }) {
+function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRow, onHideNewRow, onOpenCustomer, onAddShip, deleteMode, technicians, products, companies, sendAutoSMS, confirmMap, hideEmptyMessage }) {
   const [editCell, setEditCell] = useState(null); // {id, field} — 텍스트/숫자/날짜용
   const [editValue, setEditValue] = useState('');
   const [badgeOpen, setBadgeOpen] = useState(null); // {id, field} — 뱃지 펼침용
@@ -2029,7 +2096,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
             })}
           </tr>
         ))}
-        {records.length === 0 && (
+        {records.length === 0 && !hideEmptyMessage && (
           <tr><td colSpan={COLS.length} className="empty">조건에 맞는 AS 건이 없습니다</td></tr>
         )}
       </tbody>
@@ -2108,7 +2175,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
 
 
 /* ═══ SHIP TABLE — 인라인 편집 ═══ */
-function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, showNewRow, onHideNewRow, saveASField, sendAutoSMS }) {
+function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, showNewRow, onHideNewRow, saveASField, sendAutoSMS, hideEmptyMessage }) {
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [newRow, setNewRow] = useState({ ship_date: today(), carrier: '롯데', tracking_no: '', sender_name: '선택', receiver_name: '', receiver_phone: '', receiver_address: '', contents: '', delivery_message: '', as_record_id: null, quantity: 1, memo: '' });
@@ -2550,7 +2617,7 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
             ))}
           </tr>
         ))}
-        {sorted.length === 0 && <tr><td colSpan={COLS.length} className="empty">택배 발송 내역이 없습니다</td></tr>}
+        {sorted.length === 0 && !hideEmptyMessage && <tr><td colSpan={COLS.length} className="empty">택배 발송 내역이 없습니다</td></tr>}
       </tbody>
     </table>
     {calendarOpen && calendarOpen.pos && (() => {
@@ -6517,6 +6584,12 @@ function SettingsTab({ asRecords, products }) {
             })}
           </div>
 
+          {displayRecs.length === 0 && !billDateAll && (
+            <EmptyDateFilterNotice
+              onShowAll={() => setBillMode('all')}
+            />
+          )}
+
           <div className="section">
             <div className="section-header">
               <span style={{fontSize:12,fontWeight:600}}>정산 내역</span>
@@ -6541,7 +6614,7 @@ function SettingsTab({ asRecords, products }) {
                     <td>{r.invoice_type ? B(r.invoice_type.includes('계산서')?'#E6F1FB':'#F4F6FA',r.invoice_type.includes('계산서')?'#0C447C':'#5A6070',r.invoice_type==='없음(일반소매)'?'일반':r.invoice_type.includes('계산서')?'계산서':r.invoice_type) : <span className="empty-dot">●</span>}</td>
                   </tr>
                 ))}
-                {displayRecs.length === 0 && <tr><td colSpan={8} className="empty">정산 내역이 없습니다</td></tr>}
+                {displayRecs.length === 0 && (billDateAll || !billDateFrom) && <tr><td colSpan={8} className="empty">정산 내역이 없습니다</td></tr>}
               </tbody>
               {displayRecs.length > 0 && <tfoot>
                 <tr style={{background:'#F4F6FA',fontWeight:700,borderTop:'2px solid #B0B8CC'}}>
