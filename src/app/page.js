@@ -2075,7 +2075,7 @@ function ASTable({ records, onSaveField, onAddNew, onDelete, onReload, showNewRo
         {records.map((r, rowIdx) => {
           const isCompleted = !!String(r.tracking_number || '').trim();
           return (
-          <tr key={r.id} className="as-data-row" style={isCompleted ? {background:'#B0BBC9'} : (rowIdx % 2 === 1 ? {background:'#FAFBFC'} : undefined)}>
+          <tr key={r.id} className="as-data-row" style={isCompleted ? {background:'#DDE3EB'} : (rowIdx % 2 === 1 ? {background:'#FAFBFC'} : undefined)}>
             {COLS.map(c => {
                 const tdStyle = { ...(c.groupEnd && c.groupBorderColorBody ? {borderRight:`2px solid ${c.groupBorderColorBody}`} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {}), ...(c.type === 'readonly' ? {cursor:'default'} : {}), ...(deleteMode && c.key === 'record_type' ? {position:'relative'} : {}) };
                 return (
@@ -2613,7 +2613,7 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
         {sorted.map((r, i) => {
           const isCompleted = !!String(r.tracking_no || '').trim();
           return (
-          <tr key={r.id} className="as-data-row" style={{background: noTracking(r) ? '#FAEEDA' : (isCompleted ? '#B0BBC9' : (i % 2 === 1 ? '#FAFBFC' : undefined))}}>
+          <tr key={r.id} className="as-data-row" style={{background: noTracking(r) ? '#FAEEDA' : (isCompleted ? '#DDE3EB' : (i % 2 === 1 ? '#FAFBFC' : undefined))}}>
             {COLS.map(c => (
               <td key={c.key} style={{...(c.key === 'tracking_no' && noTracking(r) ? {border:'2px solid #1D9E75'} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {}), ...((c.type === 'readonly' || c.type === 'readonly-badge' || c.type === 'static') ? {cursor:'default'} : {})}}
                 onClick={() => { if (c.type === 'action' || c.type === 'select' || c.type === 'readonly' || c.type === 'readonly-badge' || c.type === 'static') return; startEdit(r.id, c.key, r[c.key] || ''); }}>
