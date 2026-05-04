@@ -48,18 +48,40 @@ export default function LoginPage() {
       return;
     }
 
-    // 2) user_site_access에서 as_manager 권한 확인
+    // 2) public.users에서 auth_id로 id 조회
+    const { data: userRow, error: userErr } = await sbAuth
+      .from('users')
+      .select('id, is_active')
+      .eq('auth_id', signInData.user.id)
+      .maybeSingle();
+
+    if (userErr) {
+      console.error('users 조회 실패:', userErr);
+      await sbAuth.auth.signOut();
+      setError('계정 조회 중 오류가 발생했습니다.');
+      setLoading(false);
+      return;
+    }
+
+    if (!userRow || !userRow.is_active) {
+      await sbAuth.auth.signOut();
+      setError('등록되지 않거나 비활성화된 계정입니다.');
+      setLoading(false);
+      return;
+    }
+
+    // 3) user_site_access + sites JOIN으로 as_manager 권한 확인
     const { data: access, error: accessError } = await sbAuth
       .from('user_site_access')
-      .select('site')
-      .eq('user_id', signInData.user.id)
-      .eq('site', 'as_manager')
+      .select('access_level, sites!inner(code)')
+      .eq('user_id', userRow.id)
+      .eq('sites.code', 'as_manager')
       .maybeSingle();
 
     if (accessError) {
       console.error('권한 조회 실패:', accessError);
       await sbAuth.auth.signOut();
-      setError('권한 확인 중 오류가 발생했습니다. 관리자에게 문의하세요.');
+      setError('권한 확인 중 오류가 발생했습니다.');
       setLoading(false);
       return;
     }
@@ -71,7 +93,7 @@ export default function LoginPage() {
       return;
     }
 
-    // 3) 권한 있으면 메인으로
+    // 권한 OK → 메인으로
     window.location.href = '/';
   };
 
