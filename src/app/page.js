@@ -458,6 +458,15 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
+  /* ── URL ?tab 파라미터로 초기 탭 설정 (대한플랫폼 iframe deep link 지원) ── */
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const t = sp.get('tab');
+    if (t && ['as','ship','companies','products','parts','settings'].includes(t)) {
+      setTab(t);
+    }
+  }, []);
+
   /* ── Data Load (날짜 범위 기반, 검색어 있으면 전체) ── */
   const loadData = useCallback(async (unused, fullSearch) => {
     let asQuery = supabase.from('as_records').select('*').order('created_at', { ascending: false });
