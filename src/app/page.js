@@ -521,16 +521,19 @@ export default function Home() {
   useEffect(() => { if (user) loadTemplates(); }, [user, loadTemplates]);
 
   /* ── Realtime ── */
+  const loadDataRef = useRef(loadData);
+  useEffect(() => { loadDataRef.current = loadData; }, [loadData]);
+
   useEffect(() => {
     if (!user) return;
     const ch = supabase.channel('db-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'as_records' }, (payload) => {
         console.log('[realtime] as_records event:', payload.eventType, payload.new?.id || payload.old?.id);
-        loadData();
+        loadDataRef.current();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ship_records' }, (payload) => {
         console.log('[realtime] ship_records event:', payload.eventType, payload.new?.id || payload.old?.id);
-        loadData();
+        loadDataRef.current();
       })
       .subscribe((status, err) => {
         console.log('[realtime] db-changes status:', status, err || '');
@@ -540,7 +543,7 @@ export default function Home() {
         }
       });
     return () => { supabase.removeChannel(ch); };
-  }, [user, loadData]);
+  }, [user]);
 
   /* ── AS inline save ── */
   const saveASField = async (id, field, value) => {
