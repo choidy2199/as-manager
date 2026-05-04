@@ -1,13 +1,29 @@
+'use client';
 import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 const autoLogin = typeof window !== 'undefined' && localStorage.getItem('as_auto_login') === 'true';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+// 인증용 클라이언트 - Daehan-Seoul (5명 통합 인증 마스터)
+const authUrl = process.env.NEXT_PUBLIC_SUPABASE_AUTH_URL;
+const authKey = process.env.NEXT_PUBLIC_SUPABASE_AUTH_ANON_KEY;
+export const sbAuth = createClient(authUrl, authKey, {
   auth: {
     persistSession: autoLogin,
     autoRefreshToken: autoLogin,
-  }
+    storageKey: 'sb-auth-daehan-seoul',
+  },
 });
+
+// 데이터용 클라이언트 - as-manager 자체 (기존 그대로)
+const dataUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const dataKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export const sbData = createClient(dataUrl, dataKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    storageKey: 'sb-data-as-manager',
+  },
+});
+
+// 하위 호환: 기존 import { supabase } 사용 코드를 위한 alias
+export const supabase = sbData;

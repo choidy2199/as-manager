@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, sbAuth } from '@/lib/supabase';
 
 /* ── 상수 ── */
 const BRANDS = ["콜라보","마끼다","디월트","프레레","기타"];
@@ -448,11 +448,11 @@ export default function Home() {
 
   /* ── Auth ── */
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    sbAuth.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setAuthLoading(false);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: { subscription } } = sbAuth.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);
     });
     return () => subscription.unsubscribe();
@@ -618,7 +618,7 @@ export default function Home() {
     loadData();
   };
 
-  const logout = async () => { await supabase.auth.signOut(); setUser(null); };
+  const logout = async () => { await sbAuth.auth.signOut(); setUser(null); };
 
   /* ── 택배 엑셀 출력 ── */
   const exportShipExcel = (data, label) => {

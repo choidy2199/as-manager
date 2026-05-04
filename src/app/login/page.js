@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { sbAuth } from '@/lib/supabase';
 
 export default function LoginPage() {
   const [userId, setUserId] = useState('');
@@ -28,7 +28,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    const email = userId.includes('@') ? userId : userId + '@asmanager.com';
+    const email = userId.includes('@') ? userId : userId + '@daehantool.dev';
 
     if (saveId) {
       localStorage.setItem('as_saved_id', userId);
@@ -40,13 +40,39 @@ export default function LoginPage() {
 
     localStorage.setItem('as_auto_login', autoLogin ? 'true' : 'false');
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
+    // 1) Daehan-Seoul Auth로 로그인
+    const { data: signInData, error: signInError } = await sbAuth.auth.signInWithPassword({ email, password });
+    if (signInError || !signInData?.user) {
       setError('아이디 또는 비밀번호가 올바르지 않습니다.');
-    } else {
-      window.location.href = '/';
+      setLoading(false);
+      return;
     }
-    setLoading(false);
+
+    // 2) user_site_access에서 as_manager 권한 확인
+    const { data: access, error: accessError } = await sbAuth
+      .from('user_site_access')
+      .select('site')
+      .eq('user_id', signInData.user.id)
+      .eq('site', 'as_manager')
+      .maybeSingle();
+
+    if (accessError) {
+      console.error('권한 조회 실패:', accessError);
+      await sbAuth.auth.signOut();
+      setError('권한 확인 중 오류가 발생했습니다. 관리자에게 문의하세요.');
+      setLoading(false);
+      return;
+    }
+
+    if (!access) {
+      await sbAuth.auth.signOut();
+      setError('AS매니저 접근 권한이 없습니다.');
+      setLoading(false);
+      return;
+    }
+
+    // 3) 권한 있으면 메인으로
+    window.location.href = '/';
   };
 
   return (
