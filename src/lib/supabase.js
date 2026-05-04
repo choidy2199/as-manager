@@ -1,15 +1,13 @@
 'use client';
 import { createClient } from '@supabase/supabase-js';
 
-const autoLogin = typeof window !== 'undefined' && localStorage.getItem('as_auto_login') === 'true';
-
 // 인증용 클라이언트 - Daehan-Seoul (5명 통합 인증 마스터)
 const authUrl = process.env.NEXT_PUBLIC_SUPABASE_AUTH_URL;
 const authKey = process.env.NEXT_PUBLIC_SUPABASE_AUTH_ANON_KEY;
 export const sbAuth = createClient(authUrl, authKey, {
   auth: {
-    persistSession: autoLogin,
-    autoRefreshToken: autoLogin,
+    persistSession: true,
+    autoRefreshToken: true,
     storageKey: 'sb-auth-daehan-seoul',
   },
 });
