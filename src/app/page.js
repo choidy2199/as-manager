@@ -527,21 +527,9 @@ export default function Home() {
   useEffect(() => {
     if (!user) return;
     const ch = supabase.channel('db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'as_records' }, (payload) => {
-        console.log('[realtime] as_records event:', payload.eventType, payload.new?.id || payload.old?.id);
-        loadDataRef.current();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ship_records' }, (payload) => {
-        console.log('[realtime] ship_records event:', payload.eventType, payload.new?.id || payload.old?.id);
-        loadDataRef.current();
-      })
-      .subscribe((status, err) => {
-        console.log('[realtime] db-changes status:', status, err || '');
-        if (typeof window !== 'undefined') {
-          window.__sb = supabase;
-          window.__ch = ch;
-        }
-      });
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'as_records' }, () => loadDataRef.current())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ship_records' }, () => loadDataRef.current())
+      .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [user]);
 
