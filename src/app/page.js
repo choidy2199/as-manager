@@ -517,8 +517,10 @@ export default function Home() {
     }
   }, []);
 
-  useEffect(() => { if (user) loadData(null, debouncedSearch.length >= 2); }, [user, dateFrom, dateTo, dateAll, shipDateFrom, shipDateTo, shipDateAll, loadData, debouncedSearch]);
-  useEffect(() => { if (user) loadTemplates(); }, [user, loadTemplates]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (user) loadData(null, debouncedSearch.length >= 2); }, [user, dateFrom, dateTo, dateAll, shipDateFrom, shipDateTo, shipDateAll, debouncedSearch]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (user) loadTemplates(); }, [user]);
 
   /* ── Realtime ── */
   const loadDataRef = useRef(loadData);
