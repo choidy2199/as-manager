@@ -6583,19 +6583,19 @@ function SettingsTab({ asRecords, products }) {
                   {card.typeKey === null ? (
                     <div style={{padding:'16px 16px 12px',borderBottom:'1px solid #DDE1EB'}}>
                       <div style={{display:'flex',gap:12,alignItems:'flex-end'}}>
-                        <div style={{flex:1}}>
+                        <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:11,fontWeight:500,color:'#5A6070',marginBottom:4}}>매출</div>
                           <div style={{display:'flex',alignItems:'baseline',gap:4}}>
-                            <span style={{fontSize:18,fontWeight:700,letterSpacing:'-0.5px',color:'#185FA5',fontFamily:"'Pretendard', -apple-system, sans-serif"}}>{stats.revenue.toLocaleString('ko-KR')}</span>
-                            <span style={{fontSize:13,fontWeight:500,color:'#5A6070'}}>원</span>
+                            <span style={{fontSize:22,fontWeight:700,lineHeight:1.2,letterSpacing:'-0.5px',color:'#185FA5',fontFamily:"'Pretendard', -apple-system, sans-serif"}}>{stats.revenue.toLocaleString('ko-KR')}</span>
+                            <span style={{fontSize:11,fontWeight:500,color:'#5A6070'}}>원</span>
                           </div>
                         </div>
                         <div style={{width:1,alignSelf:'stretch',background:'#DDE1EB'}} />
-                        <div style={{flex:1}}>
+                        <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:11,fontWeight:500,color:'#5A6070',marginBottom:4}}>순수익</div>
                           <div style={{display:'flex',alignItems:'baseline',gap:4}}>
-                            <span style={{fontSize:18,fontWeight:700,letterSpacing:'-0.5px',color:'#1D9E75',fontFamily:"'Pretendard', -apple-system, sans-serif"}}>{(card.netRevenue ?? 0).toLocaleString('ko-KR')}</span>
-                            <span style={{fontSize:13,fontWeight:500,color:'#5A6070'}}>원</span>
+                            <span style={{fontSize:22,fontWeight:700,lineHeight:1.2,letterSpacing:'-0.5px',color:'#1D9E75',fontFamily:"'Pretendard', -apple-system, sans-serif"}}>{(card.netRevenue ?? 0).toLocaleString('ko-KR')}</span>
+                            <span style={{fontSize:11,fontWeight:500,color:'#5A6070'}}>원</span>
                           </div>
                         </div>
                       </div>
