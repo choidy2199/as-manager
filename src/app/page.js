@@ -6391,6 +6391,20 @@ function SettingsTab({ asRecords, products }) {
     });
     return m;
   }, [products]);
+  // patch50: 순수익 계산 헬퍼 — 회계 홈페이지 연동 베이스
+  // AS수리 매출 + 부품판매 매출 + (제품판매 매출 − 제품원가) = 순수익(net revenue)
+  const calcNetRevenue = (records, costMap) => {
+    let revenue = 0;
+    let productCost = 0;
+    (records || []).forEach(r => {
+      revenue += Number(r.repair_cost) || 0;
+      if (r.record_type === 'product_sale' && r.model) {
+        const k = String(r.model).trim().toLowerCase();
+        productCost += costMap.get(k) ?? 0;
+      }
+    });
+    return { revenue, productCost, netRevenue: revenue - productCost };
+  };
   const asStats = aggregate(sRecs.filter(r => r.record_type === 'as_repair'));
   const productSaleRecs = sRecs.filter(r => r.record_type === 'product_sale');
   const productStatsBase = aggregate(productSaleRecs);
@@ -6402,6 +6416,7 @@ function SettingsTab({ asRecords, products }) {
   const productStats = { ...productStatsBase, cost: productCost, profit: productStatsBase.revenue - productCost };
   const partsStats = aggregate(sRecs.filter(r => r.record_type === 'parts_sale'));
   const totalStats = aggregate(sRecs);
+  const netCalc = calcNetRevenue(sRecs, productCostMap);
   const displayRecs = billTypeFilter ? sRecs.filter(r => r.record_type === billTypeFilter) : sRecs;
   const displayStats = aggregate(displayRecs);
   const sortedRecs = [...displayRecs].sort((a,b) => (b.receipt_date || '').localeCompare(a.receipt_date || ''));
@@ -6543,7 +6558,7 @@ function SettingsTab({ asRecords, products }) {
               { name:'AS 수리', bg:'#185FA5', stats:asStats, totalCard:false, typeKey:'as_repair' },
               { name:'제품 판매', bg:'#0C447C', stats:productStats, totalCard:false, typeKey:'product_sale' },
               { name:'부품 판매', bg:'#5A6070', stats:partsStats, totalCard:false, typeKey:'parts_sale' },
-              { name:'총 합계', bg:'#1A1D23', stats:totalStats, totalCard:true, typeKey:null },
+              { name:'총 합계', bg:'#1A1D23', stats:totalStats, totalCard:true, typeKey:null, netRevenue:netCalc.netRevenue },
             ].map(card => {
               const stats = card.stats;
               const isSelected = !card.totalCard && billTypeFilter === card.typeKey;
@@ -6565,13 +6580,35 @@ function SettingsTab({ asRecords, products }) {
                       style={{background:'rgba(255,255,255,0.2)',color:'#fff',fontSize:11,fontWeight:500,padding:'2px 8px',borderRadius:10,whiteSpace:'nowrap',border:'none',cursor:'pointer',fontFamily:"'Pretendard', -apple-system, sans-serif"}}
                     >{stats.count.toLocaleString('ko-KR')}건</button>
                   </div>
-                  <div style={{padding:'16px 16px 12px',borderBottom:'1px solid #DDE1EB'}}>
-                    <div style={{fontSize:11,fontWeight:500,color:'#5A6070',marginBottom:4}}>매출</div>
-                    <div style={{display:'flex',alignItems:'baseline',gap:4}}>
-                      <span style={{fontSize:24,fontWeight:700,letterSpacing:'-0.5px',color:card.totalCard?'#185FA5':'#1A1D23',fontFamily:"'Pretendard', -apple-system, sans-serif"}}>{stats.revenue.toLocaleString('ko-KR')}</span>
-                      <span style={{fontSize:13,fontWeight:500,color:'#5A6070'}}>원</span>
+                  {card.typeKey === null ? (
+                    <div style={{padding:'16px 16px 12px',borderBottom:'1px solid #DDE1EB'}}>
+                      <div style={{display:'flex',gap:12,alignItems:'flex-end'}}>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:11,fontWeight:500,color:'#5A6070',marginBottom:4}}>매출</div>
+                          <div style={{display:'flex',alignItems:'baseline',gap:4}}>
+                            <span style={{fontSize:18,fontWeight:700,letterSpacing:'-0.5px',color:'#185FA5',fontFamily:"'Pretendard', -apple-system, sans-serif"}}>{stats.revenue.toLocaleString('ko-KR')}</span>
+                            <span style={{fontSize:13,fontWeight:500,color:'#5A6070'}}>원</span>
+                          </div>
+                        </div>
+                        <div style={{width:1,alignSelf:'stretch',background:'#DDE1EB'}} />
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:11,fontWeight:500,color:'#5A6070',marginBottom:4}}>순수익</div>
+                          <div style={{display:'flex',alignItems:'baseline',gap:4}}>
+                            <span style={{fontSize:18,fontWeight:700,letterSpacing:'-0.5px',color:'#1D9E75',fontFamily:"'Pretendard', -apple-system, sans-serif"}}>{(card.netRevenue ?? 0).toLocaleString('ko-KR')}</span>
+                            <span style={{fontSize:13,fontWeight:500,color:'#5A6070'}}>원</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div style={{padding:'16px 16px 12px',borderBottom:'1px solid #DDE1EB'}}>
+                      <div style={{fontSize:11,fontWeight:500,color:'#5A6070',marginBottom:4}}>매출</div>
+                      <div style={{display:'flex',alignItems:'baseline',gap:4}}>
+                        <span style={{fontSize:24,fontWeight:700,letterSpacing:'-0.5px',color:'#1A1D23',fontFamily:"'Pretendard', -apple-system, sans-serif"}}>{stats.revenue.toLocaleString('ko-KR')}</span>
+                        <span style={{fontSize:13,fontWeight:500,color:'#5A6070'}}>원</span>
+                      </div>
+                    </div>
+                  )}
                   {card.typeKey === 'product_sale' ? (
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr'}}>
                       <div style={{padding:'10px 8px',textAlign:'center',borderRight:'1px solid #DDE1EB'}}>
