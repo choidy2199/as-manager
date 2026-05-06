@@ -839,9 +839,16 @@ export default function Home() {
       {/* ── NAV ── */}
       <nav className="top-nav">
         <div className="nav-logo">
-          <span className="nav-logo-icon">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h8" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>
-          </span>
+          <button
+            type="button"
+            className="nav-logo-icon"
+            onClick={() => { window.location.href = 'https://app.daehantool.dev'; }}
+            title="메인 런처"
+            aria-label="메인 런처로 이동"
+            style={{ border: 0, padding: 0, font: 'inherit', cursor: 'pointer' }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/><path d="M9 22V12h6v10" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>
+          </button>
           AS Manager
         </div>
         <div className="nav-tabs">
