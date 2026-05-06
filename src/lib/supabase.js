@@ -9,6 +9,7 @@ export const sbAuth = createClient(authUrl, authKey, {
     persistSession: true,
     autoRefreshToken: true,
     storageKey: 'sb-auth-daehan-seoul',
+    flowType: 'implicit',
   },
 });
 
