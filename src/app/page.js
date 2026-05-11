@@ -3194,27 +3194,14 @@ function PartsOrderTab({ parts, models, categories, onPhotoClick, cart, setCart,
 
   return (
     <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
-      {/* 필터바 */}
+      {/* 필터바 — patch52: 검색창 + 대분류/모델 드롭다운 한 줄 통합 */}
       <div className="as-filter-row" style={{padding:'8px 12px'}}>
-        <div className="as-filter-search-wrap">
+        <div className="as-filter-search-wrap" style={{flex:1,minWidth:0}}>
           <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
           <input className="input as-filter-search" placeholder="부품코드, 품명, 스펙, 모델명 검색..." value={orderSearch} onChange={e => setOrderSearch(e.target.value)} autoComplete="off" />
         </div>
-        <div className="as-filter-pair"><span className="as-filter-label">모델</span>
-          <select className="input as-filter-select" value={orderModel} onChange={e => setOrderModel(e.target.value)}>
-            {modelOptions.map(m => <option key={m}>{m}</option>)}
-          </select>
-        </div>
-      </div>
-
-      {/* pill 필터 (대분류) */}
-      <div style={{padding:10, background:'#F4F6FA', display:'flex', flexWrap:'wrap', gap:6, borderBottom:'0.5px solid #DDE1EB', flexShrink:0}}>
-        {pillItems.map(item => {
-          const active = orderBigCat === item;
-          return (
-            <div key={item} onClick={() => setOrderBigCat(item)} style={{padding:'6px 12px', borderRadius:999, fontSize:11, cursor:'pointer', userSelect:'none', background: active ? '#185FA5' : '#fff', color: active ? '#fff' : '#5A6070', fontWeight: active ? 500 : 400, border: active ? '0.5px solid #185FA5' : '0.5px solid #DDE1EB', whiteSpace:'nowrap'}}>{item}</div>
-          );
-        })}
+        <FilterDropdown label="대분류" value={orderBigCat} options={pillItems} onChange={setOrderBigCat} />
+        <FilterDropdown label="모델" value={orderModel} options={modelOptions} onChange={setOrderModel} />
       </div>
 
       {/* 좌(부속목록) : 우(장바구니) 5:5 */}
