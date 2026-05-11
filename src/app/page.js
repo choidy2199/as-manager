@@ -1214,34 +1214,12 @@ export default function Home() {
             {partsSubTab === 'price' && (
               <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
                 <div className="as-filter-row" style={{padding:'8px 12px'}}>
-                  <div className="as-filter-search-wrap" style={{flex:1}}>
+                  <div className="as-filter-search-wrap" style={{flex:1,minWidth:0}}>
                     <svg className="as-filter-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#9BA3B2" strokeWidth="1.2"/><path d="M9.5 9.5L13 13" stroke="#9BA3B2" strokeWidth="1.2" strokeLinecap="round"/></svg>
                     <input className="input as-filter-search" placeholder="부품코드, 품명, 스펙, 모델명 검색..." value={partsSearch} onChange={e => setPartsSearch(e.target.value)} autoComplete="off" />
                   </div>
-                </div>
-                <div style={{padding:'4px 12px 6px',display:'flex',alignItems:'flex-start',gap:8,flexWrap:'wrap'}}>
-                  <span style={{fontSize:11,color:'#9BA3B2',padding:'5px 4px',flexShrink:0,minWidth:40}}>대분류</span>
-                  <div style={{display:'flex',flexWrap:'wrap',gap:4,flex:1}}>
-                    {partBigCats.map(c => {
-                      const active = partsBigCatFilter === c;
-                      return (
-                        <button key={c} onClick={() => setPartsBigCatFilter(c)}
-                          style={{padding:'4px 12px',fontSize:12,background: active ? '#185FA5' : '#fff',color: active ? '#fff' : '#5A6070',border: active ? '0.5px solid #185FA5' : '0.5px solid #DDE1EB',borderRadius:4,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'inherit',fontWeight: active ? 500 : 400}}>{c}</button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div style={{padding:'0 12px 8px',display:'flex',alignItems:'flex-start',gap:8,flexWrap:'wrap',borderBottom:'0.5px solid #DDE1EB'}}>
-                  <span style={{fontSize:11,color:'#9BA3B2',padding:'5px 4px',flexShrink:0,minWidth:40}}>모델</span>
-                  <div style={{display:'flex',flexWrap:'wrap',gap:4,flex:1}}>
-                    {partCats.map(c => {
-                      const active = partsCatFilter === c;
-                      return (
-                        <button key={c} onClick={() => setPartsCatFilter(c)}
-                          style={{padding:'4px 12px',fontSize:12,background: active ? '#185FA5' : '#fff',color: active ? '#fff' : '#5A6070',border: active ? '0.5px solid #185FA5' : '0.5px solid #DDE1EB',borderRadius:4,cursor:'pointer',whiteSpace:'nowrap',fontFamily:'inherit',fontWeight: active ? 500 : 400}}>{c}</button>
-                      );
-                    })}
-                  </div>
+                  <FilterDropdown label="대분류" value={partsBigCatFilter} options={partBigCats} onChange={setPartsBigCatFilter} />
+                  <FilterDropdown label="모델" value={partsCatFilter} options={partCats} onChange={setPartsCatFilter} />
                 </div>
                 <div className="section" style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
                   <div className="section-header">
@@ -3059,6 +3037,123 @@ function ClipboardEditModal({ clipboards, colors, textColors, onSave, onClose })
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+
+/* ═══ FILTER DROPDOWN — patch52 (대분류/모델 필터 칩 → 드롭다운) ═══ */
+function FilterDropdown({ label, value, options, onChange }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(!open);
+        }}
+        style={{
+          background: 'white',
+          border: `0.5px solid ${open ? '#185FA5' : '#DDE1EB'}`,
+          padding: '7px 10px',
+          borderRadius: 6,
+          fontSize: 13,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          minWidth: 130,
+          height: 36,
+          justifyContent: 'space-between',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+        }}
+      >
+        <span style={{ fontSize: 11, color: '#9BA3B2' }}>{label}</span>
+        <span style={{ fontWeight: 500, color: '#1A1D23' }}>{value}</span>
+        <svg
+          width="12" height="12" viewBox="0 0 24 24" fill="none"
+          stroke={open ? '#185FA5' : '#5A6070'}
+          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}
+        >
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+      {open && (
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            top: 40,
+            right: 0,
+            background: 'white',
+            border: '0.5px solid #B5BBC9',
+            borderRadius: 8,
+            padding: 4,
+            minWidth: 160,
+            maxHeight: 240,
+            overflowY: 'auto',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+            zIndex: 20,
+          }}
+        >
+          {options.map((opt) => {
+            const isSel = value === opt;
+            return (
+              <div
+                key={opt}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChange(opt);
+                  setOpen(false);
+                }}
+                onMouseEnter={(e) => {
+                  if (!isSel) e.currentTarget.style.background = '#F4F6FA';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSel) e.currentTarget.style.background = 'transparent';
+                }}
+                style={{
+                  padding: '8px 10px',
+                  fontSize: 13,
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: isSel ? '#185FA5' : 'transparent',
+                  color: isSel ? 'white' : '#1A1D23',
+                  fontWeight: isSel ? 500 : 400,
+                }}
+              >
+                <span>{opt}</span>
+                {isSel && (
+                  <svg
+                    width="14" height="14" viewBox="0 0 24 24" fill="none"
+                    stroke="white" strokeWidth="2.5"
+                    strokeLinecap="round" strokeLinejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
