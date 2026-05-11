@@ -4147,7 +4147,7 @@ function PhotoLightbox({ url, name, code, partId, productId, table = 'parts', re
 
 /* ═══ CATEGORY DROPDOWN — position:fixed, 항목 클릭으로만 닫힘 ═══ */
 /* ═══ TEMPLATE MODAL — Phase 2-1c 부속 템플릿 ═══ */
-const DEFAULT_TEMPLATE_WIDTHS = { image_url:48, name_spec:200, big_category:90, category:100, chinese_model:100, chinese_name:90, quantity:90, action:40 };
+const DEFAULT_TEMPLATE_WIDTHS = { image_url:84, name_spec:200, big_category:90, category:150, chinese_model:150, chinese_name:90, quantity:90, action:40 };
 const TEMPLATE_COL_KEYS = ['image_url','name_spec','big_category','category','chinese_model','chinese_name','quantity','action'];
 
 function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDelete, onClose }) {
@@ -4412,7 +4412,7 @@ function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDe
                       const cnName = p.chinese_name || p.name;
                       return (
                         <tr key={idx} style={idx % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
-                          <td style={{textAlign:'center',padding:'6px 4px'}}>
+                          <td style={{textAlign:'center',padding:'6px 4px',verticalAlign:'middle'}}>
                             <PartThumbnail url={p.image_url} name={p.name} code={p.code} />
                           </td>
                           <td style={{padding:'6px 8px',fontSize:12,overflow:'hidden'}}>
