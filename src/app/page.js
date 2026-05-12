@@ -4351,20 +4351,142 @@ function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDe
               {showPartDropdown && (
                 <>
                   <div onMouseDown={() => setShowPartDropdown(false)} style={{position:'fixed',inset:0,zIndex:9098}} />
-                  <div style={{position:'absolute',top:'100%',left:16,right:16,background:'#fff',border:'0.5px solid #DDE1EB',borderRadius:4,boxShadow:'0 4px 12px rgba(0,0,0,0.12)',maxHeight:280,overflow:'auto',zIndex:9099}}>
+                  <div style={{position:'absolute',top:'100%',left:16,right:16,background:'#fff',border:'0.5px solid #DDE1EB',borderRadius:4,boxShadow:'0 4px 12px rgba(0,0,0,0.12)',maxHeight:360,overflow:'auto',zIndex:9099}}>
                     {filteredParts.length === 0 ? (
                       <div style={{padding:16,textAlign:'center',fontSize:11,color:'#9BA3B2'}}>검색 결과 없음</div>
-                    ) : filteredParts.slice(0, 50).map(p => (
-                      <div key={p.id} onMouseDown={(e) => { e.preventDefault(); addItem(p); }}
-                        style={{padding:'7px 12px',fontSize:11,cursor:'pointer',borderBottom:'0.5px solid #F0F2F7',display:'flex',gap:8,alignItems:'center'}}
-                        onMouseEnter={e => e.currentTarget.style.background = '#F4F6FA'}
-                        onMouseLeave={e => e.currentTarget.style.background = '#fff'}
-                      >
-                        <span style={{color:'#9BA3B2',fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)',width:60,flexShrink:0}}>{p.code || '—'}</span>
-                        <span style={{flex:1,fontWeight:500}}>{p.name || '(이름 없음)'}</span>
-                        <span style={{color:'#5A6070',fontSize:10}}>{p.spec || ''}</span>
-                      </div>
-                    ))}
+                    ) : (() => {
+                      const visibleParts = filteredParts.slice(0, 50);
+                      const groups = new Map();
+                      visibleParts.forEach(p => {
+                        const key = getCartGroupKey(p);
+                        if (!groups.has(key)) groups.set(key, []);
+                        groups.get(key).push(p);
+                      });
+                      const orderedKeys = CART_GROUP_ORDER.filter(k => groups.has(k));
+                      const extraKeys = Array.from(groups.keys()).filter(k => !CART_GROUP_ORDER.includes(k));
+                      const groupedSearch = [...orderedKeys, ...extraKeys].map(k => ({
+                        key: k,
+                        items: groups.get(k),
+                        totalCount: groups.get(k).length,
+                      }));
+
+                      return groupedSearch.map(g => (
+                        <Fragment key={g.key}>
+                          {/* 그룹 헤더 — sticky */}
+                          <div style={{
+                            background:'#1A1D23', color:'#FFFFFF',
+                            padding:'7px 14px', fontSize:12, fontWeight:600,
+                            display:'flex', alignItems:'center', gap:10,
+                            position:'sticky', top:0, zIndex:2,
+                            borderTop: g.key === '공용/호환' ? '2px solid #444444' : 'none',
+                          }}>
+                            <span style={{
+                              background: g.key === '공용/호환' ? '#5A6070' : '#185FA5',
+                              color:'#fff', padding:'2px 8px', borderRadius:3,
+                              fontSize:11, fontWeight:600, whiteSpace:'nowrap',
+                            }}>{g.key}</span>
+                            <span style={{
+                              color:'#9BA3B2', fontWeight:400, fontSize:11,
+                              fontVariantNumeric:'tabular-nums',
+                            }}>{g.totalCount}종</span>
+                          </div>
+
+                          {/* 부품 옵션 행 */}
+                          {g.items.map(p => {
+                            const bigCats = (p.big_category || '').split('|').map(s => s.trim()).filter(Boolean);
+                            const models = (p.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean);
+                            const modelsShown = models.slice(0, 3);
+                            const modelsExtra = models.slice(3);
+                            return (
+                              <div
+                                key={p.id}
+                                onMouseDown={(e) => { e.preventDefault(); addItem(p); }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#F4F6FA'}
+                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                style={{
+                                  display:'flex', alignItems:'center', gap:8,
+                                  padding:'7px 12px',
+                                  borderBottom:'0.5px solid #F0F2F7',
+                                  cursor:'pointer', fontSize:11,
+                                }}
+                              >
+                                {/* 사진 32px */}
+                                <div style={{
+                                  width:32, height:32, background:'#F4F6FA',
+                                  borderRadius:4, display:'flex',
+                                  alignItems:'center', justifyContent:'center',
+                                  overflow:'hidden', flexShrink:0,
+                                }}>
+                                  {p.image_url ? (
+                                    <img src={p.image_url} alt=""
+                                      style={{width:'100%', height:'100%', objectFit:'contain'}} />
+                                  ) : (
+                                    <span style={{fontSize:10, color:'#9BA3B2'}}>—</span>
+                                  )}
+                                </div>
+
+                                {/* 코드 56px */}
+                                <span style={{
+                                  width:56, fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)',
+                                  color:'#9BA3B2', flexShrink:0,
+                                }}>{p.code || '—'}</span>
+
+                                {/* 품명 flex:1 */}
+                                <span style={{
+                                  flex:1, fontWeight:500, minWidth:0,
+                                  overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                                }}>{p.name || '(이름 없음)'}</span>
+
+                                {/* 대분류 칩 96px (보라) */}
+                                <div style={{
+                                  width:96, display:'flex', gap:3, flexWrap:'wrap',
+                                  flexShrink:0,
+                                }}>
+                                  {bigCats.slice(0, 2).map((c, i) => (
+                                    <span key={i} style={{
+                                      background:'#EEEDFE', color:'#3C3489',
+                                      padding:'2px 6px', borderRadius:3,
+                                      fontSize:10, fontWeight:500, whiteSpace:'nowrap',
+                                    }}>{c}</span>
+                                  ))}
+                                </div>
+
+                                {/* 호환모델 칩 160px (파랑, 3개 + +N) */}
+                                <div style={{
+                                  width:160, display:'flex', gap:3, flexWrap:'wrap',
+                                  flexShrink:0,
+                                }}>
+                                  {modelsShown.map((m, i) => (
+                                    <span key={i} style={{
+                                      background:'#E6F1FB', color:'#0C447C',
+                                      padding:'2px 6px', borderRadius:3,
+                                      fontSize:10, fontWeight:500, whiteSpace:'nowrap',
+                                    }}>{m}</span>
+                                  ))}
+                                  {modelsExtra.length > 0 && (
+                                    <span
+                                      title={modelsExtra.join(', ')}
+                                      style={{
+                                        background:'#F4F6FA', color:'#5A6070',
+                                        padding:'2px 6px', borderRadius:3,
+                                        fontSize:10, fontWeight:500, whiteSpace:'nowrap',
+                                        cursor:'help',
+                                      }}>+{modelsExtra.length}</span>
+                                  )}
+                                </div>
+
+                                {/* 스펙 120px */}
+                                <span style={{
+                                  width:120, fontSize:10, color:'#5A6070',
+                                  textAlign:'right', flexShrink:0,
+                                  overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                                }}>{p.spec || ''}</span>
+                              </div>
+                            );
+                          })}
+                        </Fragment>
+                      ));
+                    })()}
                   </div>
                 </>
               )}
