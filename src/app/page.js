@@ -4431,10 +4431,11 @@ function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDe
                                   color:'#9BA3B2', flexShrink:0,
                                 }}>{p.code || '—'}</span>
 
-                                {/* 품명 flex:1 */}
+                                {/* 품명 220px 고정 */}
                                 <span style={{
-                                  flex:1, fontWeight:500, minWidth:0,
+                                  width:220, fontWeight:500, minWidth:0,
                                   overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                                  flexShrink:0,
                                 }}>{p.name || '(이름 없음)'}</span>
 
                                 {/* 대분류 칩 96px (보라) */}
@@ -4475,10 +4476,10 @@ function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDe
                                   )}
                                 </div>
 
-                                {/* 스펙 120px */}
+                                {/* 스펙 flex:1 (남은 공간 모두) */}
                                 <span style={{
-                                  width:120, fontSize:10, color:'#5A6070',
-                                  textAlign:'right', flexShrink:0,
+                                  flex:1, minWidth:160, fontSize:10, color:'#5A6070',
+                                  textAlign:'left', paddingLeft:8,
                                   overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
                                 }}>{p.spec || ''}</span>
                               </div>
