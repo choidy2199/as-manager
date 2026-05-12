@@ -4521,70 +4521,106 @@ function TemplateModal({ templates, parts, cart, onApply, onSave, onUpdate, onDe
                     </tr>
                   </thead>
                   <tbody>
-                    {editItems.map((it, idx) => {
-                      const p = partsById[it.part_id];
-                      if (!p) return (
-                        <tr key={idx}>
-                          <td colSpan={8} style={{padding:'6px 8px',fontSize:11,color:'#CC2222'}}>⚠️ 부품 정보 없음 (id: {it.part_id})</td>
-                        </tr>
-                      );
-                      const bigCatTokens = (p.big_category || '').split('|').map(s => s.trim()).filter(Boolean);
-                      const catTokens = (p.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean);
-                      const cnModelSource = p.chinese_model || p.category;
-                      const cnModelTokens = (cnModelSource || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean);
-                      const cnName = p.chinese_name || p.name;
-                      return (
-                        <tr key={idx} style={idx % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
-                          <td style={{textAlign:'center',padding:'6px 4px',verticalAlign:'middle'}}>
-                            <PartThumbnail url={p.image_url} name={p.name} code={p.code} />
-                          </td>
-                          <td style={{padding:'6px 8px',fontSize:12,overflow:'hidden'}}>
-                            <div style={{fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.name || '—'}</div>
-                            {p.spec && <div style={{fontSize:10,color:'#9BA3B2',marginTop:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.spec}</div>}
-                          </td>
-                          <td style={{textAlign:'center',padding:'6px 4px'}}>
-                            {bigCatTokens.length === 0 ? <span className="empty-dot">●</span> : (
-                              <div style={{display:'flex',flexWrap:'wrap',gap:2,justifyContent:'center'}}>
-                                {bigCatTokens.map((t, i) => (
-                                  <span key={i} style={{display:'inline-block',padding:'2px 6px',background:'#EDEBFE',color:'#5046B0',borderRadius:999,fontSize:10,fontWeight:500,whiteSpace:'nowrap'}}>{t}</span>
-                                ))}
-                              </div>
-                            )}
-                          </td>
-                          <td style={{textAlign:'center',padding:'6px 4px'}}>
-                            {catTokens.length === 0 ? <span className="empty-dot">●</span> : (
-                              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:2,padding:'0 2px'}}>
-                                {catTokens.map((t, i) => (
-                                  <span key={i} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'2px 6px',borderRadius:4,fontSize:10,fontWeight:500,background:'#E8EFF7',color:'#185FA5',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:0}}>{t}</span>
-                                ))}
-                              </div>
-                            )}
-                          </td>
-                          <td style={{textAlign:'center',padding:'6px 4px'}}>
-                            {cnModelTokens.length === 0 ? <span className="empty-dot">●</span> : (
-                              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:2,padding:'0 2px'}}>
-                                {cnModelTokens.map((t, i) => (
-                                  <span key={i} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'2px 6px',borderRadius:4,fontSize:10,fontWeight:500,background:'#E0F4F0',color:'#0E7A5F',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:0}}>{t}</span>
-                                ))}
-                              </div>
-                            )}
-                          </td>
-                          <td style={{textAlign:'center',padding:'6px 4px',fontSize:11,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
-                            {cnName ? cnName : <span className="empty-dot">●</span>}
-                          </td>
-                          <td style={{textAlign:'center',padding:'6px 4px'}}>
-                            <div style={{display:'inline-flex',alignItems:'center',gap:4,justifyContent:'center'}}>
-                              <button onClick={() => updateItemQty(idx, it.quantity - 1)} style={{width:22,height:22,fontSize:13,border:'0.5px solid #DDE1EB',background:'#fff',color:'#5A6070',borderRadius:4,cursor:'pointer',fontFamily:'inherit'}}>−</button>
-                              <input type="number" min="1" value={it.quantity} onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 1) updateItemQty(idx, v); else if (e.target.value === '') updateItemQty(idx, 1); }} style={{width:34,height:22,padding:'0 4px',fontSize:12,border:'0.5px solid #DDE1EB',borderRadius:4,textAlign:'center',fontFamily:'inherit'}} />
-                              <button onClick={() => updateItemQty(idx, it.quantity + 1)} style={{width:22,height:22,fontSize:13,border:'0.5px solid #DDE1EB',background:'#fff',color:'#5A6070',borderRadius:4,cursor:'pointer',fontFamily:'inherit'}}>+</button>
-                            </div>
-                          </td>
-                          <td style={{padding:'6px 4px',textAlign:'center'}}>
-                            <button onClick={() => removeItem(idx)} title="제거" style={{width:22,height:22,fontSize:12,border:'0.5px solid #DDE1EB',background:'#fff',color:'#9BA3B2',borderRadius:4,cursor:'pointer',fontFamily:'inherit'}}>✕</button>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {(() => {
+                      // patch56: 대분류 그룹화 (CART_GROUP_ORDER + 잔여 합집합 — patch39 패턴)
+                      const groupMap = new Map();
+                      editItems.forEach((it, idx) => {
+                        const p = partsById[it.part_id] || {};
+                        const key = getCartGroupKey(p);
+                        if (!groupMap.has(key)) groupMap.set(key, []);
+                        groupMap.get(key).push({ it, origIdx: idx });
+                      });
+                      const orderedKeys = CART_GROUP_ORDER.filter(k => groupMap.has(k));
+                      const extraKeys = Array.from(groupMap.keys()).filter(k => !CART_GROUP_ORDER.includes(k));
+                      const grouped = [...orderedKeys, ...extraKeys].map(k => ({ key: k, items: groupMap.get(k) }));
+
+                      return grouped.map(g => (
+                        <Fragment key={g.key}>
+                          {/* 그룹 헤더 — patch55 검색 드롭다운과 동일 디자인 */}
+                          <tr>
+                            <td colSpan={8} style={{
+                              background:'#1A1D23', color:'#FFFFFF',
+                              padding:'7px 14px', fontSize:12, fontWeight:600,
+                              borderTop: g.key === '공용/호환' ? '2px solid #444444' : 'none',
+                            }}>
+                              <span style={{
+                                background: g.key === '공용/호환' ? '#5A6070' : '#185FA5',
+                                color:'#fff', padding:'2px 8px', borderRadius:3,
+                                fontSize:11, fontWeight:600, whiteSpace:'nowrap', marginRight:10,
+                              }}>{g.key}</span>
+                              <span style={{
+                                color:'#9BA3B2', fontWeight:400, fontSize:11,
+                                fontVariantNumeric:'tabular-nums',
+                              }}>{g.items.length}종</span>
+                            </td>
+                          </tr>
+                          {g.items.map(({ it, origIdx: idx }) => {
+                            const p = partsById[it.part_id];
+                            if (!p) return (
+                              <tr key={idx}>
+                                <td colSpan={8} style={{padding:'6px 8px',fontSize:11,color:'#CC2222'}}>⚠️ 부품 정보 없음 (id: {it.part_id})</td>
+                              </tr>
+                            );
+                            const bigCatTokens = (p.big_category || '').split('|').map(s => s.trim()).filter(Boolean);
+                            const catTokens = (p.category || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean);
+                            const cnModelSource = p.chinese_model || p.category;
+                            const cnModelTokens = (cnModelSource || '').split(/[\/,]/).map(s => s.trim()).filter(Boolean);
+                            const cnName = p.chinese_name || p.name;
+                            return (
+                              <tr key={idx} style={idx % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
+                                <td style={{textAlign:'center',padding:'6px 4px',verticalAlign:'middle'}}>
+                                  <PartThumbnail url={p.image_url} name={p.name} code={p.code} />
+                                </td>
+                                <td style={{padding:'6px 8px',fontSize:12,overflow:'hidden'}}>
+                                  <div style={{fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.name || '—'}</div>
+                                  {p.spec && <div style={{fontSize:10,color:'#9BA3B2',marginTop:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.spec}</div>}
+                                </td>
+                                <td style={{textAlign:'center',padding:'6px 4px'}}>
+                                  {bigCatTokens.length === 0 ? <span className="empty-dot">●</span> : (
+                                    <div style={{display:'flex',flexWrap:'wrap',gap:2,justifyContent:'center'}}>
+                                      {bigCatTokens.map((t, i) => (
+                                        <span key={i} style={{display:'inline-block',padding:'2px 6px',background:'#EDEBFE',color:'#5046B0',borderRadius:999,fontSize:10,fontWeight:500,whiteSpace:'nowrap'}}>{t}</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{textAlign:'center',padding:'6px 4px'}}>
+                                  {catTokens.length === 0 ? <span className="empty-dot">●</span> : (
+                                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:2,padding:'0 2px'}}>
+                                      {catTokens.map((t, i) => (
+                                        <span key={i} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'2px 6px',borderRadius:4,fontSize:10,fontWeight:500,background:'#E8EFF7',color:'#185FA5',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:0}}>{t}</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{textAlign:'center',padding:'6px 4px'}}>
+                                  {cnModelTokens.length === 0 ? <span className="empty-dot">●</span> : (
+                                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:2,padding:'0 2px'}}>
+                                      {cnModelTokens.map((t, i) => (
+                                        <span key={i} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'2px 6px',borderRadius:4,fontSize:10,fontWeight:500,background:'#E0F4F0',color:'#0E7A5F',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:0}}>{t}</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{textAlign:'center',padding:'6px 4px',fontSize:11,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                                  {cnName ? cnName : <span className="empty-dot">●</span>}
+                                </td>
+                                <td style={{textAlign:'center',padding:'6px 4px'}}>
+                                  <div style={{display:'inline-flex',alignItems:'center',gap:4,justifyContent:'center'}}>
+                                    <button onClick={() => updateItemQty(idx, it.quantity - 1)} style={{width:22,height:22,fontSize:13,border:'0.5px solid #DDE1EB',background:'#fff',color:'#5A6070',borderRadius:4,cursor:'pointer',fontFamily:'inherit'}}>−</button>
+                                    <input type="number" min="1" value={it.quantity} onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 1) updateItemQty(idx, v); else if (e.target.value === '') updateItemQty(idx, 1); }} style={{width:34,height:22,padding:'0 4px',fontSize:12,border:'0.5px solid #DDE1EB',borderRadius:4,textAlign:'center',fontFamily:'inherit'}} />
+                                    <button onClick={() => updateItemQty(idx, it.quantity + 1)} style={{width:22,height:22,fontSize:13,border:'0.5px solid #DDE1EB',background:'#fff',color:'#5A6070',borderRadius:4,cursor:'pointer',fontFamily:'inherit'}}>+</button>
+                                  </div>
+                                </td>
+                                <td style={{padding:'6px 4px',textAlign:'center'}}>
+                                  <button onClick={() => removeItem(idx)} title="제거" style={{width:22,height:22,fontSize:12,border:'0.5px solid #DDE1EB',background:'#fff',color:'#9BA3B2',borderRadius:4,cursor:'pointer',fontFamily:'inherit'}}>✕</button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </Fragment>
+                      ));
+                    })()}
                   </tbody>
                 </table>
               )}
