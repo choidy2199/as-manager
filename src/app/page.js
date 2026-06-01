@@ -431,6 +431,7 @@ export default function Home() {
   /* ── 부속발주 (Phase 2-1a) state ── */
   const [cart, setCart] = useState([]); // [{ ...part fields, part_id, quantity }]
   const [currentDraftId, setCurrentDraftId] = useState(null);
+  const [orderName, setOrderName] = useState('');
   const [templates, setTemplates] = useState([]); // [{id, name, memo, updated_at, items: [{part_id, quantity, sort_order}]}]
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [orders, setOrders] = useState([]);
@@ -703,12 +704,12 @@ export default function Home() {
     if (cart.length === 0) { alert('장바구니가 비어있습니다'); return null; }
     let orderId = currentDraftId;
     if (!orderId) {
-      const { data, error } = await supabase.from('parts_orders').insert({ status: 'draft' }).select().single();
+      const { data, error } = await supabase.from('parts_orders').insert({ status: 'draft', order_name: orderName }).select().single();
       if (error) { alert('저장 실패: ' + error.message); return null; }
       orderId = data.id;
       setCurrentDraftId(orderId);
     } else {
-      await supabase.from('parts_orders').update({ memo: null }).eq('id', orderId);
+      await supabase.from('parts_orders').update({ memo: null, order_name: orderName }).eq('id', orderId);
     }
     await supabase.from('parts_order_items').delete().eq('order_id', orderId);
     const itemsToInsert = cart.map((item, idx) => ({
@@ -722,10 +723,11 @@ export default function Home() {
     if (itemsError) { alert('저장 실패: ' + itemsError.message); return null; }
     await loadOrders();
     return orderId;
-  }, [cart, currentDraftId, loadOrders]);
+  }, [cart, currentDraftId, orderName, loadOrders]);
 
   const confirmOrder = useCallback(async () => {
     if (cart.length === 0) { alert('장바구니가 비어있습니다'); return; }
+    if (!orderName.trim()) { alert('발주명을 입력하세요.'); return; }
     const savedId = await saveDraft();
     if (!savedId) return;
     const today = new Date();
@@ -746,15 +748,16 @@ export default function Home() {
     // [/PATCH36]
     const { error } = await supabase
       .from('parts_orders')
-      .update({ status: 'confirmed', order_no: orderNo, order_date: `${y}-${m}-${d}` })
+      .update({ status: 'confirmed', order_no: orderNo, order_date: `${y}-${m}-${d}`, order_name: orderName })
       .eq('id', savedId);
     if (error) { alert('확정 실패: ' + error.message); return; }
     setCart([]);
     setCurrentDraftId(null);
+    setOrderName('');
     setShowConfirmModal(false);
     await loadOrders();
     alert(`발주 확정 완료: ${orderNo}`);
-  }, [cart, saveDraft, loadOrders]);
+  }, [cart, orderName, saveDraft, loadOrders]);
 
   const loadDraft = useCallback(async (orderId) => {
     const { data: items } = await supabase
@@ -767,6 +770,8 @@ export default function Home() {
     cartData.sort(sortByBigCategory);
     setCart(cartData);
     setCurrentDraftId(orderId);
+    const { data: ord } = await supabase.from('parts_orders').select('order_name').eq('id', orderId).single();
+    setOrderName(ord?.order_name || '');
     setShowHistoryModal(false);
   }, [parts]);
 
@@ -1246,6 +1251,8 @@ export default function Home() {
                 cart={cart}
                 setCart={setCart}
                 currentDraftId={currentDraftId}
+                orderName={orderName}
+                setOrderName={setOrderName}
                 onAddToCart={handleAddToCart}
                 onSaveDraft={async () => {
                   const id = await saveDraft();
@@ -1253,6 +1260,7 @@ export default function Home() {
                     alert('작성중으로 저장되었습니다');
                     setCart([]);
                     setCurrentDraftId(null);
+                    setOrderName('');
                   }
                 }}
                 onConfirm={() => setShowConfirmModal(true)}
@@ -1315,7 +1323,10 @@ export default function Home() {
             onDeleteOrder={async (order) => {
               const isConfirmed = order.status === 'confirmed';
               const message = isConfirmed
-                ? '이 확정된 발주를 삭제하시겠습니까?\n⚠️ 이미 거래처에 전달된 발주일 수 있습니다.\n삭제하면 복구할 수 없습니다.'
+                ? '⚠️ 영구 삭제\n\n' +
+                  '발주번호: ' + (order.order_no || '없음') + '\n' +
+                  '발주명: ' + (order.order_name || '(이름없음)') + '\n\n' +
+                  '이 확정 발주는 영구 삭제되며 복구할 수 없습니다.\n정말 삭제하시겠습니까?'
                 : '이 작성중 발주를 삭제하시겠습니까?\n장바구니에 불러온 상태라면 함께 비워집니다.';
               if (!confirm(message)) return;
               const { error } = await supabase.from('parts_orders').delete().eq('id', order.id);
@@ -1323,6 +1334,7 @@ export default function Home() {
               if (currentDraftId === order.id) {
                 setCart([]);
                 setCurrentDraftId(null);
+                setOrderName('');
               }
               await loadOrders();
             }}
@@ -3160,7 +3172,7 @@ function FilterDropdown({ label, value, options, onChange }) {
 
 
 /* ═══ PARTS ORDER TAB — Phase 2-1a (장바구니 + 발주확정 + 이력) ═══ */
-function PartsOrderTab({ parts, models, categories, onPhotoClick, cart, setCart, currentDraftId, onAddToCart, onSaveDraft, onConfirm, onShowHistory, onShowTemplate, loadOrders, loadDraft }) {
+function PartsOrderTab({ parts, models, categories, onPhotoClick, cart, setCart, currentDraftId, orderName, setOrderName, onAddToCart, onSaveDraft, onConfirm, onShowHistory, onShowTemplate, loadOrders, loadDraft }) {
   const [orderSearch, setOrderSearch] = useState('');
   const [orderModel, setOrderModel] = useState('전체');
   const [orderBigCat, setOrderBigCat] = useState('전체');
@@ -3210,7 +3222,7 @@ function PartsOrderTab({ parts, models, categories, onPhotoClick, cart, setCart,
           <PartsOrderTable parts={filtered} onPhotoClick={onPhotoClick} onAdd={onAddToCart} />
         </div>
         <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden'}}>
-          <OrderCart cart={cart} setCart={setCart} currentDraftId={currentDraftId} onSaveDraft={onSaveDraft} onConfirm={onConfirm} onShowHistory={onShowHistory} onShowTemplate={onShowTemplate} />
+          <OrderCart cart={cart} setCart={setCart} currentDraftId={currentDraftId} orderName={orderName} setOrderName={setOrderName} onSaveDraft={onSaveDraft} onConfirm={onConfirm} onShowHistory={onShowHistory} onShowTemplate={onShowTemplate} />
         </div>
       </div>
     </div>
@@ -3529,7 +3541,7 @@ const CART_COLS = [
   { key:'subtotal',      label:'합계',         defaultOn:false },
 ];
 
-function OrderCart({ cart, setCart, currentDraftId, onSaveDraft, onConfirm, onShowHistory, onShowTemplate }) {
+function OrderCart({ cart, setCart, currentDraftId, orderName, setOrderName, onSaveDraft, onConfirm, onShowHistory, onShowTemplate }) {
   const [visibleCols, setVisibleCols] = useState(() => {
     const initial = Object.fromEntries(CART_COLS.map(c => [c.key, c.defaultOn]));
     if (typeof window === 'undefined') return initial;
@@ -3630,6 +3642,29 @@ function OrderCart({ cart, setCart, currentDraftId, onSaveDraft, onConfirm, onSh
               이력
             </button>
           </div>
+        </div>
+
+        {/* 발주명 입력 (필수) */}
+        <div style={{
+          display:'flex', alignItems:'center', gap:8,
+          padding:'8px 12px', background:'#fff',
+          borderBottom:'1px solid #DDE1EB'
+        }}>
+          <label style={{ fontSize:13, fontWeight:500, color:'#1A1D23', whiteSpace:'nowrap' }}>
+            발주명 <span style={{ color:'#CC2222' }}>*</span>
+          </label>
+          <input
+            type="text"
+            value={orderName}
+            onChange={e => setOrderName(e.target.value)}
+            placeholder="예) 0602 마끼다 정기발주"
+            autoComplete="off"
+            style={{
+              flex:1, height:36, padding:'0 10px',
+              border:'1px solid #DDE1EB', borderRadius:6,
+              fontSize:14, fontFamily:'inherit', color:'#1A1D23'
+            }}
+          />
         </div>
 
         {/* 항목 리스트 */}
@@ -3960,8 +3995,8 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
         <div style={{flex:1, overflow:'auto'}}>
           <table className="as-table" style={{width:'100%'}}>
             <thead><tr className="as-col-header">
-              {['발주번호','날짜','상태','항목','합계','액션'].map(h => (
-                <th key={h} style={{position:'sticky', top:0, zIndex:10, background:'#EAECF2', color:'#5A6070', fontSize:12, fontWeight:500, padding:'8px 10px', height:36, lineHeight:'20px', boxShadow:'0 1px 0 0 #DDE1EB', userSelect:'none', ...(h === '액션' ? {width:240, minWidth:240} : {})}}>{h}</th>
+              {['발주번호','발주명','날짜','상태','항목','합계','액션'].map(h => (
+                <th key={h} style={{position:'sticky', top:0, zIndex:10, background:'#EAECF2', color:'#5A6070', fontSize:12, fontWeight:500, padding:'8px 10px', height:36, lineHeight:'20px', boxShadow:'0 1px 0 0 #DDE1EB', userSelect:'none', ...(h === '액션' ? {width:240, minWidth:240} : {}), ...(h === '발주명' ? {minWidth:160} : {})}}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
@@ -3976,6 +4011,11 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
                       {o.order_no
                         ? <span style={{fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)', color:'#1A1D23'}}>{o.order_no}</span>
                         : <span style={{color:'#9BA3B2'}}>—</span>}
+                    </td>
+                    <td style={{padding:'8px 10px', fontSize:12, textAlign:'center'}}>
+                      {o.order_name
+                        ? <span style={{color:'#1A1D23', fontWeight:500}}>{o.order_name}</span>
+                        : <span style={{color:'#9BA3B2'}}>(이름없음)</span>}
                     </td>
                     <td style={{padding:'8px 10px', fontSize:12, textAlign:'center', color:'#5A6070'}}>
                       {isDraft ? `${fmtDateMD(o.created_at)} 작성` : fmtDateYMD(o.order_date)}
@@ -4019,7 +4059,7 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
                   </tr>
                 );
               })}
-              {filtered.length === 0 && <tr><td colSpan={6} style={{padding:'40px 0', textAlign:'center', fontSize:12, color:'#9BA3B2'}}>발주 내역이 없습니다</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={7} style={{padding:'40px 0', textAlign:'center', fontSize:12, color:'#9BA3B2'}}>발주 내역이 없습니다</td></tr>}
             </tbody>
           </table>
         </div>
