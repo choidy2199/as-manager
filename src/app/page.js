@@ -1309,6 +1309,14 @@ export default function Home() {
             parts={parts}
             onLoadDraft={loadDraft}
             onEditOrder={handleEditOrder}
+            onRenameOrder={async (orderId, newName) => {
+              const { error } = await supabase
+                .from('parts_orders')
+                .update({ order_name: newName })
+                .eq('id', orderId);
+              if (error) { alert('발주명 저장 실패: ' + error.message); return; }
+              await loadOrders();
+            }}
             canEdit={cart.length === 0 && currentDraftId === null}
             onClose={() => setShowHistoryModal(false)}
             onGeneratePdf={async (order) => {
@@ -3930,9 +3938,12 @@ function PdfPreviewModal({ preview, onClose, onDownload }) {
 }
 
 
-function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, onDeleteOrder, onGeneratePdf, onEditOrder, canEdit }) {
+function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, onDeleteOrder, onGeneratePdf, onEditOrder, onRenameOrder, canEdit }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('전체');
+  const [editingNameId, setEditingNameId] = useState(null);
+  const [editingNameValue, setEditingNameValue] = useState('');
+  const skipBlurSaveRef = useRef(false);  // ESC 취소 시 blur 저장 방지용
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -4013,9 +4024,37 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
                         : <span style={{color:'#9BA3B2'}}>—</span>}
                     </td>
                     <td style={{padding:'8px 10px', fontSize:12, textAlign:'center'}}>
-                      {o.order_name
-                        ? <span style={{color:'#1A1D23', fontWeight:500}}>{o.order_name}</span>
-                        : <span style={{color:'#9BA3B2'}}>(이름없음)</span>}
+                      {editingNameId === o.id ? (
+                        <input
+                          type="text"
+                          value={editingNameValue}
+                          autoFocus
+                          autoComplete="off"
+                          onChange={e => setEditingNameValue(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+                            else if (e.key === 'Escape') { e.stopPropagation(); skipBlurSaveRef.current = true; setEditingNameId(null); }
+                          }}
+                          onBlur={() => {
+                            if (skipBlurSaveRef.current) { skipBlurSaveRef.current = false; return; }
+                            onRenameOrder(o.id, editingNameValue.trim());
+                            setEditingNameId(null);
+                          }}
+                          style={{
+                            width:'100%', height:28, padding:'0 8px', textAlign:'center',
+                            border:'1px solid #185FA5', borderRadius:4,
+                            fontSize:12, fontFamily:'inherit', color:'#1A1D23'
+                          }}
+                        />
+                      ) : (
+                        <span
+                          onClick={() => { skipBlurSaveRef.current = false; setEditingNameId(o.id); setEditingNameValue(o.order_name || ''); }}
+                          title="클릭하여 발주명 수정"
+                          style={{ cursor:'pointer', color: o.order_name ? '#1A1D23' : '#9BA3B2', fontWeight: o.order_name ? 500 : 400 }}
+                        >
+                          {o.order_name || '(이름없음)'}
+                        </span>
+                      )}
                     </td>
                     <td style={{padding:'8px 10px', fontSize:12, textAlign:'center', color:'#5A6070'}}>
                       {isDraft ? `${fmtDateMD(o.created_at)} 작성` : fmtDateYMD(o.order_date)}
