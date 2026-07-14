@@ -1169,7 +1169,16 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="as-table-wrapper" style={{flex:1,overflow:'auto'}}>
-                  <ProductsTable products={filteredProducts} onReload={() => loadData()} setProducts={setProducts} categories={partCategories} setCategories={setPartCategories} onPhotoClick={info => setPartLightbox(info)} />
+                  <ProductsTable products={filteredProducts} onReload={() => loadData()} setProducts={setProducts} categories={partCategories} setCategories={setPartCategories} onPhotoClick={info => setPartLightbox(info)} onDiagramClick={p => setPartLightbox({
+                    url: p.exploded_diagram_url || '',
+                    name: `${p.model || ''} 분해도`.trim(),
+                    productId: p.id,
+                    table: 'products',
+                    column: 'exploded_diagram_url',
+                    skipResize: true,
+                    zoomable: true,
+                    filePrefix: 'diagram_',
+                  })} />
                 </div>
               </div>
             </div>
@@ -1282,16 +1291,23 @@ export default function Home() {
             partId={partLightbox.partId}
             productId={partLightbox.productId}
             table={partLightbox.table}
+            column={partLightbox.column || 'image_url'}
+            skipResize={partLightbox.skipResize || false}
+            zoomable={partLightbox.zoomable || false}
+            filePrefix={partLightbox.filePrefix}
             readOnly={partLightbox.readOnly}
             onClose={() => setPartLightbox(null)}
             onUpdate={(newUrl) => {
+              const col = partLightbox?.column || 'image_url';
               if (partLightbox?.table === 'products') {
                 if (!partLightbox?.productId) return;
-                setProducts(prev => prev.map(p => p.id === partLightbox.productId ? { ...p, image_url: newUrl } : p));
+                setProducts(prev => prev.map(p => p.id === partLightbox.productId ? { ...p, [col]: newUrl } : p));
               } else {
                 if (!partLightbox?.partId) return;
-                setParts(prev => prev.map(p => p.id === partLightbox.partId ? { ...p, image_url: newUrl } : p));
+                setParts(prev => prev.map(p => p.id === partLightbox.partId ? { ...p, [col]: newUrl } : p));
               }
+              // 라이트박스 state url도 갱신 → 교체 즉시 화면 반영 (분해도 경로는 닫히지 않음)
+              setPartLightbox(prev => prev ? { ...prev, url: newUrl || '' } : prev);
             }}
           />
         )}
@@ -4131,12 +4147,22 @@ function PartThumbnail({ url, name, code, onClick }) {
 
 
 /* ═══ PHOTO LIGHTBOX ═══ */
-function PhotoLightbox({ url, name, code, partId, productId, table = 'parts', readOnly, onClose, onUpdate }) {
+const ctrlBtn = { background: '#2A2E37', color: '#fff', border: 'none',
+                  borderRadius: 6, minWidth: 34, height: 30, padding: '0 8px',
+                  fontSize: 13, cursor: 'pointer' };
+
+function PhotoLightbox({ url, name, code, partId, productId, table = 'parts', column = 'image_url', skipResize = false, zoomable = false, filePrefix, readOnly, onClose, onUpdate }) {
   const fileInputRef = useRef(null);
   const [busy, setBusy] = useState(false);
+  const [fit, setFit] = useState(true);       // 맞춤 모드 (기본 ON) — patch60 줌
+  const [zoom, setZoom] = useState(1);        // 원본 배율 (1 = 100%)
+  const [natW, setNatW] = useState(0);        // 이미지 naturalWidth (onLoad에서 세팅)
   const recordId = table === 'products' ? productId : partId;
   const bucket = table === 'products' ? 'product-images' : 'parts-images';
   const fileNamePrefix = table === 'products' ? 'product_' : 'part_';
+  const effectivePrefix = filePrefix || fileNamePrefix;
+
+  useEffect(() => { setFit(true); setZoom(1); setNatW(0); }, [url]);  // 사진 변경/교체 시 맞춤으로 리셋
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -4149,6 +4175,25 @@ function PhotoLightbox({ url, name, code, partId, productId, table = 'parts', re
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (skipResize) {
+      // patch60: 원본 File 그대로 업로드 — canvas 재인코딩 금지 (분해도 원본 해상도 유지)
+      (async () => {
+        setBusy(true);
+        const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+        const uploadName = `${effectivePrefix}${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from(bucket).upload(uploadName, file, { contentType: file.type || 'image/png', upsert: true });
+        if (upErr) { setBusy(false); alert('이미지 업로드 실패: ' + upErr.message); return; }
+        const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(uploadName);
+        const newUrl = urlData?.publicUrl || null;
+        if (!newUrl || newUrl.startsWith('blob:')) { setBusy(false); alert('업로드 URL 생성 실패'); return; }
+        const { error } = await supabase.from(table).update({ [column]: newUrl }).eq('id', recordId);
+        if (error) { setBusy(false); alert('저장 실패: ' + error.message); return; }
+        setBusy(false);
+        if (onUpdate) onUpdate(newUrl);
+        // 교체 즉시 라이트박스에 새 이미지 표시 — onClose 호출하지 않음
+      })();
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (ev) => {
       const img = new Image();
@@ -4170,7 +4215,7 @@ function PhotoLightbox({ url, name, code, partId, productId, table = 'parts', re
           const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
           const newUrl = urlData?.publicUrl || null;
           if (!newUrl || newUrl.startsWith('blob:')) { setBusy(false); alert('업로드 URL 생성 실패'); return; }
-          const { error } = await supabase.from(table).update({ image_url: newUrl }).eq('id', recordId);
+          const { error } = await supabase.from(table).update({ [column]: newUrl }).eq('id', recordId);
           if (error) { setBusy(false); alert('저장 실패: ' + error.message); return; }
           setBusy(false);
           if (onUpdate) onUpdate(newUrl);
@@ -4185,7 +4230,7 @@ function PhotoLightbox({ url, name, code, partId, productId, table = 'parts', re
   const handleDelete = async () => {
     if (!confirm('사진을 삭제하시겠습니까?')) return;
     setBusy(true);
-    const { error } = await supabase.from(table).update({ image_url: null }).eq('id', recordId);
+    const { error } = await supabase.from(table).update({ [column]: null }).eq('id', recordId);
     if (error) { setBusy(false); alert('삭제 실패: ' + error.message); return; }
     setBusy(false);
     if (onUpdate) onUpdate(null);
@@ -4202,9 +4247,41 @@ function PhotoLightbox({ url, name, code, partId, productId, table = 'parts', re
       </div>
       <div onClick={e => e.stopPropagation()} style={{background:'#fff',borderRadius:8,padding:28,maxWidth:'90vw',maxHeight:'90vh',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
         {url ? (
-          <img src={url} alt={name || ''} style={{maxWidth:'calc(90vw - 56px)',maxHeight:'calc(90vh - 120px)',objectFit:'contain'}} />
+          zoomable ? (
+            <div style={{ overflow: 'auto', maxWidth: 'calc(90vw - 56px)', maxHeight: 'calc(85vh - 140px)',
+                          background: '#0e0f12', display: 'flex',
+                          justifyContent: fit ? 'center' : 'flex-start' }}>
+              <img
+                src={url}
+                alt={name || '분해도'}
+                onLoad={(e) => setNatW(e.currentTarget.naturalWidth)}
+                draggable={false}
+                style={ fit
+                  ? { maxWidth: '100%', maxHeight: 'calc(85vh - 140px)', objectFit: 'contain', display: 'block' }
+                  : { width: `${Math.max(1, Math.round(natW * zoom))}px`, height: 'auto',
+                      display: 'block', maxWidth: 'none', maxHeight: 'none' } }
+              />
+            </div>
+          ) : (
+            <img src={url} alt={name || ''} style={{maxWidth:'calc(90vw - 56px)',maxHeight:'calc(90vh - 120px)',objectFit:'contain'}} />
+          )
         ) : (
           <div style={{width:320,height:240,display:'flex',alignItems:'center',justifyContent:'center',background:'#F4F6FA',borderRadius:6,color:'#9BA3B2',fontSize:13}}>등록된 사진 없음</div>
+        )}
+        {zoomable && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center',
+                        marginTop: 10, background: '#1A1D23', borderRadius: 8, padding: '6px 10px' }}>
+            <button type="button" disabled={natW === 0}
+              onClick={() => { setFit(false); setZoom(z => Math.max(0.25, +(z - 0.25).toFixed(2))); }}
+              style={ctrlBtn}>－</button>
+            <button type="button" onClick={() => setFit(true)} style={ctrlBtn}>맞춤</button>
+            <button type="button" disabled={natW === 0}
+              onClick={() => { setFit(false); setZoom(1); }} style={ctrlBtn}>원본 100%</button>
+            <button type="button" disabled={natW === 0}
+              onClick={() => { setFit(false); setZoom(z => Math.min(4, +(z + 0.25).toFixed(2))); }}
+              style={ctrlBtn}>＋</button>
+            {!fit && natW > 0 && <span style={{ color: '#fff', fontSize: 12 }}>{Math.round(zoom * 100)}%</span>}
+          </div>
         )}
         <div style={{textAlign:'center',color:'#1A1D23'}}>
           <div style={{fontWeight:500,fontSize:13}}>{name || '(이름 없음)'} · 내부코드 {code || '-'}</div>
@@ -5323,7 +5400,7 @@ function PartsTable({ parts, setParts, categories, setCategories, products, onPh
 
 
 /* ═══ PRODUCTS TABLE — 제품가격 인라인 편집 ═══ */
-function ProductsTable({ products, onReload, setProducts, categories, setCategories, onPhotoClick }) {
+function ProductsTable({ products, onReload, setProducts, categories, setCategories, onPhotoClick, onDiagramClick }) {
   const [editCell, setEditCell] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [badgeOpen, setBadgeOpen] = useState(null);
@@ -5352,9 +5429,10 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
     { key: 'power_watt', label: '소비전력', w: 90 },
     { key: 'weight_kg', label: '중량', w: 80 },
     { key: 'purchase_price', label: '매입가', w: 110 },
+    { key: 'exploded_diagram', label: '제품분해도', w: 100 },
     { key: '_manage', label: '관리', w: 110 },
   ];
-  const DEFAULT_W = { image_url: 80, brand: 90, model: 200, big_category: 160, price: 110, memo: 140, tank_size: 80, tank_material: 90, power_watt: 90, weight_kg: 80, purchase_price: 110, _manage: 110 };
+  const DEFAULT_W = { image_url: 80, brand: 90, model: 200, big_category: 160, price: 110, memo: 140, tank_size: 80, tank_material: 90, power_watt: 90, weight_kg: 80, purchase_price: 110, exploded_diagram: 100, _manage: 110 };
   const getW = (k) => savedWidthsRef.current[k] || DEFAULT_W[k] || 80;
 
   const BRAND_COLORS = {
@@ -5670,6 +5748,25 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
       );
     }
 
+    if (col.key === 'exploded_diagram') {
+      return p.exploded_diagram_url ? (
+        <img
+          src={p.exploded_diagram_url}
+          alt="분해도"
+          onClick={(e) => { e.stopPropagation(); onDiagramClick(p); }}
+          style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6,
+                   border: '0.5px solid #D5D7DB', cursor: 'pointer', display: 'block', margin: '0 auto' }}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDiagramClick(p); }}
+          style={{ border: '0.5px dashed #85B7EB', color: '#185FA5', background: '#E6F1FB',
+                   borderRadius: 6, padding: '5px 10px', fontSize: 12, cursor: 'pointer' }}
+        >+ 등록</button>
+      );
+    }
+
     if (col.key === '_manage') {
       return (
         <div style={{ display: 'flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
@@ -5796,7 +5893,7 @@ function ProductsTable({ products, onReload, setProducts, categories, setCategor
           ...(c.key === 'purchase_price' && purchaseAuthOk ? { textAlign: 'right' } : {}),
         }}
           onClick={(e) => {
-            if (c.key === 'brand' || c.key === '_manage' || c.key === 'image_url' || c.key === 'model' || c.key === 'tank_material') return;
+            if (c.key === 'brand' || c.key === '_manage' || c.key === 'image_url' || c.key === 'model' || c.key === 'tank_material' || c.key === 'exploded_diagram') return;
             if (c.key === 'big_category') { openBigCatDropdown(p, e); return; }
             if (c.key === 'purchase_price') {
               if (purchaseAuthOk) startEdit(p.id, 'purchase_price', p.purchase_price?.toString() || '');
