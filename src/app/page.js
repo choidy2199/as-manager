@@ -4157,20 +4157,21 @@ function PhotoLightbox({ url, name, code, partId, productId, table = 'parts', co
   const [fit, setFit] = useState(true);       // 맞춤 모드 (기본 ON) — patch60 줌
   const [zoom, setZoom] = useState(1);        // 원본 배율 (1 = 100%)
   const [natW, setNatW] = useState(0);        // 이미지 naturalWidth (onLoad에서 세팅)
+  const [origOpen, setOrigOpen] = useState(false); // patch63: 원본 크기 팝업 열림
   const recordId = table === 'products' ? productId : partId;
   const bucket = table === 'products' ? 'product-images' : 'parts-images';
   const fileNamePrefix = table === 'products' ? 'product_' : 'part_';
   const effectivePrefix = filePrefix || fileNamePrefix;
 
-  useEffect(() => { setFit(true); setZoom(1); setNatW(0); }, [url]);  // 사진 변경/교체 시 맞춤으로 리셋
+  useEffect(() => { setFit(true); setZoom(1); setNatW(0); setOrigOpen(false); }, [url]);  // 사진 변경/교체 시 맞춤으로 리셋
 
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e) => { if (e.key === 'Escape') { if (origOpen) setOrigOpen(false); else onClose(); } };
     document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
-  }, [onClose]);
+  }, [onClose, origOpen]);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -4256,8 +4257,8 @@ function PhotoLightbox({ url, name, code, partId, productId, table = 'parts', co
                 alt={name || '분해도'}
                 onLoad={(e) => setNatW(e.currentTarget.naturalWidth)}
                 draggable={false}
-                onClick={() => { window.open(url, '_blank', 'noopener,noreferrer'); }}
-                title="클릭하면 새 창에서 원본 크기로 보기"
+                onClick={() => setOrigOpen(true)}
+                title="클릭하면 팝업으로 원본 크기 보기"
                 style={ fit
                   ? { maxWidth: '100%', maxHeight: 'calc(85vh - 140px)', objectFit: 'contain', display: 'block', cursor: 'zoom-in' }
                   : { width: `${Math.max(1, Math.round(natW * zoom))}px`, height: 'auto',
@@ -4298,6 +4299,26 @@ function PhotoLightbox({ url, name, code, partId, productId, table = 'parts', co
           </div>
         )}
       </div>
+      {/* patch63: 원본 크기 팝업 (분해도 사진 클릭 시) */}
+      {origOpen && (
+        <div onClick={(e) => { e.stopPropagation(); setOrigOpen(false); }}
+          style={{position:'fixed',inset:0,zIndex:10001,background:'rgba(10,12,15,0.92)',display:'flex',flexDirection:'column'}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 16px',flexShrink:0}}>
+            <span style={{color:'#fff',fontSize:12,opacity:0.75}}>원본 크기{natW > 0 ? ` (가로 ${natW.toLocaleString('ko-KR')}px)` : ''} · 스크롤로 부위 이동</span>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <span style={{padding:'2px 6px',background:'rgba(255,255,255,0.15)',borderRadius:3,color:'#fff',fontSize:11,fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)'}}>ESC</span>
+              <span style={{color:'#fff',fontSize:11,opacity:0.7}}>또는 바깥 클릭으로 닫기</span>
+              <button type="button" onClick={(e) => { e.stopPropagation(); setOrigOpen(false); }}
+                style={{background:'rgba(255,255,255,0.15)',color:'#fff',border:'none',borderRadius:6,width:30,height:30,fontSize:14,cursor:'pointer'}}>✕</button>
+            </div>
+          </div>
+          <div style={{flex:1,overflow:'auto',display:'flex'}}>
+            <img src={url} alt={name || '분해도 원본'} draggable={false}
+              onClick={(e) => e.stopPropagation()}
+              style={{margin:'auto',display:'block',maxWidth:'none',maxHeight:'none'}} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
