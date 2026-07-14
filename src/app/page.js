@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, Fragment } from 'react';
 import { supabase, sbAuth } from '@/lib/supabase';
 
 /* ── 상수 ── */
@@ -4158,12 +4158,67 @@ function PhotoLightbox({ url, name, code, partId, productId, table = 'parts', co
   const [zoom, setZoom] = useState(1);        // 원본 배율 (1 = 100%)
   const [natW, setNatW] = useState(0);        // 이미지 naturalWidth (onLoad에서 세팅)
   const [origOpen, setOrigOpen] = useState(false); // patch63: 원본 크기 팝업 열림
+  const [oScale, setOScale] = useState(1);         // patch64: 원본 팝업 배율 (1 = 100%)
+  const origBoxRef = useRef(null);                 // 원본 팝업 스크롤 컨테이너
+  const oMovedRef = useRef(false);                 // 드래그 직후 클릭 닫힘 방지
+  const oPendingScroll = useRef(null);             // 줌 후 커서 기준 스크롤 보정값
   const recordId = table === 'products' ? productId : partId;
   const bucket = table === 'products' ? 'product-images' : 'parts-images';
   const fileNamePrefix = table === 'products' ? 'product_' : 'part_';
   const effectivePrefix = filePrefix || fileNamePrefix;
 
-  useEffect(() => { setFit(true); setZoom(1); setNatW(0); setOrigOpen(false); }, [url]);  // 사진 변경/교체 시 맞춤으로 리셋
+  useEffect(() => { setFit(true); setZoom(1); setNatW(0); setOrigOpen(false); setOScale(1); }, [url]);  // 사진 변경/교체 시 맞춤으로 리셋
+  useEffect(() => { if (origOpen) setOScale(1); }, [origOpen]);  // 팝업 열 때마다 100%에서 시작
+
+  // patch64: 원본 팝업 — 마우스 휠 줌 (커서 위치 중심, passive:false로 페이지 스크롤 차단)
+  useEffect(() => {
+    if (!origOpen) return;
+    const box = origBoxRef.current;
+    if (!box) return;
+    const onWheel = (e) => {
+      e.preventDefault();
+      const rect = box.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      const cx = box.scrollLeft + px;
+      const cy = box.scrollTop + py;
+      setOScale(prev => {
+        const next = Math.min(6, Math.max(0.1, +(prev * (e.deltaY < 0 ? 1.15 : 1 / 1.15)).toFixed(4)));
+        if (next === prev) return prev;
+        const ratio = next / prev;
+        oPendingScroll.current = { sl: cx * ratio - px, st: cy * ratio - py };
+        return next;
+      });
+    };
+    box.addEventListener('wheel', onWheel, { passive: false });
+    return () => box.removeEventListener('wheel', onWheel);
+  }, [origOpen]);
+
+  // 배율 변경 렌더 직후 스크롤 보정 → 커서 아래 지점 고정
+  useLayoutEffect(() => {
+    if (oPendingScroll.current && origBoxRef.current) {
+      origBoxRef.current.scrollLeft = oPendingScroll.current.sl;
+      origBoxRef.current.scrollTop = oPendingScroll.current.st;
+      oPendingScroll.current = null;
+    }
+  }, [oScale]);
+
+  // patch64: 원본 팝업 — 마우스 드래그로 이동(팬)
+  const onOrigMouseDown = (e) => {
+    const box = origBoxRef.current;
+    if (!box || e.button !== 0) return;
+    e.preventDefault();
+    oMovedRef.current = false;
+    const start = { x: e.clientX, y: e.clientY, sl: box.scrollLeft, st: box.scrollTop };
+    const onMove = (ev) => {
+      if (Math.abs(ev.clientX - start.x) > 3 || Math.abs(ev.clientY - start.y) > 3) oMovedRef.current = true;
+      box.scrollLeft = start.sl - (ev.clientX - start.x);
+      box.scrollTop = start.st - (ev.clientY - start.y);
+    };
+    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') { if (origOpen) setOrigOpen(false); else onClose(); } };
@@ -4299,12 +4354,12 @@ function PhotoLightbox({ url, name, code, partId, productId, table = 'parts', co
           </div>
         )}
       </div>
-      {/* patch63: 원본 크기 팝업 (분해도 사진 클릭 시) */}
+      {/* patch63: 원본 크기 팝업 (분해도 사진 클릭 시) · patch64: 휠 줌 + 드래그 이동 */}
       {origOpen && (
-        <div onClick={(e) => { e.stopPropagation(); setOrigOpen(false); }}
+        <div onClick={(e) => { e.stopPropagation(); if (oMovedRef.current) { oMovedRef.current = false; return; } setOrigOpen(false); }}
           style={{position:'fixed',inset:0,zIndex:10001,background:'rgba(10,12,15,0.92)',display:'flex',flexDirection:'column'}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 16px',flexShrink:0}}>
-            <span style={{color:'#fff',fontSize:12,opacity:0.75}}>원본 크기{natW > 0 ? ` (가로 ${natW.toLocaleString('ko-KR')}px)` : ''} · 스크롤로 부위 이동</span>
+            <span style={{color:'#fff',fontSize:12,opacity:0.75}}>원본 {Math.round(oScale * 100)}%{natW > 0 ? ` (가로 ${natW.toLocaleString('ko-KR')}px)` : ''} · 마우스 휠 = 줌 인/아웃 · 드래그 = 이동 · 더블클릭 = 100%</span>
             <div style={{display:'flex',alignItems:'center',gap:8}}>
               <span style={{padding:'2px 6px',background:'rgba(255,255,255,0.15)',borderRadius:3,color:'#fff',fontSize:11,fontFamily:'var(--font-mono, "SF Mono", Menlo, Consolas, monospace)'}}>ESC</span>
               <span style={{color:'#fff',fontSize:11,opacity:0.7}}>또는 바깥 클릭으로 닫기</span>
@@ -4312,10 +4367,14 @@ function PhotoLightbox({ url, name, code, partId, productId, table = 'parts', co
                 style={{background:'rgba(255,255,255,0.15)',color:'#fff',border:'none',borderRadius:6,width:30,height:30,fontSize:14,cursor:'pointer'}}>✕</button>
             </div>
           </div>
-          <div style={{flex:1,overflow:'auto',display:'flex'}}>
+          <div ref={origBoxRef} onMouseDown={onOrigMouseDown}
+            style={{flex:1,overflow:'auto',display:'flex',cursor:'grab',userSelect:'none'}}>
             <img src={url} alt={name || '분해도 원본'} draggable={false}
+              onLoad={(e) => { if (!natW) setNatW(e.currentTarget.naturalWidth); }}
               onClick={(e) => e.stopPropagation()}
-              style={{margin:'auto',display:'block',maxWidth:'none',maxHeight:'none'}} />
+              onDoubleClick={(e) => { e.stopPropagation(); setOScale(1); }}
+              style={{margin:'auto',display:'block',maxWidth:'none',maxHeight:'none',
+                      width: natW > 0 ? `${Math.max(1, Math.round(natW * oScale))}px` : undefined, height:'auto'}} />
           </div>
         </div>
       )}
