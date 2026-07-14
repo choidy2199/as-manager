@@ -4256,10 +4256,12 @@ function PhotoLightbox({ url, name, code, partId, productId, table = 'parts', co
                 alt={name || '분해도'}
                 onLoad={(e) => setNatW(e.currentTarget.naturalWidth)}
                 draggable={false}
+                onClick={() => { if (natW === 0) return; if (fit) { setFit(false); setZoom(1); } else { setFit(true); } }}
+                title={fit ? '클릭하여 원본 크기로 보기' : '클릭하여 맞춤으로 보기'}
                 style={ fit
-                  ? { maxWidth: '100%', maxHeight: 'calc(85vh - 140px)', objectFit: 'contain', display: 'block' }
+                  ? { maxWidth: '100%', maxHeight: 'calc(85vh - 140px)', objectFit: 'contain', display: 'block', cursor: 'zoom-in' }
                   : { width: `${Math.max(1, Math.round(natW * zoom))}px`, height: 'auto',
-                      display: 'block', maxWidth: 'none', maxHeight: 'none' } }
+                      display: 'block', maxWidth: 'none', maxHeight: 'none', cursor: 'zoom-out' } }
               />
             </div>
           ) : (
