@@ -2223,6 +2223,20 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
   const [calendarOpen, setCalendarOpen] = useState(null); // {id, pos:{top,left}}
   const [calendarMonth, setCalendarMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
   const [calendarSelected, setCalendarSelected] = useState(today());
+  const [copiedKey, setCopiedKey] = useState(null); // patch65: 복사 완료 표시용 `${id}:${col}`
+  const copiedTimerRef = useRef(null);
+  const COPY_COLS = ['receiver_name','receiver_phone','receiver_address','contents','delivery_message'];
+  const copyCell = async (e, id, key, text) => {
+    e.stopPropagation(); e.preventDefault();
+    const str = String(text ?? '');
+    try {
+      if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(str);
+      else { const ta = document.createElement('textarea'); ta.value = str; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); }
+    } catch (err) { console.error('복사 실패', err); return; }
+    setCopiedKey(`${id}:${key}`);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopiedKey(null), 1200);
+  };
   const companyInputRef = useRef(null);
   const SHIP_CARRIERS = ['롯데','CJ','한진','경동','로젠','우체국','대신택배','대신화물','경동화물','퀵'];
   const tableRef = useRef(null);
@@ -2650,9 +2664,14 @@ function ShipTable({ records, asRecords, companies, onSave, onAdd, onDelete, sho
           return (
           <tr key={r.id} className="as-data-row" style={{background: noTracking(r) ? '#FAEEDA' : (isCompleted ? '#DDE3EB' : (i % 2 === 1 ? '#FAFBFC' : undefined))}}>
             {COLS.map(c => (
-              <td key={c.key} style={{...(c.key === 'tracking_no' && noTracking(r) ? {border:'2px solid #1D9E75'} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {}), ...((c.type === 'readonly' || c.type === 'readonly-badge' || c.type === 'static') ? {cursor:'default'} : {})}}
+              <td key={c.key} style={{...(c.key === 'tracking_no' && noTracking(r) ? {border:'2px solid #1D9E75'} : {}), ...(c.type === 'select' ? {overflow:'visible',position:'relative'} : {}), ...((c.type === 'readonly' || c.type === 'readonly-badge' || c.type === 'static') ? {cursor:'default'} : {}), ...(COPY_COLS.includes(c.key) ? {position:'relative',paddingRight:24} : {})}}
                 onClick={() => { if (c.type === 'action' || c.type === 'select' || c.type === 'readonly' || c.type === 'readonly-badge' || c.type === 'static') return; startEdit(r.id, c.key, r[c.key] || ''); }}>
                 {renderCell(r, c)}
+                {COPY_COLS.includes(c.key) && r[c.key] && !(editCell?.id === r.id && editCell?.field === c.key) && (
+                  copiedKey === `${r.id}:${c.key}`
+                    ? <span className="ship-copy-btn copied" title="복사됨"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6.5l2.5 2.5L10 3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+                    : <button type="button" className="ship-copy-btn" title="복사" onMouseDown={e => e.stopPropagation()} onClick={e => copyCell(e, r.id, c.key, r[c.key])}><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="4" y="4" width="6.5" height="6.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/><path d="M8 4V2.5A1 1 0 0 0 7 1.5H2.5a1 1 0 0 0-1 1V7a1 1 0 0 0 1 1H4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg></button>
+                )}
               </td>
             ))}
           </tr>

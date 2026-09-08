@@ -258,6 +258,10 @@ textarea.input { height: auto; padding: 10px; resize: vertical; }
 .as-table td:last-child { border-right: none; }
 /* group borders now via inline styles */
 .as-data-row:hover td { background: var(--tl-bg-secondary); }
+/* patch65: 택배발송 셀 복사 아이콘 */
+.ship-copy-btn { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; padding: 0; border: none; border-radius: 3px; background: transparent; color: #9BA3B2; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+.ship-copy-btn:hover { color: #185FA5; background: #E6F1FB; }
+.ship-copy-btn.copied { color: #1D9E75; cursor: default; }
 .as-new-row td { background: #FFFDE7; border-bottom: 2px solid var(--tl-warning); overflow: visible; padding: 4px 4px; }
 .as-cell-input { width: 100%; height: 32px; border: 1px solid var(--tl-primary); border-radius: 4px; padding: 0 6px; font-size: 13px; font-family: 'Pretendard', sans-serif; background: #fff; outline: none; box-shadow: 0 0 0 2px var(--tl-primary-light); }
 select.as-cell-input { padding-right: 2px; height: 32px; font-size: 13px; }
