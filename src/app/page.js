@@ -20,6 +20,19 @@ const fmtDate = (d) => {
 };
 const toE164 = (p) => { if (!p) return ''; const d = p.replace(/[^0-9]/g, ''); if (d.startsWith('0')) return '+82' + d.slice(1); return '+' + d; };
 const toLocal = (p) => { if (!p) return ''; const d = p.replace(/[^0-9]/g, ''); if (d.startsWith('82')) return '0' + d.slice(2); return d; };
+// Supabase 기본 조회 한도(1회 1,000행) 우회: 1,000행씩 반복 조회해 전부 합친다. buildQuery는 호출마다 새 쿼리를 반환해야 한다.
+const FETCH_PAGE = 1000;
+const fetchAll = async (buildQuery) => {
+  let all = []; let from = 0;
+  while (true) {
+    const { data, error } = await buildQuery().range(from, from + FETCH_PAGE - 1);
+    if (error) return { data: all.length ? all : null, error };
+    all = all.concat(data || []);
+    if (!data || data.length < FETCH_PAGE) break;
+    from += FETCH_PAGE;
+  }
+  return { data: all, error: null };
+};
 const recordTypeToDb = (t) => ({ 'AS 수리':'as_repair','제품 판매':'product_sale','부품 판매':'parts_sale' }[t] || 'as_repair');
 const dbToRecordType = (t) => ({ 'as_repair':'AS 수리','product_sale':'제품 판매','parts_sale':'부품 판매' }[t] || 'AS 수리');
 
@@ -470,13 +483,17 @@ export default function Home() {
 
   /* ── Data Load (날짜 범위 기반, 검색어 있으면 전체) ── */
   const loadData = useCallback(async (unused, fullSearch) => {
-    let asQuery = supabase.from('as_records').select('*').order('created_at', { ascending: false });
-    if (!fullSearch && !dateAll && dateFrom && dateTo) {
-      asQuery = asQuery.gte('receipt_date', dateFrom).lte('receipt_date', dateTo);
-    }
+    const buildAsQuery = () => {
+      let q = supabase.from('as_records').select('*').order('created_at', { ascending: false }).order('id', { ascending: false });
+      if (!fullSearch && !dateAll && dateFrom && dateTo) {
+        q = q.gte('receipt_date', dateFrom).lte('receipt_date', dateTo);
+      }
+      return q;
+    };
+    const buildShipQuery = () => { let q = supabase.from('ship_records').select('*').order('ship_date', { ascending: false }).order('id', { ascending: false }); if (!shipDateAll && shipDateFrom && shipDateTo) { q = q.gte('ship_date', shipDateFrom).lte('ship_date', shipDateTo); } return q; };
     const [asRes, shipRes, partsRes, productsRes, techRes, compRes, catRes] = await Promise.all([
-      asQuery,
-      (() => { let q = supabase.from('ship_records').select('*').order('ship_date', { ascending: false }); if (!shipDateAll && shipDateFrom && shipDateTo) { q = q.gte('ship_date', shipDateFrom).lte('ship_date', shipDateTo); } return q; })(),
+      fetchAll(buildAsQuery),
+      fetchAll(buildShipQuery),
       supabase.from('parts').select('*').order('code'),
       supabase.from('products').select('*').order('sort_order', { ascending: true }),
       supabase.from('technicians').select('*').order('created_at'),
@@ -7384,7 +7401,7 @@ function SMSPopup({ onClose, onUnreadChange, onConfirmSent }) {
   // 고객 목록 로드
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase.from('sms_messages').select('*').order('sent_at', { ascending: false });
+      const { data } = await fetchAll(() => supabase.from('sms_messages').select('*').order('sent_at', { ascending: false }).order('id', { ascending: false }));
       if (!data) return;
       const grouped = {};
       data.forEach(m => {
