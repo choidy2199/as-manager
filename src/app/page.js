@@ -298,6 +298,265 @@ function downloadPdfBlob(blob, filename) {
 }
 
 
+/* ═══ [PATCH67] 입고체크 공용 헬퍼 ═══ */
+const RECEIVE_QTY_MAX = 999999;
+const receivedOf = (it) => it.received_qty ?? null;
+const hasItemReceipt = (it) => receivedOf(it) !== null || (it.receive_note || '').trim() !== '';
+const hasOrderReceipt = (items) => items.some(hasItemReceipt);
+const countReceiveShort = (items) => items.filter(it => receivedOf(it) !== null && it.received_qty < it.quantity).length;
+
+// 상태 뱃지는 입고 데이터로 계산만 한다 (parts_orders.status 값은 바꾸지 않음)
+function getReceiveStatus(order, items) {
+  if (order.status === 'draft') return 'draft';
+  const checked = items.filter(it => receivedOf(it) !== null).length;
+  if (checked === 0) return 'confirmed';
+  return checked === items.length ? 'done' : 'receiving';
+}
+function getReceiveBadge(order, items) {
+  const status = getReceiveStatus(order, items);
+  const short = status === 'done' ? countReceiveShort(items) : 0;
+  if (short > 0) return { label: `입고완료 · 부족 ${short}종`, background: '#FEE2E2', color: '#991B1B' };
+  return {
+    draft: { label: '작성중', background: '#FFF4D6', color: '#8A6300' },
+    confirmed: { label: '확정', background: '#E6F4EA', color: '#1A6F2E' },
+    receiving: { label: '입고중', background: '#E6F1FB', color: '#185FA5' },
+    done: { label: '입고완료', background: '#1A6F2E', color: '#fff' },
+  }[status];
+}
+
+// 정확히 빈칸이거나 허용 형식일 때만 통과. 나머지는 값을 고치지 않고 거부한다.
+function parseReceiveQty(raw, prev) {
+  if (raw === '') return { ok: true, value: null, plus: false };
+  let t = raw.replace(/＋/g, '+').replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 65248)).trim();
+  if (/^\+?[1-9]\d{0,2}(,\d{3})+$/.test(t)) t = t.replace(/,/g, '');
+  if (!/^\+?\d{1,9}$/.test(t)) return { ok: false, label: '형식 오류', why: '0 이상의 숫자 또는 +숫자만 입력할 수 있습니다' };
+  const plus = t[0] === '+';
+  const value = plus ? (prev || 0) + parseInt(t.slice(1), 10) : parseInt(t, 10);
+  if (value > RECEIVE_QTY_MAX) return { ok: false, label: '한도 초과', why: '999,999개까지 입력할 수 있습니다' };
+  return { ok: true, value, plus };
+}
+
+// 저장마다 붙이는 고유 번호(receive_op): 응답이 끊겨도 내 저장이 반영됐는지 확인하고, 오래된 재시도가 최신 값을 덮어쓰지 않게 한다
+const newReceiveOp = () => (globalThis.crypto?.randomUUID
+  ? globalThis.crypto.randomUUID()
+  : 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => Math.floor(Math.random() * 16).toString(16)));
+
+// 응답이 끝나지 않는 요청 때문에 닫기·출력이 멈추지 않게 한다 (늦게 반영돼도 op로 확인)
+const RECEIVE_TIMEOUT = 15000;
+const withReceiveTimeout = (query) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), RECEIVE_TIMEOUT);
+  return query.abortSignal(ctrl.signal).then(
+    (res) => { clearTimeout(timer); return res; },
+    (err) => { clearTimeout(timer); return { data: null, error: { message: err?.message || String(err) } }; },
+  );
+};
+const fetchOrderItems = (orderId) => fetchAll(() => ({
+  range: (from, to) => withReceiveTimeout(supabase.from('parts_order_items').select('*').eq('order_id', orderId).order('sort_order').order('id').range(from, to)),
+}));
+
+// 수정·삭제·저장 직전에 DB의 최신 상태를 다시 확인한다
+async function fetchOrderReceiptState(orderId) {
+  const [ordRes, itemRes] = await Promise.all([
+    withReceiveTimeout(supabase.from('parts_orders').select('status').eq('id', orderId)),
+    fetchOrderItems(orderId),
+  ]);
+  const error = ordRes.error || itemRes.error;
+  if (error) return { error: error.message };
+  return { status: ordRes.data?.[0]?.status ?? null, hasReceipt: hasOrderReceipt(itemRes.data || []) };
+}
+
+// PDF 발주서와 같은 순서(HISTORY_BIG_CAT_ORDER + PATCH39 합집합)로 그룹핑
+function groupOrderItems(items, parts) {
+  const partsById = {};
+  parts.forEach(p => { partsById[p.id] = p; });
+  const firstCat = (p) => (p?.big_category || '').split('|')[0].trim();
+  const sorted = [...items].sort((a, b) => {
+    const partA = partsById[a.part_id];
+    const partB = partsById[b.part_id];
+    const catA = firstCat(partA);
+    const catB = firstCat(partB);
+    const orderA = HISTORY_BIG_CAT_ORDER[catA] ?? 999;
+    const orderB = HISTORY_BIG_CAT_ORDER[catB] ?? 999;
+    if (orderA !== orderB) return orderA - orderB;
+    if (catA !== catB) return catA.localeCompare(catB, 'ko-KR');
+    const byName = (partA?.name || '').localeCompare(partB?.name || '', 'ko-KR');
+    if (byName !== 0) return byName;
+    return (partA?.spec || '').localeCompare(partB?.spec || '', 'ko-KR') || String(a.id).localeCompare(String(b.id));
+  });
+  const map = new Map();
+  sorted.forEach(it => {
+    const key = getCartGroupKey({ big_category: partsById[it.part_id]?.big_category || '' });
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(it);
+  });
+  const orderedKeys = CART_GROUP_ORDER.filter(k => map.has(k));
+  const extraKeys = Array.from(map.keys()).filter(k => !CART_GROUP_ORDER.includes(k));
+  let no = 0;
+  return [...orderedKeys, ...extraKeys].map(key => ({
+    key,
+    totalQty: map.get(key).reduce((s, it) => s + (it.quantity || 0), 0),
+    rows: map.get(key).map(it => ({ no: ++no, item: it, part: partsById[it.part_id] || null })),
+  }));
+}
+
+/* ═══ [PATCH67] 입고 체크리스트 PDF — A4 세로, 화면과 같은 번호·순서 ═══ */
+async function generateReceiveChecklistPDF(order, items, parts) {
+  const pdfMakeMod = await import('pdfmake/build/pdfmake');
+  const pdfMake = pdfMakeMod.default || pdfMakeMod;
+  await loadPdfFonts(pdfMake);
+
+  const groups = groupOrderItems(items, parts);
+  const images = {};
+  await Promise.all(groups.flatMap(g => g.rows).map(async ({ item, part }) => {
+    const img = part?.image_url ? await Promise.race([loadImageAsBase64(part.image_url), new Promise(res => setTimeout(() => res(null), 10000))]) : null;
+    // pdfmake는 PNG·JPEG만 지원: 다른 형식이면 사진 없이 출력
+    if (img && /^data:image\/(png|jpeg)/.test(img)) images[item.id] = img;
+  }));
+
+  const again = items.some(it => receivedOf(it) !== null);
+  const widths = again ? [18, 34, '*', 34, 38, 38, 26, 50, 94] : [18, 34, '*', 46, 30, 64, 120];
+  const heads = again
+    ? ['No', '사진', '부품명 / 규격', '발주', '기존 입고', '남은 수량', '확인', '이번 입고', '비고(불량 등)']
+    : ['No', '사진', '부품명 / 규격', '발주수량', '확인', '입고수량', '비고(불량 등)'];
+  const PAGE_W = 595.28 - 56;
+  const PAD = 3;
+  const fixedW = widths.reduce((s, w) => s + (w === '*' ? 0 : w), 0);
+  const nameW = PAGE_W - fixedW - widths.length * PAD * 2 - (widths.length + 1) * 0.5;
+
+  // 행 높이를 넉넉하게 계산해 쪽을 직접 나눈다 (품목 잘림·대분류 제목만 남는 쪽 방지)
+  const textW = (s, size) => Array.from(s || '').reduce((w, c) => w + (c.charCodeAt(0) > 255 ? size : size * 0.62), 0);
+  const lines = (s, size, w) => (s ? Math.ceil((textW(s, size) * 1.08) / w) : 0);
+  const rowH = ({ item, part }) => Math.max(
+    38,
+    lines(part?.name || '(부품 정보 없음)', 10, nameW) * 13 + lines(part?.spec, 8.5, nameW) * 11 + 8,
+    again || item.receive_note ? lines(item.receive_note, 8.5, widths[widths.length - 1]) * 11 + 8 : 0,
+  );
+  const GROUP_H = 22;
+  const BODY_H = 841.89 - 56 - 24 - (again ? 92 : 78) - 24;
+
+  const pages = [[]];
+  let used = 0;
+  groups.forEach(g => {
+    g.rows.forEach((row, i) => {
+      const h = rowH(row);
+      const need = h + (i === 0 ? GROUP_H : 0);
+      if (used > 0 && used + need > BODY_H) {
+        pages.push([]);
+        used = 0;
+        pages[pages.length - 1].push({ group: g, cont: i > 0 });
+        used += GROUP_H;
+      } else if (i === 0) {
+        pages[pages.length - 1].push({ group: g, cont: false });
+        used += GROUP_H;
+      }
+      pages[pages.length - 1].push({ row });
+      used += h;
+    });
+  });
+
+  const cell = (text, extra = {}) => ({ text: String(text), alignment: 'center', fontSize: 9, margin: [0, 10, 0, 0], ...extra });
+  const toRow = ({ no, item, part }) => {
+    const rec = receivedOf(item);
+    return [
+      cell(no),
+      images[item.id] ? { image: images[item.id], fit: [32, 32], alignment: 'center' } : { text: '' },
+      { stack: [
+        { text: part?.name || '(부품 정보 없음)', fontSize: 10, bold: true },
+        ...(part?.spec ? [{ text: part.spec, fontSize: 8.5, color: '#5A6070' }] : []),
+      ], alignment: 'center', margin: [0, part?.spec ? 3 : 9, 0, 0] },
+      cell(fmt(item.quantity), { fontSize: 11, bold: true, margin: [0, 9, 0, 0] }),
+      ...(again ? [
+        rec === null ? cell('●', { color: '#185FA5', opacity: 0.4, fontSize: 6, margin: [0, 12, 0, 0] }) : cell(fmt(rec)),
+        cell(fmt(Math.max(0, item.quantity - (rec || 0))), { fontSize: 11, bold: true, margin: [0, 9, 0, 0] }),
+      ] : []),
+      { canvas: [{ type: 'rect', x: 0, y: 0, w: 14, h: 14, lineWidth: 1, lineColor: '#1A1D23' }], alignment: 'center', margin: [0, 9, 0, 0] },
+      { text: '' },
+      { text: item.receive_note || '', fontSize: 8.5, alignment: 'center', margin: [0, 3, 0, 0] },
+    ];
+  };
+  const toGroupRow = ({ group, cont }) => [
+    {
+      colSpan: widths.length, fillColor: '#F4F6FA', margin: [4, 1, 0, 1],
+      text: [
+        { text: group.key + (cont ? ' (계속)' : ''), bold: true, fontSize: 9.5 },
+        { text: `   ${group.rows.length}종 · ${fmt(group.totalQty)}개`, fontSize: 9, color: '#5A6070' },
+      ],
+    },
+    ...Array(widths.length - 1).fill({}),
+  ];
+  const blank = (label) => ({
+    width: 190,
+    stack: [
+      { text: label, fontSize: 10 },
+      { canvas: [{ type: 'line', x1: 36, y1: 0, x2: 160, y2: 0, lineWidth: 0.7, lineColor: '#1A1D23' }] },
+    ],
+  });
+
+  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+  const printedOn = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+  const totalQty = items.reduce((s, it) => s + (it.quantity || 0), 0);
+
+  const docDef = {
+    pageSize: 'A4',
+    pageOrientation: 'portrait',
+    pageMargins: [28, 28, 28, 36],
+    info: { title: `입고체크리스트 ${order.order_no || ''}` },
+    content: pages.map((entries, pi) => ({
+      pageBreak: pi > 0 ? 'before' : undefined,
+      stack: [
+        { columns: [
+          { width: '*', text: '입고 체크리스트', fontSize: 16, bold: true },
+          { width: 'auto', text: `출력일 ${printedOn}`, fontSize: 10, margin: [0, 5, 0, 0] },
+        ] },
+        { text: `${order.order_no || ''} / ${order.order_name || '(이름없음)'}`, fontSize: 11, bold: true, margin: [0, 3, 0, 8] },
+        { columns: [blank('입고일'), blank('확인자')], margin: [0, 0, 0, 6] },
+        ...(again ? [{ text: '이번에 들어온 수량만 적고, 화면에는 앞에 +를 붙여 입력합니다. 예) +40', fontSize: 9, color: '#5A6070', margin: [0, 0, 0, 5] }] : []),
+        {
+          table: {
+            headerRows: 1,
+            dontBreakRows: true,
+            widths,
+            heights: (r) => (r === 0 ? 16 : entries[r - 1]?.row ? 32 : 14),
+            body: [
+              heads.map(h => ({ text: h, alignment: 'center', bold: true, fontSize: 9, fillColor: '#EAECF2', margin: [0, 2, 0, 0] })),
+              ...entries.map(e => (e.row ? toRow(e.row) : toGroupRow(e))),
+            ],
+          },
+          layout: {
+            hLineWidth: () => 0.5, vLineWidth: () => 0.5,
+            hLineColor: () => '#9BA3B2', vLineColor: () => '#9BA3B2',
+            paddingTop: () => 3, paddingBottom: () => 3, paddingLeft: () => PAD, paddingRight: () => PAD,
+          },
+        },
+      ],
+    })),
+    footer: (current, count) => ({
+      margin: [28, 10, 28, 0],
+      columns: [
+        { text: `총 ${items.length}종 · ${fmt(totalQty)}개`, fontSize: 9, color: '#5A6070' },
+        { text: `${current} / ${count}쪽`, fontSize: 9, color: '#5A6070', alignment: 'right' },
+      ],
+    }),
+    defaultStyle: { font: 'Pretendard', fontSize: 9, color: '#1A1D23' },
+  };
+
+  const filename = `입고체크리스트_${order.order_no || ''}.pdf`.replace(/\s+/g, '');
+  const pdf = pdfMake.createPdf(docDef);
+  return new Promise((resolve, reject) => {
+    try {
+      pdf.getBlob(blob => {
+        if (!blob) { reject(new Error('Blob 생성 실패')); return; }
+        resolve({ blob, blobUrl: URL.createObjectURL(blob), filename, printable: true });
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+/* ═══ [/PATCH67] ═══ */
+
+
 const HISTORY_BIG_CAT_ORDER = {
   '2HP-900W': 1,
   '4HP-1,500W': 2,
@@ -451,6 +710,8 @@ export default function Home() {
   const [orderItems, setOrderItems] = useState([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [pdfPreview, setPdfPreview] = useState(null);
+  const [receiveOrderId, setReceiveOrderId] = useState(null); // [PATCH67] 입고체크 중인 발주
+  const [receiveToasts, setReceiveToasts] = useState([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   /* ── 제품가격 state ── */
@@ -693,11 +954,18 @@ export default function Home() {
   const payVisit = paymentBase.filter(r => r.payment_status === '방문결제').length;
 
   /* ── 부속발주 (Phase 2-1a) 핵심 함수 ── */
+  const receiveLoadRef = useRef(0);   // 입고 조회 순번: 나중에 시작한 조회만 화면에 반영
+  const receiveTouchRef = useRef(0);  // 입고 행이 화면에 반영된 횟수
   const loadOrders = useCallback(async () => {
+    const touched = receiveTouchRef.current;
     const [ordersRes, itemsRes] = await Promise.all([
       supabase.from('parts_orders').select('*').order('created_at', { ascending: false }),
-      supabase.from('parts_order_items').select('*'),
+      // [PATCH67] 1,000행 한도에서 잘리면 입고 뱃지·잠금이 틀리므로 전부 읽는다
+      fetchAll(() => supabase.from('parts_order_items').select('*').order('order_id').order('sort_order').order('id')),
     ]);
+    const loadError = ordersRes.error || itemsRes.error;
+    if (loadError) { alert('발주 목록을 불러오지 못했습니다: ' + loadError.message); return null; }
+    if (touched !== receiveTouchRef.current) return loadOrders(); // 조회하는 사이 입고가 저장됐으면 옛 값으로 덮지 않고 다시 읽는다
     const o = ordersRes.data || [];
     const it = itemsRes.data || [];
     setOrders(o);
@@ -726,9 +994,18 @@ export default function Home() {
       orderId = data.id;
       setCurrentDraftId(orderId);
     } else {
-      await supabase.from('parts_orders').update({ memo: null, order_name: orderName }).eq('id', orderId);
+      // [PATCH67] 품목을 지우고 다시 넣기 전에 최신 상태 확인 (입고 기록 유실 방지)
+      const state = await fetchOrderReceiptState(orderId);
+      if (state.error) { alert('저장 실패: ' + state.error); return null; }
+      if (state.status === null) { alert('이미 삭제된 발주입니다. 새로고침 후 다시 확인해 주세요.'); return null; }
+      if (state.hasReceipt) { alert('입고 기록이 있는 발주라 저장할 수 없습니다. 새로고침 후 다시 확인해 주세요.'); return null; }
+      if (state.status !== 'draft') { alert('다른 화면에서 이미 확정된 발주입니다. 새로고침 후 다시 확인해 주세요.'); return null; }
+      const { error: orderError } = await supabase.from('parts_orders').update({ memo: null, order_name: orderName }).eq('id', orderId);
+      if (orderError) { alert('저장 실패: ' + orderError.message); return null; }
     }
-    await supabase.from('parts_order_items').delete().eq('order_id', orderId);
+    // [PATCH67] 삭제가 거절되면 추가하지 않는다 (품목 중복 방지)
+    const { error: deleteError } = await supabase.from('parts_order_items').delete().eq('order_id', orderId);
+    if (deleteError) { alert('저장 실패: ' + deleteError.message); return null; }
     const itemsToInsert = cart.map((item, idx) => ({
       order_id: orderId,
       part_id: item.part_id,
@@ -805,6 +1082,11 @@ export default function Home() {
       '발주번호는 그대로 유지됩니다.'
     );
     if (!ok) return;
+    // [PATCH67] 확인창을 보는 사이 다른 화면에서 입고가 기록됐을 수 있어 다시 확인
+    const state = await fetchOrderReceiptState(order.id);
+    if (state.error) { alert('수정 모드 진입 실패: ' + state.error); return; }
+    if (state.hasReceipt) { alert('입고 기록이 있어 수정할 수 없습니다.'); await loadOrders(); return; }
+    if (state.status !== 'confirmed') { alert('다른 화면에서 변경된 발주입니다.'); await loadOrders(); return; }
     const { error } = await supabase
       .from('parts_orders').update({ status: 'draft' }).eq('id', order.id);
     if (error) { alert('수정 모드 진입 실패: ' + error.message); return; }
@@ -812,6 +1094,110 @@ export default function Home() {
     await loadOrders();
     setShowHistoryModal(false);
   }, [cart, currentDraftId, loadDraft, loadOrders]);
+
+  /* ── [PATCH67] 입고체크 ── */
+  const notifyReceive = useCallback((text, kind = 'ok') => {
+    const id = `${Date.now()}-${Math.random()}`;
+    setReceiveToasts(prev => [...prev, { id, text, kind }]);
+    setTimeout(() => setReceiveToasts(prev => prev.filter(t => t.id !== id)), kind === 'ok' ? 2000 : 3500);
+  }, []);
+  const receiveErrorText = (error) => {
+    if (error.code === '40P01') return '다른 작업과 겹쳤습니다. 다시 시도해 주세요.';
+    if (/abort/i.test(error.message || '')) return '응답이 없습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.';
+    return error.message;
+  };
+
+  const loadReceiveItems = useCallback(async (orderId) => {
+    const seq = ++receiveLoadRef.current;
+    const [ordRes, itemRes] = await Promise.all([
+      withReceiveTimeout(supabase.from('parts_orders').select('*').eq('id', orderId)),
+      fetchOrderItems(orderId),
+    ]);
+    const error = ordRes.error || itemRes.error;
+    if (error) return { error: receiveErrorText(error) };
+    if (seq !== receiveLoadRef.current) return { error: '다른 조회가 진행 중입니다.' };
+    receiveTouchRef.current += 1;
+    const order = ordRes.data?.[0];
+    if (!order) return { error: '이미 삭제된 발주입니다.' };
+    setOrders(prev => prev.map(o => (o.id === orderId ? order : o)));
+    setOrderItems(prev => [...prev.filter(it => it.order_id !== orderId), ...(itemRes.data || [])]);
+    if (order.status !== 'confirmed') return { error: '확정 상태가 아니라 입고를 기록할 수 없습니다.' };
+    return { ok: true };
+  }, []);
+
+  const applyReceiveRows = useCallback((rows) => {
+    receiveTouchRef.current += 1;
+    const byId = new Map(rows.map(row => [row.id, row]));
+    setOrderItems(prev => prev.map(it => byId.get(it.id) || it));
+  }, []);
+
+  // base(직전에 읽은 행)가 그대로일 때만 저장. 같은 저장을 다시 보낼 때는 같은 op를 쓴다
+  const saveReceiveField = useCallback(async (base, field, value, op) => {
+    const prev = base[field] ?? null;
+    const prevOp = base.receive_op ?? null;
+    let query = supabase.from('parts_order_items').update({ [field]: value, receive_op: op }).eq('id', base.id);
+    query = prevOp === null ? query.is('receive_op', null) : query.eq('receive_op', prevOp);
+    query = prev === null ? query.is(field, null) : query.eq(field, prev);
+    const { data, error } = await withReceiveTimeout(query.select('*'));
+    if (!error && data?.length === 1) { applyReceiveRows(data); return { ok: true, row: data[0] }; }
+    if (error?.code === 'P0001') return { stale: true };
+    // 0행이거나 결과를 모르는 오류: 실제로 내 저장(op)이 반영됐는지 확인한다
+    const check = await withReceiveTimeout(supabase.from('parts_order_items').select('*').eq('id', base.id));
+    if (check.error) return { error: `저장 여부를 확인하지 못했습니다. ${receiveErrorText(error || check.error)}` };
+    const row = check.data?.[0];
+    if (row && row.receive_op === op) { applyReceiveRows([row]); return { ok: true, row }; }
+    if (row && (row.receive_op ?? null) === prevOp && (row[field] ?? null) === prev) return { error: error ? receiveErrorText(error) : '다시 시도해 주세요.' };
+    return { stale: true, current: row ? row[field] ?? null : undefined };
+  }, [applyReceiveRows]);
+
+  const readReceiveItem = useCallback(async (id) => {
+    const { data, error } = await withReceiveTimeout(supabase.from('parts_order_items').select('*').eq('id', id));
+    if (error) return { error: receiveErrorText(error) };
+    const row = data?.[0];
+    if (!row) return { error: '이미 삭제된 품목입니다.', missing: true };
+    applyReceiveRows([row]);
+    return { row };
+  }, [applyReceiveRows]);
+
+  const fillReceiveItems = useCallback(async (items) => {
+    const op = newReceiveOp();
+    const rows = new Map();
+    let stale = false;
+    let message = '';
+    // 한 요청에 한 품목만 저장한다: 여러 행을 한 번에 잠그면 개별 저장과 교착될 수 있다
+    for (let i = 0; i < items.length; i += 6) {
+      // 화면에서 본 행(receive_op)이 그대로일 때만 채운다: 실행 중 다른 화면이 입력했다가 비운 칸도 덮어쓰지 않는다
+      const results = await Promise.all(items.slice(i, i + 6).map(it => {
+        const query = supabase.from('parts_order_items').update({ received_qty: it.quantity, receive_op: op }).eq('id', it.id).is('received_qty', null);
+        const prevOp = it.receive_op ?? null;
+        return withReceiveTimeout((prevOp === null ? query.is('receive_op', null) : query.eq('receive_op', prevOp)).select('*'));
+      }));
+      results.forEach(({ data, error }) => {
+        if (error) { if (error.code === 'P0001') stale = true; message = receiveErrorText(error); }
+        else data.forEach(row => rows.set(row.id, row));
+      });
+      if (stale) break;
+    }
+    // 일부라도 확인되지 않았으면 실제 저장 결과를 다시 읽는다 (응답 유실을 실패로 잘못 안내하지 않기 위함)
+    if (rows.size < items.length) {
+      for (let i = 0; i < items.length; i += 50) {
+        const { data, error } = await withReceiveTimeout(supabase.from('parts_order_items').select('*').in('id', items.slice(i, i + 50).map(it => it.id)));
+        if (error) { stale = true; message = `저장 결과를 확인하지 못했습니다. ${receiveErrorText(error)}`; }
+        else data.forEach(row => rows.set(row.id, row));
+      }
+    }
+    applyReceiveRows([...rows.values()]);
+    const found = items.map(it => rows.get(it.id)).filter(Boolean);
+    const opById = new Map(items.map(it => [it.id, it.receive_op ?? null]));
+    const saved = found.filter(row => row.receive_op === op).length;
+    // 실패 = 그대로 빈칸인 품목. 저장 번호가 바뀐 품목은 다른 화면이 건드린 것(missed)
+    const failed = found.filter(row => row.receive_op !== op && receivedOf(row) === null && (row.receive_op ?? null) === opById.get(row.id)).length;
+    return { saved, failed, missed: items.length - saved - failed, stale, error: message, rows: [...rows.values()] };
+  }, [applyReceiveRows]);
+
+  const receiveOrder = receiveOrderId ? orders.find(o => o.id === receiveOrderId) || null : null;
+  const receiveItems = useMemo(() => (receiveOrderId ? orderItems.filter(it => it.order_id === receiveOrderId) : []), [orderItems, receiveOrderId]);
+  /* ── [/PATCH67] ── */
 
   /* ── 부속 필터 (기존) ── */
   const filteredParts = parts.filter(p => {
@@ -1351,7 +1737,9 @@ export default function Home() {
               await loadOrders();
             }}
             canEdit={cart.length === 0 && currentDraftId === null}
-            onClose={() => setShowHistoryModal(false)}
+            onReceive={(order) => setReceiveOrderId(order.id)}
+            onLocked={() => notifyReceive('입고 기록이 있어 수정·삭제할 수 없습니다. 수량과 비고를 모두 비우면 가능합니다.', 'info')}
+            onClose={() => { if (receiveOrderId) return; setShowHistoryModal(false); }}
             onGeneratePdf={async (order) => {
               try {
                 const result = await generateOrderPDF(order, orderItems, parts);
@@ -1370,6 +1758,10 @@ export default function Home() {
                   '이 확정 발주는 영구 삭제되며 복구할 수 없습니다.\n정말 삭제하시겠습니까?'
                 : '이 작성중 발주를 삭제하시겠습니까?\n장바구니에 불러온 상태라면 함께 비워집니다.';
               if (!confirm(message)) return;
+              // [PATCH67] 삭제 직전 입고 기록 재확인
+              const state = await fetchOrderReceiptState(order.id);
+              if (state.error) { alert('삭제 실패: ' + state.error); return; }
+              if (state.hasReceipt) { alert('입고 기록이 있어 삭제할 수 없습니다.'); await loadOrders(); return; }
               const { error } = await supabase.from('parts_orders').delete().eq('id', order.id);
               if (error) { alert('삭제 실패: ' + error.message); return; }
               if (currentDraftId === order.id) {
@@ -1381,6 +1773,41 @@ export default function Home() {
             }}
           />
         )}
+
+        {/* [PATCH67] 입고체크 */}
+        {(showHistoryModal || receiveOrderId) && <style dangerouslySetInnerHTML={{ __html: RECEIVE_CSS }} />}
+        {receiveOrder && (
+          <OrderReceiveModal
+            key={receiveOrder.id}
+            order={receiveOrder}
+            items={receiveItems}
+            parts={parts}
+            pdfOpen={!!pdfPreview}
+            onLoad={loadReceiveItems}
+            onRead={readReceiveItem}
+            onSave={saveReceiveField}
+            onFill={fillReceiveItems}
+            onPrint={async (order, items) => {
+              // 글꼴·사진이 끝까지 오지 않아도 60초 뒤에는 멈추고, 늦게 끝난 결과는 버린다
+              let expired = false;
+              try {
+                const job = generateReceiveChecklistPDF(order, items, parts).then(res => {
+                  if (expired) URL.revokeObjectURL(res.blobUrl);
+                  return res;
+                });
+                job.catch(() => {});
+                const result = await Promise.race([job, new Promise((_, reject) => setTimeout(() => { expired = true; reject(new Error('시간이 초과됐습니다. 다시 시도해 주세요.')); }, 60000))]);
+                setPdfPreview(result);
+              } catch (err) {
+                alert('체크리스트 생성 실패: ' + (err?.message || err));
+                console.error(err);
+              }
+            }}
+            onClose={() => { setReceiveOrderId(null); loadOrders(); }}
+            notify={notifyReceive}
+          />
+        )}
+        <ReceiveToasts toasts={receiveToasts} />
 
         {pdfPreview && (
           <PdfPreviewModal
@@ -3964,6 +4391,10 @@ function OrderConfirmModal({ cart, onConfirm, onClose }) {
 /* ═══ ORDER HISTORY MODAL — 발주 이력 (작성중/확정) ═══ */
 /* ═══ PDF PREVIEW MODAL — 미리보기 + 다운로드 ═══ */
 function PdfPreviewModal({ preview, onClose, onDownload }) {
+  const frameRef = useRef(null);
+  const closeRef = useRef(null);
+  const printable = !!preview?.printable;
+  useEffect(() => { if (printable) closeRef.current?.focus(); }, [printable]);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
@@ -3974,23 +4405,25 @@ function PdfPreviewModal({ preview, onClose, onDownload }) {
   return (
     <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:10002, display:'flex', alignItems:'center', justifyContent:'center', padding:24}}
       onMouseDown={e => e.stopPropagation()}
+      onClick={e => { if (printable && e.target === e.currentTarget) onClose(); }}
     >
       <div style={{background:'#fff', borderRadius:8, width:'min(960px, 90vw)', height:'90vh', display:'flex', flexDirection:'column', overflow:'hidden', boxShadow:'0 12px 32px rgba(0,0,0,0.3)'}}>
         <div style={{flexShrink:0, padding:'12px 16px', background:'#1A1D23', color:'#fff', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
           <span style={{fontSize:13, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginRight:12}}>📄 PDF 미리보기 — {preview.filename}</span>
           <div style={{display:'flex', gap:8, flexShrink:0}}>
+            {preview.printable && <button onClick={() => { frameRef.current?.contentWindow?.focus(); frameRef.current?.contentWindow?.print(); }} style={{padding:'5px 12px', background:'transparent', color:'#fff', border:'0.5px solid rgba(255,255,255,0.3)', borderRadius:4, fontSize:12, fontWeight:500, cursor:'pointer', fontFamily:'inherit'}}>인쇄</button>}
             <button onClick={onDownload} style={{padding:'5px 12px', background:'#185FA5', color:'#fff', border:'none', borderRadius:4, fontSize:12, fontWeight:500, cursor:'pointer', fontFamily:'inherit'}}>📥 다운로드</button>
-            <button onClick={onClose} style={{padding:'5px 10px', background:'transparent', color:'#fff', border:'0.5px solid rgba(255,255,255,0.3)', borderRadius:4, fontSize:12, cursor:'pointer', fontFamily:'inherit'}}>닫기</button>
+            <button ref={closeRef} onClick={onClose} style={{padding:'5px 10px', background:'transparent', color:'#fff', border:'0.5px solid rgba(255,255,255,0.3)', borderRadius:4, fontSize:12, cursor:'pointer', fontFamily:'inherit'}}>닫기</button>
           </div>
         </div>
-        <iframe src={preview.blobUrl} style={{flex:1, width:'100%', border:'none', background:'#525659'}} title="PDF 미리보기" />
+        <iframe ref={frameRef} src={preview.blobUrl} style={{flex:1, width:'100%', border:'none', background:'#525659'}} title="PDF 미리보기" />
       </div>
     </div>
   );
 }
 
 
-function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, onDeleteOrder, onGeneratePdf, onEditOrder, onRenameOrder, canEdit }) {
+function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, onDeleteOrder, onGeneratePdf, onEditOrder, onRenameOrder, onReceive, onLocked, canEdit }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('전체');
   const [editingNameId, setEditingNameId] = useState(null);
@@ -4020,7 +4453,7 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
   });
 
   const draftCount = orders.filter(o => o.status === 'draft').length;
-  const confirmedCount = orders.filter(o => o.status === 'confirmed').length;
+  const receiveCounts = orders.reduce((acc, o) => { const st = getReceiveStatus(o, itemsByOrder[o.id] || []); acc[st] = (acc[st] || 0) + 1; return acc; }, {});
 
   const fmtDateMD = (iso) => {
     if (!iso) return '—';
@@ -4039,7 +4472,7 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
         {/* 헤더 */}
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 18px', borderBottom:'0.5px solid #DDE1EB', flexShrink:0}}>
           <div style={{fontSize:14, fontWeight:600, color:'#1A1D23'}}>
-            발주이력 <span style={{fontSize:11, fontWeight:400, color:'#9BA3B2', marginLeft:8}}>총 {orders.length}건 · 작성중 {draftCount} / 확정 {confirmedCount}</span>
+            발주이력 <span style={{fontSize:11, fontWeight:400, color:'#9BA3B2', marginLeft:8}}>총 {orders.length}건 · 작성중 {draftCount} / 확정 {receiveCounts.confirmed || 0} / 입고중 {receiveCounts.receiving || 0} / 입고완료 {receiveCounts.done || 0}</span>
           </div>
           <button onClick={onClose} style={{background:'none', border:'none', fontSize:18, cursor:'pointer', color:'#9BA3B2', padding:0, lineHeight:1, fontFamily:'inherit'}}>✕</button>
         </div>
@@ -4056,10 +4489,10 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
 
         {/* 리스트 */}
         <div style={{flex:1, overflow:'auto'}}>
-          <table className="as-table" style={{width:'100%'}}>
+          <table className="as-table" style={{width:'100%', minWidth:1120}}>
             <thead><tr className="as-col-header">
               {['발주번호','발주명','날짜','상태','항목','합계','액션'].map(h => (
-                <th key={h} style={{position:'sticky', top:0, zIndex:10, background:'#EAECF2', color:'#5A6070', fontSize:12, fontWeight:500, padding:'8px 10px', height:36, lineHeight:'20px', boxShadow:'0 1px 0 0 #DDE1EB', userSelect:'none', ...(h === '액션' ? {width:240, minWidth:240} : {}), ...(h === '발주명' ? {minWidth:160} : {})}}>{h}</th>
+                <th key={h} style={{position:'sticky', top:0, zIndex:10, background:'#EAECF2', color:'#5A6070', fontSize:12, fontWeight:500, padding:'8px 10px', height:36, lineHeight:'20px', boxShadow:'0 1px 0 0 #DDE1EB', userSelect:'none', ...(h === '액션' ? {width:280, minWidth:280} : {}), ...(h === '상태' ? {width:160} : {}), ...(h === '발주명' ? {minWidth:160} : {})}}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
@@ -4068,6 +4501,8 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
                 const totalQty = items.reduce((s, it) => s + (it.quantity || 0), 0);
                 const totalAmount = items.reduce((s, it) => s + (it.quantity || 0) * (it.price_snapshot || 0), 0);
                 const isDraft = o.status === 'draft';
+                const badge = getReceiveBadge(o, items);
+                const locked = !isDraft && hasOrderReceipt(items);
                 return (
                   <tr key={o.id} style={i % 2 === 1 ? {background:'#FAFBFC'} : undefined}>
                     <td style={{padding:'8px 10px', fontSize:12, textAlign:'center'}}>
@@ -4112,9 +4547,7 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
                       {isDraft ? `${fmtDateMD(o.created_at)} 작성` : fmtDateYMD(o.order_date)}
                     </td>
                     <td style={{padding:'8px 10px', fontSize:12, textAlign:'center'}}>
-                      {isDraft
-                        ? <span style={{display:'inline-block', padding:'2px 8px', background:'#FFF4D6', color:'#8A6300', borderRadius:999, fontSize:11, fontWeight:500, whiteSpace:'nowrap'}}>작성중</span>
-                        : <span style={{display:'inline-block', padding:'2px 8px', background:'#E6F4EA', color:'#1A6F2E', borderRadius:999, fontSize:11, fontWeight:500, whiteSpace:'nowrap'}}>확정</span>}
+                      <span style={{display:'inline-block', padding:'2px 8px', background:badge.background, color:badge.color, borderRadius:999, fontSize:11, fontWeight:500, whiteSpace:'nowrap'}}>{badge.label}</span>
                     </td>
                     <td style={{padding:'8px 10px', fontSize:12, textAlign:'center', color:'#5A6070'}}>{items.length}종 / {totalQty}개</td>
                     <td style={{padding:'8px 10px', fontSize:12, textAlign:'right', color:'#185FA5', fontWeight:600, fontVariantNumeric:'tabular-nums'}}>{totalAmount.toLocaleString('ko-KR')}원</td>
@@ -4127,23 +4560,25 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
                       ) : (
                         <div style={{display:'flex', gap:4, justifyContent:'center'}}>
                           <button onClick={() => onGeneratePdf && onGeneratePdf(o)} style={{padding:'4px 10px', fontSize:11, fontWeight:500, background:'#185FA5', color:'#fff', border:'none', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>📄 PDF</button>
+                          <button onClick={() => onReceive && onReceive(o)} style={{padding:'4px 10px', fontSize:11, fontWeight:500, background:'#E6F1FB', color:'#185FA5', border:'0.5px solid #185FA5', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>📦 입고체크</button>
                           <button
-                            onClick={() => canEdit && onEditOrder && onEditOrder(o)}
-                            disabled={!canEdit}
-                            title={canEdit ? '이 확정 발주를 수정 (작성중으로 되돌림)' : '장바구니를 먼저 비우거나 [작성중 저장] 후에 시도하세요'}
+                            onClick={() => { if (locked) { onLocked && onLocked(); return; } if (canEdit && onEditOrder) onEditOrder(o); }}
+                            disabled={!canEdit && !locked}
+                            aria-disabled={!canEdit || locked}
+                            title={locked ? '입고 기록이 있어 수정할 수 없습니다' : canEdit ? '이 확정 발주를 수정 (작성중으로 되돌림)' : '장바구니를 먼저 비우거나 [작성중 저장] 후에 시도하세요'}
                             style={{
                               padding:'4px 10px',
                               fontSize:11,
                               fontWeight:500,
-                              background: canEdit ? '#FFF4D6' : '#F4F6FA',
-                              color: canEdit ? '#8A6300' : '#9BA3B2',
-                              border: canEdit ? '0.5px solid #F0D27A' : '0.5px solid #DDE1EB',
+                              background: canEdit && !locked ? '#FFF4D6' : '#F4F6FA',
+                              color: canEdit && !locked ? '#8A6300' : '#9BA3B2',
+                              border: canEdit && !locked ? '0.5px solid #F0D27A' : '0.5px solid #DDE1EB',
                               borderRadius:4,
-                              cursor: canEdit ? 'pointer' : 'not-allowed',
+                              cursor: canEdit && !locked ? 'pointer' : 'not-allowed',
                               fontFamily:'inherit'
                             }}
                           >✏️ 수정</button>
-                          <button onClick={() => onDeleteOrder && onDeleteOrder(o)} title="확정 발주 삭제 (주의)" style={{padding:'4px 8px', fontSize:11, background:'#FEE2E2', color:'#7a3030', border:'0.5px solid #F0B5B5', borderRadius:4, cursor:'pointer', fontFamily:'inherit'}}>🗑</button>
+                          <button onClick={() => { if (locked) { onLocked && onLocked(); return; } if (onDeleteOrder) onDeleteOrder(o); }} aria-disabled={locked} title={locked ? '입고 기록이 있어 삭제할 수 없습니다' : '확정 발주 삭제 (주의)'} style={{padding:'4px 8px', fontSize:11, background: locked ? '#F4F6FA' : '#FEE2E2', color: locked ? '#9BA3B2' : '#7a3030', border: locked ? '0.5px solid #DDE1EB' : '0.5px solid #F0B5B5', borderRadius:4, cursor: locked ? 'not-allowed' : 'pointer', fontFamily:'inherit'}}>🗑</button>
                         </div>
                       )}
                     </td>
@@ -4160,6 +4595,617 @@ function OrderHistoryModal({ orders, orderItems, parts, onLoadDraft, onClose, on
           <button onClick={onClose} style={{padding:'7px 16px', fontSize:12, background:'#fff', color:'#5A6070', border:'0.5px solid #DDE1EB', borderRadius:6, cursor:'pointer', fontFamily:'inherit'}}>닫기</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+
+/* ═══ [PATCH67] 입고체크 — 스타일 (이 모달 전용, rcv- 접두사) ═══ */
+const RECEIVE_CSS = `
+.rcv-overlay{position:fixed;inset:0;z-index:10002;background:rgba(26,29,35,.5);display:flex;align-items:center;justify-content:center;padding:24px;font-family:Pretendard,-apple-system,sans-serif}
+.rcv-overlay.rcv-top{z-index:10003}
+.rcv-modal{background:#fff;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.2);width:100%;max-width:1100px;max-height:85vh;display:flex;flex-direction:column;min-width:0;color:#1A1D23;font-size:13px}
+.rcv-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 18px;border-bottom:.5px solid #DDE1EB;flex-shrink:0;cursor:move;user-select:none}
+.rcv-title{flex:1;min-width:0;font-size:14px;font-weight:600}
+.rcv-progress{font-size:13px;font-weight:600;color:#185FA5;white-space:nowrap}
+.rcv-x{background:none;border:none;font-size:18px;line-height:1;color:#6B7280;cursor:pointer;width:28px;height:28px;border-radius:4px;flex-shrink:0;font-family:inherit}
+.rcv-x:hover{background:#F4F6FA;color:#1A1D23}
+.rcv-notice{display:flex;align-items:center;gap:12px;padding:10px 18px;background:#FAEEDA;color:#7A4B00;border-bottom:.5px solid #DDE1EB;flex-shrink:0}
+.rcv-notice span{flex:1}
+.rcv-sum{display:flex;flex-wrap:wrap;align-items:center;min-height:40px;gap:6px 16px;padding:10px 18px;border-bottom:.5px solid #DDE1EB;font-size:12px;color:#5A6070;font-variant-numeric:tabular-nums;flex-shrink:0}
+.rcv-sum b{font-weight:600;color:#1A1D23}
+.rcv-saving{margin-left:auto;min-width:96px;text-align:right}
+.rcv-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:500;white-space:nowrap}
+.rcv-scroll{flex:1;overflow:auto;min-height:0}
+.rcv-table{width:100%;min-width:900px;border-collapse:collapse;table-layout:fixed}
+.rcv-table th{position:sticky;top:0;z-index:10;background:#EAECF2;color:#5A6070;font-size:13px;font-weight:500;padding:8px 10px;height:36px;line-height:20px;text-align:center;box-shadow:0 1px 0 0 #DDE1EB;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none}
+.rcv-table td{padding:8px 10px;font-size:13px;line-height:20px;text-align:center;vertical-align:middle;border-bottom:1px solid #F0F2F7;overflow:hidden;text-overflow:ellipsis}
+.rcv-table tr.rcv-even td{background:#FAFBFC}
+.rcv-table tr.rcv-row:hover td{background:#F4F6FA}
+.rcv-grip{position:absolute;right:0;top:0;width:6px;height:100%;cursor:col-resize;background:transparent;z-index:10}
+.rcv-grip:hover,.rcv-grip.rcv-on{background:#185FA5}
+.rcv-table tr.rcv-group td{padding:7px 14px;background:#1A1D23;text-align:left;border:none}
+.rcv-chip{background:#185FA5;color:#fff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600}
+.rcv-chip.rcv-compat{background:#5A6070}
+.rcv-cnt{color:#B0B8CC;font-size:11px;margin-left:10px;font-variant-numeric:tabular-nums}
+.rcv-no{color:#5A6070;font-weight:600;font-variant-numeric:tabular-nums}
+.rcv-mno{display:none}
+.rcv-name{font-weight:500;overflow-wrap:anywhere}
+.rcv-spec{font-size:11px;color:#6B7280;overflow-wrap:anywhere}
+.rcv-num{font-variant-numeric:tabular-nums}
+.rcv-in{width:100%;height:32px;border:1px solid #DDE1EB;border-radius:6px;padding:0 8px;font-size:13px;font-family:inherit;background:#fff;color:#1A1D23;text-align:center}
+.rcv-in.rcv-qty{width:84px;font-variant-numeric:tabular-nums}
+.rcv-in:hover{border-color:#B0B8CC}
+.rcv-in:focus{outline:none;border-color:#185FA5;box-shadow:0 0 0 2px #E6F1FB}
+.rcv-in.rcv-saving-in{background:#F4F6FA;border-style:dashed;border-color:#185FA5}
+.rcv-in.rcv-ok{border-color:#1D9E75}
+.rcv-in.rcv-err{border-color:#CC2222;background:#FCEBEB}
+.rcv-in:disabled{background:#F4F6FA;color:#9BA3B2;cursor:not-allowed}
+.rcv-v{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.rcv-v-ok{background:#D1FAE5;color:#065F46}
+.rcv-v-short{background:#FEE2E2;color:#991B1B}
+.rcv-v-over{background:#E6F1FB;color:#185FA5}
+.rcv-state{padding:64px 16px;text-align:center;color:#5A6070;line-height:1.8;overflow-wrap:anywhere}
+.rcv-sk{height:14px;border-radius:4px;background:#EAECF2;width:70%;margin:0 auto 12px}
+.rcv-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:.5px solid #DDE1EB;flex-shrink:0}
+.rcv-btn{height:32px;padding:6px 12px;font-size:13px;font-weight:600;border-radius:6px;cursor:pointer;border:1px solid transparent;white-space:nowrap;min-width:72px;font-family:inherit}
+.rcv-btn-primary{background:#185FA5;color:#fff}
+.rcv-btn-primary:hover:not(:disabled){background:#0C447C}
+.rcv-btn-secondary{background:transparent;color:#185FA5;border-color:#185FA5}
+.rcv-btn-secondary:hover:not(:disabled){background:#E6F1FB}
+.rcv-btn-danger{background:#CC2222;color:#fff}
+.rcv-btn-danger:hover:not(:disabled){background:#A81A1A}
+.rcv-btn:disabled{background:#DDE1EB;border-color:#DDE1EB;color:#6B7280;cursor:not-allowed}
+.rcv-btn:focus-visible,.rcv-x:focus-visible{outline:2px solid #185FA5;outline-offset:1px}
+.rcv-print{margin-right:auto;min-width:124px}
+.rcv-fill{min-width:196px}
+.rcv-confirm{max-width:400px}
+.rcv-confirm .rcv-head{cursor:default}
+.rcv-confirm-body{padding:18px;line-height:1.7;white-space:pre-line}
+.rcv-toasts{position:fixed;top:16px;right:16px;z-index:10010;display:flex;flex-direction:column;gap:8px;max-width:calc(100vw - 32px);pointer-events:none;font-family:Pretendard,-apple-system,sans-serif}
+.rcv-toast{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;color:#fff;min-width:240px;max-width:400px}
+.rcv-toast-ok{background:#14734F}
+.rcv-toast-err{background:#CC2222}
+.rcv-toast-info{background:#185FA5}
+@media (max-width:768px){
+  .rcv-overlay{padding:0}
+  .rcv-overlay.rcv-top{padding:12px}
+  .rcv-modal:not(.rcv-confirm){height:100%;max-height:100%;border-radius:0}
+  .rcv-modal:not(.rcv-confirm) .rcv-head{cursor:default;flex-wrap:wrap}
+  .rcv-modal:not(.rcv-confirm) .rcv-title{flex-basis:calc(100% - 56px)}
+  .rcv-progress{order:3;flex-basis:100%}
+  .rcv-x{width:40px;height:40px}
+  .rcv-saving{margin-left:0;min-width:0;text-align:left}
+  .rcv-saving:empty{display:none}
+  .rcv-notice{flex-wrap:wrap}
+  .rcv-table{display:block;width:100%!important;min-width:0!important}
+  .rcv-table colgroup,.rcv-table thead{display:none}
+  .rcv-table tbody{display:block}
+  .rcv-table tr.rcv-group,.rcv-table tr.rcv-group td{display:block}
+  .rcv-table tr.rcv-row{display:grid;grid-template-columns:72px 1fr 1fr 1fr;gap:8px;padding:12px 16px;border-bottom:1px solid #DDE1EB}
+  .rcv-table tr.rcv-row td{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0;border:none;background:none;min-width:0}
+  .rcv-table tr.rcv-row:hover td{background:none}
+  .rcv-table tr.rcv-row td[data-l]::before{content:attr(data-l);font-size:11px;color:#5A6070}
+  .rcv-table tr.rcv-row td.rcv-no{display:none}
+  .rcv-table tr.rcv-row td.rcv-c-photo{grid-row:1/3}
+  .rcv-table tr.rcv-row td.rcv-c-name{grid-column:2/5}
+  .rcv-table tr.rcv-row td.rcv-c-note{grid-column:1/5;align-items:stretch}
+  .rcv-table tr.rcv-even{background:#FAFBFC}
+  .rcv-mno{display:inline}
+  .rcv-in,.rcv-in.rcv-qty{height:40px;width:100%;font-size:16px}
+  .rcv-foot{flex-wrap:wrap}
+  .rcv-foot .rcv-btn{height:44px}
+  .rcv-print{flex:1 0 100%}
+  .rcv-fill{flex:1;min-width:0}
+  .rcv-toasts{top:auto;bottom:132px;left:16px}
+  .rcv-toast{min-width:0;max-width:none}
+}
+`;
+
+function ReceiveToasts({ toasts }) {
+  if (toasts.length === 0) return null;
+  return (
+    <div className="rcv-toasts" aria-live="polite">
+      {toasts.map(t => <div key={t.id} className={`rcv-toast rcv-toast-${t.kind}`}>{t.text}</div>)}
+    </div>
+  );
+}
+
+const RECEIVE_COLS = ['No', '사진', '부품명', '발주수량', '입고수량', '차이', '비고'];
+const RECEIVE_DEFAULT_WIDTHS = [52, 96, 230, 96, 120, 140, 252];
+const RECEIVE_WIDTH_KEY = 'parts-receive-col-widths';
+
+/* ═══ [PATCH67] RECEIVE MODAL — 입고체크 ═══ */
+function OrderReceiveModal({ order, items, parts, pdfOpen, onLoad, onRead, onSave, onFill, onPrint, onClose, notify }) {
+  const [phase, setPhase] = useState('loading'); // loading | ready | error
+  const [loadError, setLoadError] = useState('');
+  const [stale, setStale] = useState(null); // null | { text }
+  const [busyFill, setBusyFill] = useState(false);
+  const [busyPrint, setBusyPrint] = useState(false);
+  const [confirmBox, setConfirmBox] = useState(null);
+  const [widths, setWidths] = useState(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(RECEIVE_WIDTH_KEY));
+      if (Array.isArray(v) && v.length === RECEIVE_COLS.length && v.every(n => Number.isFinite(n) && n >= 40)) return v;
+    } catch {}
+    return RECEIVE_DEFAULT_WIDTHS;
+  });
+  const [, bump] = useState(0);
+
+  // 입력칸 상태는 ref가 기준 (연속 클릭에서도 최신 값을 읽기 위함): { [id:field]: { text, status, label, why, failed } }
+  const cellsRef = useRef({});
+  const pendingRef = useRef(0);
+  const fillRef = useRef(false);       // 일괄 채우기 중 (입력 잠금)
+  const printRef = useRef(false);      // PDF 생성 중 (입력·저장은 계속 가능)
+  const openingRef = useRef(false);    // 저장 대기 후 창을 여는 중
+  const closingRef = useRef(false);
+  const askRef = useRef(null);
+  const skipBlurRef = useRef(null);
+  const itemsRef = useRef(items);
+  const pdfOpenRef = useRef(pdfOpen);
+  const staleRef = useRef(null);
+  const rowsRef = useRef({});          // 서버가 돌려준 최신 행 (렌더보다 먼저 다음 저장의 기준이 됨)
+  const rowChainRef = useRef({});      // 같은 품목의 저장·되돌리기 읽기를 순서대로 처리
+  const nextRowRef = useRef({});       // { `${id}:${저장 전 op}`: 내 저장 직후 행 } 재시도 기준은 내 저장이 이어진 만큼만 따라간다
+  const loadSeqRef = useRef(0);
+  const rootRef = useRef(null);
+  const modalRef = useRef(null);
+  const tableRef = useRef(null);
+  const downRef = useRef(false);
+  itemsRef.current = items;
+  pdfOpenRef.current = pdfOpen;
+
+  const keyOf = (id, field) => `${id}:${field}`;
+  const setCell = (k, v) => { if (v) cellsRef.current[k] = v; else delete cellsRef.current[k]; bump(n => n + 1); };
+  const unsavedKeys = () => Object.keys(cellsRef.current).filter(k => ['err', 'edit'].includes(cellsRef.current[k].status));
+  const seenRow = (cell) => cell?.retry?.base || cell?.base || null;
+  const latestItem = (id) => rowsRef.current[id] || itemsRef.current.find(x => x.id === id);
+  const markStale = (text) => { staleRef.current = { text }; setStale({ text }); };
+  const waitIdle = async () => { while (pendingRef.current > 0 || fillRef.current || printRef.current) await new Promise(r => setTimeout(r, 50)); };
+
+  // 진행 중인 저장을 기다리고, 기다리는 사이 새로 입력한 칸도 저장을 끝낸다
+  const flush = async () => {
+    for (let i = 0; i < 20; i++) {
+      const el = document.activeElement;
+      if (el?.classList?.contains('rcv-in') && rootRef.current?.contains(el)) el.blur();
+      await waitIdle();
+      const again = document.activeElement;
+      const typing = again?.classList?.contains('rcv-in') && rootRef.current?.contains(again);
+      if (!typing && !Object.values(cellsRef.current).some(c => c.status === 'saving')) return;
+    }
+  };
+
+  const ask = (box) => {
+    if (askRef.current) return Promise.resolve(false);
+    return new Promise(resolve => { askRef.current = resolve; setConfirmBox(box); });
+  };
+  const answer = (v) => { const r = askRef.current; askRef.current = null; setConfirmBox(null); if (r) r(v); };
+
+  const load = async () => {
+    const seq = ++loadSeqRef.current;
+    setPhase('loading');
+    // 진행 중인 저장보다 먼저 읽은 옛 값으로 화면을 덮지 않는다
+    while (pendingRef.current > 0 || fillRef.current) await new Promise(r => setTimeout(r, 50));
+    if (seq !== loadSeqRef.current) return;
+    const r = await onLoad(order.id);
+    if (seq !== loadSeqRef.current) return;
+    cellsRef.current = {};
+    rowsRef.current = {};
+    nextRowRef.current = {};
+    if (r.error) { setLoadError(r.error); setPhase('error'); return; }
+    staleRef.current = null;
+    setStale(null);
+    setPhase('ready');
+  };
+  useEffect(() => {
+    load();
+    return () => { loadSeqRef.current++; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order.id]);
+
+  const requestClose = async () => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    await flush();
+    closingRef.current = false;
+    if (askRef.current || pdfOpenRef.current) return;
+    if (unsavedKeys().length > 0) {
+      const ok = await ask({ title: '저장되지 않은 입력', body: '저장하지 못한 값이 있습니다.\n닫으면 이 값은 사라집니다.', yes: '저장 없이 닫기', danger: true });
+      if (!ok) return;
+    }
+    onClose();
+  };
+  const requestCloseRef = useRef(requestClose);
+  requestCloseRef.current = requestClose;
+
+  // ESC는 맨 위 창만 닫는다: window 캡처 단계에서 먼저 처리해 아래 발주이력 모달까지 전달되지 않게 한다
+  useEffect(() => {
+    const prevFocus = document.activeElement;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => {
+      if (pdfOpenRef.current || e.isComposing) return;
+      const scope = rootRef.current?.querySelector('.rcv-confirm') || modalRef.current;
+      if (e.key === 'Escape') {
+        if (!askRef.current && e.target?.classList?.contains('rcv-in')) return; // 입력칸은 자체 처리(되돌리기)
+        e.preventDefault();
+        e.stopPropagation();
+        if (askRef.current) answer(false); else requestCloseRef.current();
+      } else if (e.key === 'Tab' && scope) {
+        const f = Array.from(scope.querySelectorAll('button:not(:disabled),input:not(:disabled)')).filter(x => x.offsetParent !== null);
+        if (f.length === 0) return;
+        const first = f[0];
+        const last = f[f.length - 1];
+        if (!scope.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+        else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    modalRef.current?.querySelector('.rcv-x')?.focus();
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      document.body.style.overflow = prevOverflow;
+      if (prevFocus?.isConnected) prevFocus.focus();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const shown = (it, field) => { const v = it[field] ?? null; return v === null ? '' : String(v); };
+
+  const save = async (id, field, el) => {
+    if (skipBlurRef.current === el) { skipBlurRef.current = null; return; }
+    const k = keyOf(id, field);
+    const cell = cellsRef.current[k];
+    // 입력을 시작할 때 화면에서 본 행이 기준: 그 뒤 다시 읽은 다른 화면의 값을 모르고 덮어쓰지 않는다
+    const it = seenRow(cell) || latestItem(id);
+    if (!it || staleRef.current || fillRef.current || cell?.status === 'saving') return;
+    const prev = it[field] ?? null;
+    const name = parts.find(p => p.id === it.part_id)?.name || '(부품 정보 없음)';
+    let value;
+    let plus = false;
+    if (field === 'received_qty') {
+      const r = parseReceiveQty(el.value, prev);
+      if (!r.ok) {
+        setCell(k, { text: el.value, status: 'err', label: r.label, why: r.why, base: it, retry: cell?.retry });
+        notify(`저장하지 않음: ${name}. ${r.why}.`, 'err');
+        return;
+      }
+      value = r.value;
+      plus = r.plus;
+    } else {
+      value = el.value.trim() === '' ? null : el.value.trim();
+    }
+    if (value === prev && !cell?.retry) { if (cell) setCell(k, null); return; }
+    // 합산 값은 한 번만 계산해 '합계'로 보관하고, 같은 값을 다시 보낼 때는 같은 저장 번호(op)를 써서 두 번 반영되지 않게 한다
+    const text = value === null ? '' : String(value);
+    const reuse = cell?.retry && cell.retry.value === value ? cell.retry : null;
+    setCell(k, { text, status: 'saving', base: it });
+    pendingRef.current += 1;
+    const job = { value, prev, op: reuse ? reuse.op : newReceiveOp(), base: it };
+    const opKey = (row) => `${id}:${row.receive_op ?? ''}`;
+    const run = async () => {
+      if (staleRef.current) return { skipped: true };
+      // 기준 행은 내 저장이 이어진 만큼만 따라간다
+      let base = job.base;
+      while (nextRowRef.current[opKey(base)]) base = nextRowRef.current[opKey(base)];
+      // 입력할 때 본 값과 기준 행이 달라졌으면 합산 결과를 저장하지 않는다
+      if ((base[field] ?? null) !== job.prev) return { stale: true, current: base[field] ?? null };
+      job.base = base;
+      return onSave(job.base, field, value, job.op);
+    };
+    const chained = (rowChainRef.current[id] || Promise.resolve()).then(run).catch(err => ({ error: err?.message || String(err) }));
+    rowChainRef.current[id] = chained;
+    const r = await chained;
+    pendingRef.current -= 1;
+    if (r.ok) {
+      rowsRef.current[id] = r.row;
+      nextRowRef.current[opKey(job.base)] = r.row;
+      const okCell = { status: 'ok' };
+      setCell(k, okCell);
+      setTimeout(() => { if (cellsRef.current[k] === okCell) setCell(k, null); }, 1500);
+      notify(plus ? `저장 완료: ${fmt(prev || 0)} + ${fmt(value - (prev || 0))} = ${fmt(value)}` : '저장 완료');
+    } else if (r.stale || r.skipped) {
+      setCell(k, { text, status: 'err', why: '다른 화면에서 변경됨', retry: job });
+      if (r.stale) {
+        const isQty = field === 'received_qty' && r.current !== undefined;
+        const label = (v) => (v === null ? '빈칸' : fmt(v));
+        markStale(isQty ? `${name}: 현재 저장값 ${label(r.current)}, 입력한 합계 ${label(value)}.${r.current === value ? ' 이미 반영된 수량일 수 있으니 다시 더하지 마세요.' : ''}` : '');
+      }
+    } else {
+      setCell(k, { text, status: 'err', why: '저장 실패: 다시 Enter를 누르면 재시도합니다', retry: job });
+      notify(`저장 실패: ${name}. ${r.error}`, 'err');
+    }
+  };
+
+  const onCellKey = async (e, id, field) => {
+    if (e.nativeEvent.isComposing) return;
+    const el = e.currentTarget;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const all = Array.from(tableRef.current?.querySelectorAll(`.rcv-in[data-f="${field}"]`) || []);
+      const next = all[all.indexOf(el) + 1];
+      if (next) next.focus(); else el.blur();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      const k = keyOf(id, field);
+      const cell = cellsRef.current[k];
+      if (cell?.status === 'saving') return;
+      skipBlurRef.current = el;
+      setCell(k, null);
+      el.blur();
+      skipBlurRef.current = null;
+      // 저장 실패 후 되돌리면 서버에는 반영됐을 수 있으므로 그 품목만, 앞선 저장이 끝난 뒤 다시 읽는다
+      if (cell?.retry) {
+        pendingRef.current += 1;
+        const read = (rowChainRef.current[id] || Promise.resolve()).then(() => onRead(id)).catch(err => ({ error: err?.message || String(err) }));
+        rowChainRef.current[id] = read;
+        const r = await read;
+        pendingRef.current -= 1;
+        if (r.row) rowsRef.current[id] = r.row;
+        else if (r.missing) markStale(r.error);
+        else notify(`최신 값을 불러오지 못했습니다: ${r.error}`, 'err');
+      }
+    }
+  };
+
+  const blockUnsaved = (what) => {
+    const keys = unsavedKeys();
+    if (keys.length === 0) return false;
+    notify(`저장되지 않은 값이 ${keys.length}개 있어 ${what} 수 없습니다. 빨간 칸을 먼저 저장하거나 ESC로 되돌려 주세요.`, 'err');
+    const el = tableRef.current?.querySelector(`tr[data-item="${keys[0].split(':')[0]}"] .rcv-in[data-f="${keys[0].split(':')[1]}"]`);
+    if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); }
+    return true;
+  };
+  // 저장 대기 → 다른 창이 열렸거나 닫는 중이면 중단 → 미저장 값 확인
+  const ready = async (what) => {
+    if (openingRef.current) return false;
+    openingRef.current = true;
+    await flush();
+    openingRef.current = false;
+    if (closingRef.current || askRef.current || pdfOpenRef.current || staleRef.current) return false;
+    return !blockUnsaved(what);
+  };
+
+  const handlePrint = async () => {
+    if (!(await ready('출력할'))) return;
+    printRef.current = true;
+    setBusyPrint(true);
+    try { await onPrint(order, itemsRef.current); } finally { printRef.current = false; setBusyPrint(false); }
+  };
+
+  const handleFill = async () => {
+    if (!(await ready('일괄로 채울'))) return;
+    const empty = itemsRef.current.map(it => latestItem(it.id)).filter(it => receivedOf(it) === null);
+    if (empty.length === 0) return;
+    const ok = await ask({
+      title: '전체 정상입고로 채우기',
+      body: `비어 있는 ${empty.length}종의 입고수량을 발주수량으로 채웁니다.\n이미 입력한 ${itemsRef.current.length - empty.length}종과 비고는 그대로 둡니다.`,
+      yes: '채우기',
+    });
+    if (!ok) return;
+    fillRef.current = true;
+    setBusyFill(true);
+    let r;
+    try { r = await onFill(empty); } catch (err) { r = { saved: 0, failed: 0, missed: empty.length, stale: true, rows: [], error: err?.message || String(err) }; }
+    r.rows.forEach(row => { rowsRef.current[row.id] = row; });
+    fillRef.current = false;
+    setBusyFill(false);
+    if (r.stale || r.missed > 0) markStale(r.error || '');
+    if (r.failed > 0) notify(`${r.saved}종 저장, ${r.failed}종 실패. 빈칸으로 남은 품목을 확인해 주세요. ${r.error || ''}`, 'err');
+    else if (r.saved > 0) notify(`${r.saved}종 저장 완료`);
+  };
+
+  const startResize = (e, idx) => {
+    e.preventDefault();
+    const table = tableRef.current;
+    const grip = e.currentTarget;
+    const cols = table.querySelectorAll('col');
+    const cur = Array.from(table.querySelectorAll('th')).map(th => th.offsetWidth);
+    cur.forEach((w, i) => { cols[i].style.width = `${w}px`; });
+    const startX = e.clientX;
+    const startW = cur[idx];
+    const total = cur.reduce((a, b) => a + b, 0);
+    grip.classList.add('rcv-on');
+    const move = (ev) => {
+      cur[idx] = Math.max(40, startW + ev.clientX - startX);
+      cols[idx].style.width = `${cur[idx]}px`;
+      table.style.minWidth = '0';
+      table.style.width = `${Math.max(300, total - startW + cur[idx])}px`;
+    };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      grip.classList.remove('rcv-on');
+      setWidths(cur);
+      try { localStorage.setItem(RECEIVE_WIDTH_KEY, JSON.stringify(cur)); } catch {}
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  };
+
+  const startDrag = (e) => {
+    if (e.target.closest('button') || window.innerWidth <= 768) return;
+    e.preventDefault();
+    const m = modalRef.current;
+    const r = m.getBoundingClientRect();
+    const dx = e.clientX - r.left;
+    const dy = e.clientY - r.top;
+    Object.assign(m.style, { width: `${r.width}px`, position: 'fixed', left: `${r.left}px`, top: `${r.top}px` });
+    const move = (ev) => {
+      m.style.left = `${Math.min(window.innerWidth - 120, Math.max(120 - r.width, ev.clientX - dx))}px`;
+      m.style.top = `${Math.min(window.innerHeight - 48, Math.max(0, ev.clientY - dy))}px`;
+    };
+    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  };
+  useEffect(() => {
+    const reset = () => { const m = modalRef.current; if (m) Object.assign(m.style, { width: '', position: '', left: '', top: '' }); };
+    window.addEventListener('resize', reset);
+    return () => window.removeEventListener('resize', reset);
+  }, []);
+
+  const groups = useMemo(() => groupOrderItems(items, parts), [items, parts]);
+  const checked = items.filter(it => receivedOf(it) !== null).length;
+  const shortCnt = countReceiveShort(items);
+  const overCnt = items.filter(it => receivedOf(it) !== null && it.received_qty > it.quantity).length;
+  const badge = getReceiveBadge(order, items);
+  const showTable = phase === 'ready' && items.length > 0;
+  const locked = !!stale || busyFill;
+
+  const diffView = (it) => {
+    const cell = cellsRef.current[keyOf(it.id, 'received_qty')];
+    if (cell?.label) return <span className="rcv-v rcv-v-short">{cell.label}</span>;
+    const rec = receivedOf(it);
+    if (cell?.text && cell.status === 'edit') {
+      const seen = receivedOf(seenRow(cell) || it);
+      const r = parseReceiveQty(cell.text, seen);
+      if (r.ok && r.plus) return <span className="rcv-v rcv-v-over">{fmt(seen || 0)} + {fmt(r.value - (seen || 0))} = {fmt(r.value)}</span>;
+    }
+    if (rec === null) return <span className="empty-dot" title="미입력">●</span>;
+    const d = rec - it.quantity;
+    if (d === 0) return <span className="rcv-v rcv-v-ok">✓ 일치</span>;
+    return d < 0 ? <span className="rcv-v rcv-v-short">{fmt(d)} 부족</span> : <span className="rcv-v rcv-v-over">+{fmt(d)} 초과</span>;
+  };
+
+  const inputView = (it, field, name) => {
+    const k = keyOf(it.id, field);
+    const cell = cellsRef.current[k];
+    const isQty = field === 'received_qty';
+    const cls = ['rcv-in', isQty ? 'rcv-qty' : '', cell?.status === 'saving' ? 'rcv-saving-in' : '', cell?.status === 'ok' ? 'rcv-ok' : '', cell?.status === 'err' ? 'rcv-err' : ''].filter(Boolean).join(' ');
+    return (
+      <input
+        className={cls}
+        data-f={field}
+        inputMode={isQty ? 'tel' : undefined}
+        maxLength={isQty ? undefined : 200}
+        autoComplete="off"
+        aria-label={`${name} ${isQty ? '입고수량' : '비고'}`}
+        aria-invalid={cell?.status === 'err' ? 'true' : undefined}
+        title={cell?.status === 'err' ? cell.why : undefined}
+        value={cell?.text ?? shown(it, field)}
+        readOnly={cell?.status === 'saving'}
+        disabled={locked}
+        onFocus={isQty ? (e) => e.target.select() : undefined}
+        onChange={(e) => {
+          const prevCell = cellsRef.current[k];
+          const keep = prevCell?.status === 'err' ? prevCell : { status: 'edit', retry: prevCell?.retry, base: prevCell?.base };
+          setCell(k, { ...keep, base: seenRow(prevCell) || latestItem(it.id), text: e.target.value });
+        }}
+        onBlur={(e) => save(it.id, field, e.target)}
+        onKeyDown={(e) => onCellKey(e, it.id, field)}
+      />
+    );
+  };
+
+  let rowIdx = 0;
+  return (
+    <div ref={rootRef}>
+      <div
+        className="rcv-overlay"
+        onMouseDown={(e) => { downRef.current = e.target === e.currentTarget; }}
+        onClick={(e) => { if (downRef.current && e.target === e.currentTarget) requestClose(); }}
+      >
+        <div className="rcv-modal" ref={modalRef} role="dialog" aria-modal="true" aria-label="입고체크">
+          <div className="rcv-head" onMouseDown={startDrag}>
+            <div className="rcv-title">입고체크 — {order.order_no} / {order.order_name || '(이름없음)'}</div>
+            <span className="rcv-progress rcv-num" aria-live="polite">{showTable ? `${items.length}종 중 ${checked}종 체크` : ''}</span>
+            <button className="rcv-x" onClick={requestClose} aria-label="입고체크 닫기">✕</button>
+          </div>
+
+          {stale && (
+            <div className="rcv-notice" role="alert">
+              <span>다른 화면에서 이 발주가 변경되어 저장하지 못했습니다. {stale.text} 새로고침해 현재 값을 확인한 뒤 필요한 만큼만 입력해 주세요.</span>
+              <button className="rcv-btn rcv-btn-secondary" onClick={load}>새로고침</button>
+            </div>
+          )}
+
+          {showTable && (
+            <div className="rcv-sum">
+              <span>상태 <span className="rcv-badge" style={{ background: badge.background, color: badge.color }}>{badge.label}</span></span>
+              <span>미입력 <b>{items.length - checked}종</b></span>
+              <span>부족 <b style={{ color: '#991B1B' }}>{shortCnt}종</b></span>
+              <span>초과 <b style={{ color: '#185FA5' }}>{overCnt}종</b></span>
+              <span className="rcv-saving" aria-live="polite">{pendingRef.current > 0 ? '저장 중...' : ''}</span>
+            </div>
+          )}
+
+          <div className="rcv-scroll">
+            {phase === 'loading' && (
+              <div className="rcv-state" aria-busy="true">
+                {[0, 1, 2, 3, 4].map(i => <div key={i} className="rcv-sk" />)}
+                불러오는 중...
+              </div>
+            )}
+            {phase === 'error' && (
+              <div className="rcv-state">
+                품목을 불러오지 못했습니다.<br />{loadError}<br />
+                <button className="rcv-btn rcv-btn-secondary" style={{ marginTop: 12 }} onClick={load}>다시 시도</button>
+              </div>
+            )}
+            {phase === 'ready' && items.length === 0 && <div className="rcv-state">이 발주에 등록된 품목이 없습니다.</div>}
+            {showTable && (
+              <table className="rcv-table" ref={tableRef}>
+                <colgroup>{widths.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
+                <thead>
+                  <tr>{RECEIVE_COLS.map((h, i) => <th key={h}>{h}<span className="rcv-grip" onMouseDown={(e) => startResize(e, i)} /></th>)}</tr>
+                </thead>
+                <tbody>
+                  {groups.map(g => (
+                    <Fragment key={g.key}>
+                      <tr className="rcv-group">
+                        <td colSpan={RECEIVE_COLS.length}>
+                          <span className={`rcv-chip${g.key === '공용/호환' ? ' rcv-compat' : ''}`}>{g.key}</span>
+                          <span className="rcv-cnt">{g.rows.length}종 · {fmt(g.totalQty)}개</span>
+                        </td>
+                      </tr>
+                      {g.rows.map(({ no, item, part }) => {
+                        const name = part?.name || '(부품 정보 없음)';
+                        const even = rowIdx++ % 2 === 1;
+                        return (
+                          <tr key={item.id} data-item={item.id} className={`rcv-row${even ? ' rcv-even' : ''}`}>
+                            <td className="rcv-no">{no}</td>
+                            <td className="rcv-c-photo"><PartThumbnail url={part?.image_url} name={part?.name} code={part?.code} /></td>
+                            <td className="rcv-c-name">
+                              <div className="rcv-name"><span className="rcv-mno">{no}. </span>{name}</div>
+                              {part?.spec && <div className="rcv-spec">{part.spec}</div>}
+                            </td>
+                            <td className="rcv-num" data-l="발주수량">{fmt(item.quantity)}</td>
+                            <td data-l="입고수량">{inputView(item, 'received_qty', name)}</td>
+                            <td data-l="차이">{diffView(item)}</td>
+                            <td className="rcv-c-note" data-l="비고">{inputView(item, 'receive_note', name)}</td>
+                          </tr>
+                        );
+                      })}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div className="rcv-foot">
+            <button className="rcv-btn rcv-btn-secondary rcv-print" onClick={handlePrint} disabled={!showTable || locked || busyPrint}>{busyPrint ? '만드는 중...' : '체크리스트 출력'}</button>
+            <button className="rcv-btn rcv-btn-primary rcv-fill" onClick={handleFill} disabled={!showTable || locked || busyPrint || checked === items.length}>{busyFill ? '저장 중...' : '전체 정상입고로 채우기'}</button>
+            <button className="rcv-btn rcv-btn-secondary" onClick={requestClose}>닫기</button>
+          </div>
+        </div>
+      </div>
+
+      {confirmBox && (
+        <div className="rcv-overlay rcv-top" onClick={(e) => { if (e.target === e.currentTarget) answer(false); }}>
+          <div className="rcv-modal rcv-confirm" role="alertdialog" aria-modal="true" aria-label={confirmBox.title}>
+            <div className="rcv-head"><div className="rcv-title">{confirmBox.title}</div></div>
+            <div className="rcv-confirm-body">{confirmBox.body}</div>
+            <div className="rcv-foot">
+              <button className="rcv-btn rcv-btn-secondary" autoFocus onClick={() => answer(false)}>취소</button>
+              <button className={`rcv-btn ${confirmBox.danger ? 'rcv-btn-danger' : 'rcv-btn-primary'}`} onClick={() => answer(true)}>{confirmBox.yes}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
