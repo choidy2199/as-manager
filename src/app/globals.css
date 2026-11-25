@@ -382,3 +382,6 @@ input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
+
+/* Preview uses the bundled font without an external CDN. */
+@font-face{font-family:Pretendard;src:url(/fonts/Pretendard-Regular.ttf) format("truetype");font-weight:400;font-display:swap}

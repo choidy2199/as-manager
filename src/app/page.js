@@ -1250,7 +1250,7 @@ export default function Home() {
           <button
             type="button"
             className="nav-logo-icon"
-            onClick={() => { window.location.href = 'https://app.daehantool.dev'; }}
+            onClick={() => { window.location.href = '/?tab=parts'; }}
             title="메인 런처"
             aria-label="메인 런처로 이동"
             style={{ border: 0, padding: 0, font: 'inherit', cursor: 'pointer' }}
